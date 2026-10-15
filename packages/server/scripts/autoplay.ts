@@ -15,6 +15,7 @@ import {
   legalSettlements,
   legalSetupRoads,
   legalSetupSettlements,
+  tradeRates,
   type Action,
   type PlayerView,
 } from '@hex/engine';
@@ -77,9 +78,15 @@ function choose(v: PlayerView): Action | null {
       const sett = legalSettlements(v, me);
       if (sett.length && hasRes(res, COSTS.settlement)) return { type: 'buildSettlement', vertex: sett[0] };
       const roads = legalRoads(v, me);
-      if (roads.length && hasRes(res, COSTS.road) && v.players[me].roadsBuilt < 12) {
+      if (roads.length && hasRes(res, COSTS.road) && (sett.length === 0 || v.players[me].roadsBuilt < 6)) {
         return { type: 'buildRoad', edge: roads[Math.floor(Math.random() * roads.length)] };
       }
+      // Trade surplus with the bank toward whatever the next build is missing.
+      const target = city.length ? COSTS.city : COSTS.settlement;
+      const rates = tradeRates(v, me);
+      const missing = RESOURCES.find((r) => res[r] < (target[r] ?? 0) && v.bank[r] > 0);
+      const surplus = RESOURCES.find((r) => r !== missing && res[r] - (target[r] ?? 0) >= rates[r]);
+      if (missing && surplus) return { type: 'bankTrade', give: surplus, get: missing };
       return { type: 'endTurn' };
     }
     default:

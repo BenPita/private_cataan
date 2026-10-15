@@ -140,3 +140,18 @@ describe('authoritative actions', () => {
     expect(json).not.toContain('"rng"');
   });
 });
+
+describe('migration', () => {
+  it('upgrades games saved before the opening roll existed', async () => {
+    const store = new MemoryStore();
+    const ctx = await twoPlayerRoom(store);
+    await ctx.m.setReady(ctx.room, 1, true);
+    await ctx.m.start(ctx.room, 0);
+    const old = JSON.parse(JSON.stringify(ctx.room));
+    delete old.game.turnOrder;
+    delete old.game.orderRoll;
+    await store.save(old);
+    const restored = (await new RoomManager(store).get(ctx.room.id))!;
+    expect(restored.game!.turnOrder).toEqual([0, 1]);
+  });
+});

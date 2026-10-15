@@ -119,6 +119,16 @@ function buildSeats(config: RoomConfig, existing: Seat[] = []): Seat[] {
   return [...humans, ...bots];
 }
 
+/** Upgrades rooms saved by older versions so running games survive a deploy. */
+function migrate(room: Room): Room {
+  const g = room.game as (GameState & { turnOrder?: number[]; orderRoll?: GameState['orderRoll'] }) | null;
+  if (g && !g.turnOrder) {
+    g.turnOrder = g.players.map((_, i) => i);
+    g.orderRoll = null;
+  }
+  return room;
+}
+
 /**
  * Owns all rooms: lobby flow, seat ownership, and authoritative action
  * processing. Socket-agnostic so it can be tested directly.
@@ -138,7 +148,7 @@ export class RoomManager {
     const cached = this.rooms.get(id);
     if (cached) return cached;
     const loaded = await this.store.load(id);
-    if (loaded) this.rooms.set(id, loaded);
+    if (loaded) this.rooms.set(id, migrate(loaded));
     return loaded;
   }
 
