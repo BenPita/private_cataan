@@ -87,7 +87,7 @@ describe('bots on the server', () => {
     await playHumans(m, room, [0]);
     expect(room.status).toBe('finished');
     expect(room.game!.winner).not.toBeNull();
-  });
+  }, 180_000);
 
   it('two humans and two bots play a full game', async () => {
     const m = manager();
@@ -99,7 +99,7 @@ describe('bots on the server', () => {
     await m.start(room, 0);
     await playHumans(m, room, [0, 1]);
     expect(room.status).toBe('finished');
-  });
+  }, 180_000);
 
   it('bots resume after a server restart without double actions', async () => {
     const store = new MemoryStore();

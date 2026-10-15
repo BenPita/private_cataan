@@ -24,6 +24,8 @@ export interface BoardTargets {
 /** Lets effects find where a board point (in SVG board units) is on screen. */
 export interface BoardApi {
   project(x: number, y: number): { x: number; y: number } | null;
+  /** Present on the 3D board: throws physical dice that land on these values. */
+  rollDice?(values: [number, number]): Promise<void>;
 }
 
 export interface BoardProps {

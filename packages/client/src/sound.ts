@@ -164,6 +164,16 @@ export const sfx = {
     hits.forEach((t, i) => knock(t, 520 + Math.random() * 260, 0.32 * (1 - i * 0.12), 0.07));
     buzz([0, 380, 25, 90, 20]);
   },
+  /** Dice rattling in a hand before the throw. */
+  diceShake() {
+    for (let i = 0; i < 6; i++) noise(i * 0.04, 0.028, 2400 + Math.random() * 1600, 3, 0.2);
+    buzz(30);
+  },
+  /** A die hitting the board; louder for harder impacts. */
+  diceHit(strength: number) {
+    knock(0, 480 + Math.random() * 320, 0.12 + strength * 0.38, 0.05 + strength * 0.04);
+    if (strength > 0.5) buzz(Math.round(10 + strength * 20));
+  },
   /** One resource card slides into a hand. */
   card(delay = 0) {
     noise(delay, 0.11, 5200, 0.9, 0.18, 'bandpass', 1600);

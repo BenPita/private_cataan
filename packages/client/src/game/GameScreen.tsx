@@ -79,7 +79,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [selection, setSelection] = useState<Selection>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [dice, setDice] = useState<{ faces: [number, number]; rolling: boolean; sum: number } | null>(null);
+  const [dice, setDice] = useState<{ faces: [number, number]; rolling: boolean; sum: number; sumOnly?: boolean } | null>(null);
   const [highlight, setHighlight] = useState<number[]>([]);
   const [flash, setFlash] = useState<Partial<ResMap>>({});
   const [inspect, setInspect] = useState<number | null>(null);
@@ -157,6 +157,32 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     const roll = view.lastRoll;
     if (!roll || roll.id === lastRollId.current) return;
     lastRollId.current = roll.id;
+    const sum = roll.dice[0] + roll.dice[1];
+    const settle = (sumOnly: boolean) => {
+      setDice({ faces: roll.dice, rolling: false, sum, sumOnly });
+      setHighlight(roll.producingHexes);
+      const gain = roll.gains[me];
+      if (gain && RESOURCES.some((r) => gain[r] > 0)) {
+        sfx.gain(RESOURCES.reduce((n, r) => n + gain[r], 0));
+        setFlash(gain);
+      }
+      launchFlights(roll.producingHexes, roll.gains);
+      if (sum === 7) sfx.robber();
+      setTimeout(() => setDice(null), 1500);
+      setTimeout(() => {
+        setHighlight([]);
+        setFlash({});
+      }, 2600);
+    };
+    // 3D board: real dice thrown on the table.
+    const throwDice = boardApi.current?.rollDice;
+    if (throwDice && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      let cancelled = false;
+      throwDice(roll.dice).then(() => !cancelled && settle(true));
+      return () => {
+        cancelled = true;
+      };
+    }
     sfx.dice();
     let ticks = 0;
     const timer = setInterval(() => {
@@ -164,21 +190,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       setDice({ faces: [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)], rolling: true, sum: 0 });
       if (ticks >= 8) {
         clearInterval(timer);
-        const sum = roll.dice[0] + roll.dice[1];
-        setDice({ faces: roll.dice, rolling: false, sum });
-        setHighlight(roll.producingHexes);
-        const gain = roll.gains[me];
-        if (gain && RESOURCES.some((r) => gain[r] > 0)) {
-          sfx.gain(RESOURCES.reduce((n, r) => n + gain[r], 0));
-          setFlash(gain);
-        }
-        launchFlights(roll.producingHexes, roll.gains);
-        if (sum === 7) sfx.robber();
-        setTimeout(() => setDice(null), 1500);
-        setTimeout(() => {
-          setHighlight([]);
-          setFlash({});
-        }, 2600);
+        settle(false);
       }
     }, 70);
     return () => clearInterval(timer);
@@ -316,9 +328,9 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           </div>
         )}
         {dice && (
-          <div className={`dice-overlay ${dice.rolling ? 'rolling' : ''}`}>
-            <Die value={dice.faces[0]} rolling={dice.rolling} tone="red" />
-            <Die value={dice.faces[1]} rolling={dice.rolling} tone="yellow" />
+          <div className={`dice-overlay ${dice.rolling ? 'rolling' : ''} ${dice.sumOnly ? 'sum-only' : ''}`}>
+            {!dice.sumOnly && <Die value={dice.faces[0]} rolling={dice.rolling} tone="red" />}
+            {!dice.sumOnly && <Die value={dice.faces[1]} rolling={dice.rolling} tone="yellow" />}
             {!dice.rolling && <span className={`dice-sum ${dice.sum === 7 ? 'seven' : ''}`}>{dice.sum}</span>}
           </div>
         )}

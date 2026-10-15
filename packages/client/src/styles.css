@@ -1803,3 +1803,16 @@ h3,
   width: 100% !important;
   height: 100% !important;
 }
+
+/* With 3D dice on the board, only a small total badge is shown, above the board. */
+.dice-overlay.sum-only {
+  top: 64px;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border-radius: 999px;
+  animation: pop 0.3s ease-out;
+}
+.dice-overlay.sum-only .dice-sum {
+  font-size: 30px;
+  margin: 0;
+}

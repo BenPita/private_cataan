@@ -12,6 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GRAPH, type PlayerView } from '@hex/engine';
 import { S, type BoardProps } from './Board';
+import { createDice } from './dice3d';
 
 const U = 1 / S; // board units -> world units (hex radius = 1)
 const TILE_R = 0.965;
@@ -189,7 +190,7 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
       else select(hit as never);
     });
     engine.current = e;
-    if (apiRef) apiRef.current = { project: e.project };
+    if (apiRef) apiRef.current = { project: e.project, rollDice: e.rollDice };
     return () => {
       e.dispose();
       engine.current = null;
@@ -348,6 +349,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       },
     });
   };
+
+  const dice = createDice(scene, TILE_H, (ms) => tween(ms, () => {}));
 
   // --- Sizing & camera framing ------------------------------------------------
   let framed = false;
@@ -671,6 +674,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   function dispose() {
     cancelAnimationFrame(raf);
+    dice.dispose();
     ro.disconnect();
     controls.dispose();
     el.removeEventListener('pointerdown', onDown);
@@ -680,6 +684,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     mount.removeChild(el);
   }
 
-  return { setBoard, setPieces, setRobber, setTargets, setHighlight, project, dispose };
+  return { setBoard, setPieces, setRobber, setTargets, setHighlight, project, dispose, rollDice: dice.roll };
 }
 

@@ -37,7 +37,12 @@ Read this file instead of the originals; consult them only for fine detail.
   (drag = rotate, pinch = zoom, double tap = reset), raycast tap picking with gold pulsing
   markers, drop/slide animations, on-demand rendering. Same props/BoardApi as the 2D board;
   ☰ menu toggles 3D/2D (saved per device; 2D automatically when WebGL is missing).
-- Design roadmap (remaining): phase 2b = physics dice in 3D (tilted camera, extruded tiles with
+- Phase 2b physics dice (2026-10-16): `packages/client/src/game/dice3d.ts` (cannon-es). The
+  server's result is authoritative; the client simulates a throw headlessly (re-throwing until
+  both dice lie flat), records it, then paints the die faces so the server's values land on
+  top (opposite faces still sum to 7) and replays the motion with impact sounds from real
+  collisions. 2D board / reduced motion keep the flat dice overlay. Test: client/test/dice.test.ts.
+- Design roadmap (remaining): (tilted camera, extruded tiles with
   normal maps, 3D pieces, physics dice, 2D fallback); phase 3 = UX (tutorial, build tray,
   probability hints, landscape layout, volume settings); phase 4 = ambience (waves,
   birds, victory camera orbit, emotes).
