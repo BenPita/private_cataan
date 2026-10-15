@@ -84,7 +84,7 @@ export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap
   return (
     <div className="hand">
       {RESOURCES.map((r) => (
-        <div key={r} className="hand-slot" title={resourceName(r)}>
+        <div key={r} className={`hand-slot stack-${Math.min(res[r], 3)}`} title={resourceName(r)} data-res={r}>
           <ResourceCard r={r} count={res[r]} dim={res[r] === 0} />
           {(flash[r] ?? 0) !== 0 && (
             <span className={`res-flash ${(flash[r] ?? 0) > 0 ? 'up' : 'down'}`}>
@@ -106,7 +106,8 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
         return (
           <div
             key={i}
-            className={`player-chip ${view.currentPlayer === i && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL' ? 'active' : ''}`}
+            data-player={i}
+            className={`player-chip ${i === view.me ? 'me' : ''} ${view.currentPlayer === i && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL' ? 'active' : ''}`}
             style={{ ['--pc' as string]: p.color }}
           >
             <div className="chip-top">
@@ -114,7 +115,6 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
               <span className="pname">
                 {p.kind === 'bot' ? '🤖 ' : ''}
                 {playerName(view, i)}
-                {i === view.me ? ` (${t('you')})` : ''}
               </span>
               {!seats[i]?.connected && <span className="offline-tag">{t('disconnected')}</span>}
             </div>
@@ -122,14 +122,28 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
               <span title={t('vp')} className="vp">
                 ★ {p.victoryPoints}
               </span>
-              <span title={t('resCards')}>🂠 {p.resourceCount}</span>
-              <span title={t('devCount')}>📜 {p.devCardCount}</span>
+              <span title={t('resCards')} className="mini-stack">
+                <img src="/art/back-resource.webp" alt="" />
+                {p.resourceCount}
+              </span>
+              <span title={t('devCount')} className="mini-stack">
+                <img src="/art/back-dev.webp" alt="" />
+                {p.devCardCount}
+              </span>
               <span title={t('knights')}>⚔ {p.knightsPlayed}</span>
             </div>
             {(view.longestRoad.holder === i || view.largestArmy === i) && (
               <div className="chip-badges">
-                {view.longestRoad.holder === i && <span className="badge">🛤 {t('longestRoad')}</span>}
-                {view.largestArmy === i && <span className="badge">🛡 {t('largestArmy')}</span>}
+                {view.longestRoad.holder === i && (
+                  <span className="badge">
+                    <img src="/art/dev-roadBuilding.webp" alt="" /> {t('longestRoad')}
+                  </span>
+                )}
+                {view.largestArmy === i && (
+                  <span className="badge">
+                    <img src="/art/dev-knight.webp" alt="" /> {t('largestArmy')}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -514,25 +528,22 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
   return (
     <Sheet title={t('devCards')} onClose={onClose}>
       {cards.length === 0 && <p className="hint-text">{t('noDevCards')}</p>}
-      <div className="dev-list">
+      <div className="dev-hand">
         {[...groups.entries()].map(([type, g]) => {
           const why = reason(type, g);
           const info = devInfo(type);
           return (
-            <div key={type} className="dev-card">
-              <DevCardFace type={type} title={info.name} />
-              <div className="dev-text">
-                <b>
-                  {info.name} ×{g.total}
-                </b>
-                <span className="muted">{info.text}</span>
-                {why && <span className="reason">{why}</span>}
+            <div key={type} className="dev-slot">
+              <div className={`dev-stack ${g.total > 1 ? 'many' : ''}`}>
+                <DevCardFace type={type} title={info.name} text={info.text} />
+                {g.total > 1 && <b className="dev-count">×{g.total}</b>}
               </div>
-              {type !== 'victoryPoint' && (
-                <button className="btn primary small" disabled={!!why} onClick={() => play(type)}>
+              {type !== 'victoryPoint' ? (
+                <button className="btn primary small wide" disabled={!!why} onClick={() => play(type)}>
                   {t('play')}
                 </button>
-              )}
+              ) : null}
+              {why && <span className="reason">{why}</span>}
             </div>
           );
         })}

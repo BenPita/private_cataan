@@ -73,77 +73,33 @@ export function ResourceGlyph({ r, size = 28, x, y }: { r: Resource; size?: numb
   );
 }
 
-/** A small resource "card": cream frame, painted colour panel, icon. */
+/** A printed resource card (painted illustration from /art), optionally with a count. */
 export function ResourceCard({ r, count, small, dim }: { r: Resource; count?: number; small?: boolean; dim?: boolean }) {
-  const [a, b] = RESOURCE_BG[r];
   return (
     <span className={`rcard ${small ? 'small' : ''} ${dim ? 'dim' : ''}`}>
-      <span className="rcard-art" style={{ background: `radial-gradient(circle at 40% 30%, ${a}, ${b})` }}>
-        <ResourceGlyph r={r} size={small ? 18 : 30} />
-      </span>
+      <img className="rcard-img" src={`/art/card-${r}.webp`} alt="" draggable={false} />
       {count !== undefined && <b className="rcard-count">{count}</b>}
     </span>
   );
 }
 
 const DEV_COLORS: Record<DevCardType, string> = {
-  knight: '#3b6fb6',
-  victoryPoint: '#c48a1a',
-  roadBuilding: '#4c8a3c',
-  yearOfPlenty: '#7a4fb0',
-  monopoly: '#b5432f',
+  knight: '#2f5d9e',
+  victoryPoint: '#a8741a',
+  roadBuilding: '#3f7a35',
+  yearOfPlenty: '#6a4596',
+  monopoly: '#9c3a2a',
 };
 
-export function DevArt({ type, size = 44 }: { type: DevCardType; size?: number }) {
+/** A development card: coloured title banner, painted illustration, rules text. */
+export function DevCardFace({ type, title, text }: { type: DevCardType; title: string; text?: string }) {
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden>
-      {type === 'knight' && (
-        <g>
-          <path d="M14 40 L14 22 Q14 10 24 8 Q34 10 34 22 L34 40 Z" fill="#cfd6de" stroke="#2f3a46" strokeWidth="2" />
-          <rect x="17" y="20" width="14" height="3" fill="#2f3a46" />
-          <path d="M24 8 Q28 2 34 4" fill="none" stroke="#c0392b" strokeWidth="3" strokeLinecap="round" />
-        </g>
-      )}
-      {type === 'victoryPoint' && (
-        <g>
-          <circle cx="24" cy="24" r="16" fill="#f3c74e" stroke="#8a5d0b" strokeWidth="2" />
-          <polygon points="24,12 27.5,20.5 36,21 29.5,27 31.5,35.5 24,31 16.5,35.5 18.5,27 12,21 20.5,20.5" fill="#fff4c4" stroke="#8a5d0b" strokeWidth="1.2" />
-        </g>
-      )}
-      {type === 'roadBuilding' && (
-        <g>
-          <rect x="6" y="26" width="36" height="7" rx="2" fill="#a26c35" stroke="#4a2e12" strokeWidth="1.5" transform="rotate(-18 24 29)" />
-          <rect x="6" y="14" width="36" height="7" rx="2" fill="#b97d40" stroke="#4a2e12" strokeWidth="1.5" transform="rotate(-18 24 17)" />
-        </g>
-      )}
-      {type === 'yearOfPlenty' && (
-        <g>
-          <path d="M10 30 Q24 6 38 30 Z" fill="#f6e3a8" stroke="#6b4a12" strokeWidth="2" />
-          <circle cx="24" cy="22" r="4" fill="#ffd54a" stroke="#6b4a12" strokeWidth="1.2" />
-          <path d="M24 12 L24 6 M16 16 L12 12 M32 16 L36 12" stroke="#f2a516" strokeWidth="2.5" strokeLinecap="round" />
-          <rect x="12" y="30" width="24" height="8" rx="2" fill="#8a5a2b" />
-        </g>
-      )}
-      {type === 'monopoly' && (
-        <g>
-          <circle cx="18" cy="28" r="10" fill="#f3c74e" stroke="#8a5d0b" strokeWidth="2" />
-          <circle cx="30" cy="22" r="10" fill="#f8d465" stroke="#8a5d0b" strokeWidth="2" />
-          <text x="30" y="27" textAnchor="middle" fontSize="13" fontWeight="700" fill="#8a5d0b">$</text>
-        </g>
-      )}
-    </svg>
-  );
-}
-
-export function DevCardFace({ type, title }: { type: DevCardType; title: string }) {
-  return (
-    <span className="dcard">
+    <span className={`dcard ${text ? 'with-text' : ''}`}>
       <span className="dcard-head" style={{ background: DEV_COLORS[type] }}>
         {title}
       </span>
-      <span className="dcard-art">
-        <DevArt type={type} />
-      </span>
+      <img className="dcard-art" src={`/art/dev-${type}.webp`} alt="" draggable={false} />
+      {text && <span className="dcard-text">{text}</span>}
     </span>
   );
 }

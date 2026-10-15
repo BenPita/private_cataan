@@ -1230,3 +1230,369 @@ h3 {
     background-position: 0 200px, 30px 260px, -20px 180px, 10px 240px;
   }
 }
+
+/* =====================================================================
+   Physical table theme: painted board, printed cards, wooden pieces.
+   ===================================================================== */
+:root {
+  --sea-deep: #12688c;
+  --serif: 'Frank Ruhl Libre', 'Times New Roman', serif;
+}
+
+body {
+  background: #12688c;
+}
+
+h1,
+h2,
+h3,
+.sheet-head h2,
+.order-card h2,
+.victory-card h1,
+.logo h1 {
+  font-family: var(--serif);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+/* Paper and wood textures */
+.card.parchment,
+.sheet,
+.order-card,
+.victory-card,
+.player-chip,
+.inspect {
+  background: url('/art/parchment.webp') center / cover, #f6e8c3;
+}
+.bottom {
+  background: url('/art/wood.webp') center / cover, #5a3518;
+  border-top: 4px solid #2e1a0a;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45), inset 0 3px 0 rgba(255, 220, 160, 0.18);
+}
+.board-wrap {
+  background: radial-gradient(ellipse at 50% 45%, #1d8fb2 0%, #12688c 70%);
+}
+
+/* Board pieces */
+.hex-tile {
+  image-rendering: auto;
+}
+.hex-glow {
+  fill: rgba(255, 244, 190, 0.35);
+  stroke: #fff6c8;
+  stroke-width: 3;
+  pointer-events: none;
+  animation: glowPulse 0.55s ease-in-out 4 alternate;
+}
+@keyframes glowPulse {
+  from {
+    opacity: 0.15;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.token-num {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 19px;
+  fill: #2a1e14;
+}
+.token-num.red {
+  fill: #b3261a;
+  font-size: 21px;
+}
+.harbor-rate {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 10px;
+  fill: #f6e8c3;
+}
+.harbor-big {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 13px;
+  fill: #4a2c12;
+  text-anchor: middle;
+}
+.piece-drop {
+  animation: drop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+@keyframes drop {
+  0% {
+    transform: translateY(-26px);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+.robber {
+  transition: transform 0.6s cubic-bezier(0.35, 0, 0.25, 1.2);
+}
+
+/* Printed resource cards */
+.rcard {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: 7px;
+  position: relative;
+}
+.rcard-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: 7px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+.rcard.small {
+  width: 22px;
+  flex-direction: row;
+}
+.rcard.small .rcard-img {
+  width: 22px;
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.rcard.small .rcard-count {
+  position: absolute;
+  bottom: -5px;
+  inset-inline-end: -7px;
+  background: #2a1e14;
+  color: #fff;
+  font-size: 10px;
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: 8px;
+  text-align: center;
+  padding: 0 3px;
+}
+.res-list {
+  gap: 9px;
+  padding-inline-end: 6px;
+}
+.rcard-count {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2a1e14;
+  color: #fff5d8;
+  font-size: 14px;
+  font-weight: 800;
+  min-width: 24px;
+  height: 22px;
+  line-height: 22px;
+  border-radius: 11px;
+  text-align: center;
+  padding: 0 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.rcard.dim .rcard-img {
+  filter: grayscale(0.6) brightness(0.95);
+  opacity: 0.6;
+}
+
+/* The hand: one stack per resource, deeper stacks show more card edges */
+.hand {
+  gap: 8px;
+  padding: 2px 4px 6px;
+}
+.hand-slot .rcard {
+  width: 100%;
+  max-width: 64px;
+}
+.hand-slot.stack-2 .rcard-img {
+  box-shadow: 3px -3px 0 -1px #e9d6a6, 3px -3px 0 0 #b08c50, 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+.hand-slot.stack-3 .rcard-img {
+  box-shadow: 3px -3px 0 -1px #e9d6a6, 3px -3px 0 0 #b08c50, 6px -6px 0 -1px #e9d6a6, 6px -6px 0 0 #b08c50, 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* Player aids */
+.player-chip {
+  border: 1.5px solid #b89a5e;
+  border-top: 6px solid var(--pc);
+  border-radius: 10px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.chip-top {
+  font-family: var(--serif);
+  font-size: 14px;
+}
+.mini-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.mini-stack img {
+  width: 11px;
+  height: 15px;
+  border-radius: 2px;
+  box-shadow: 1px -1px 0 #b08c50;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #fff3cf;
+}
+.badge img {
+  width: 16px;
+  height: 12px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+/* Development cards */
+.dcard {
+  width: 100%;
+  border-radius: 9px;
+  background: url('/art/parchment.webp') center / cover, #f6e8c3;
+  border: 2px solid #c9a563;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.dcard-head {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: none;
+  padding: 4px 6px;
+  letter-spacing: 0.02em;
+}
+.dcard-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  padding: 0;
+  border-bottom: 1px solid #c9a563;
+}
+.dcard-text {
+  font-size: 11.5px;
+  line-height: 1.35;
+  padding: 6px 7px 8px;
+  color: #3a2c1c;
+  text-align: center;
+}
+.dev-hand {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 14px 12px;
+}
+.dev-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.dev-stack {
+  position: relative;
+}
+.dev-stack.many .dcard {
+  box-shadow: 4px -4px 0 -1px #f0deb0, 4px -4px 0 0 #b08c50, 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.dev-count {
+  position: absolute;
+  top: -8px;
+  inset-inline-end: -6px;
+  background: #2a1e14;
+  color: #fff5d8;
+  border-radius: 11px;
+  padding: 1px 8px;
+  font-size: 13px;
+}
+
+/* Dice */
+.dice-overlay {
+  background: rgba(42, 30, 20, 0.82);
+  border: none;
+  padding: 14px 20px;
+}
+.dice-overlay .dice-sum {
+  color: #fff3cf;
+}
+.die {
+  width: 64px;
+  height: 64px;
+}
+.die.rolling {
+  animation: tumble 0.28s linear infinite;
+}
+@keyframes tumble {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(180deg) translateY(-6px);
+  }
+  100% {
+    transform: rotate(360deg) translateY(0);
+  }
+}
+
+/* Cards flying from the board into hands */
+.flying-card {
+  position: fixed;
+  width: 30px;
+  aspect-ratio: 5 / 7;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.5);
+  animation: fly 0.95s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+}
+@keyframes fly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4) rotate(-10deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -80%) scale(1.15) rotate(0deg);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.8) rotate(8deg);
+  }
+}
+
+/* Wooden action buttons on the table */
+.bottom .btn.action {
+  background: linear-gradient(180deg, #f8ecc8, #dcc391);
+  border-color: #8a6a36;
+}
+.hint {
+  font-family: var(--serif);
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piece-drop,
+  .flying-card,
+  .die.rolling,
+  .hex-glow,
+  .btn.pulse,
+  .vertex-target,
+  .edge-target,
+  .hex-target {
+    animation: none !important;
+  }
+  .robber {
+    transition: none;
+  }
+}
+
+.player-chip.me {
+  outline: 2px solid #e8a317;
+  outline-offset: 1px;
+}

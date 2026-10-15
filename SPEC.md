@@ -14,8 +14,16 @@ Read this file instead of the originals; consult them only for fine detail.
 - Visual style (owner request, 2026-10-15): look and feel of the official 6th-edition
   rulebook — turquoise sea, sandy beach, painted terrain, cream number discs with red
   6/8, wooden piers with parchment harbor tags, cream-framed resource cards, coloured
-  dev-card headers, block-style pieces in red/blue/white/orange. All art is drawn from
-  scratch in SVG (`packages/client/src/art.tsx`, `Board.tsx`); no official assets/logos.
+  dev-card headers, block-style pieces in red/blue/white/orange. No official assets/logos.
+- Design v2 "physical table" (2026-10-16, frontend-design skill): painted raster art is
+  generated from code by `packages/client/art-src/generate.py` (numpy + Pillow + SciPy)
+  into `public/art/*.webp` — terrain tiles (2 variants each), sea frame with beach,
+  resource cards, dev-card illustrations, card backs, wood and parchment textures.
+  Re-run the script after changing the art code. Board pieces, number discs, harbors,
+  dice and robber stay SVG (crisp, cheap). No SVG filters on the board (phone perf).
+  Fonts: Frank Ruhl Libre (headings, numbers, card titles) + Rubik (UI text).
+  Animations: cards fly from producing lands to hands, pieces drop in, dice tumble,
+  robber slides; all disabled under prefers-reduced-motion.
 
 ## Participants (update.md is binding)
 - 2–4 total participants, any mix of humans and bots: `2 <= humans + bots <= 4`, bots ≤ 3.

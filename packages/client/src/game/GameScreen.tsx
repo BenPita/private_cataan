@@ -7,14 +7,16 @@ import {
   legalSettlements,
   legalSetupRoads,
   legalSetupSettlements,
+  TERRAIN_RESOURCE,
   type Action,
   type ResMap,
+  type Resource,
 } from '@hex/engine';
 import { emit, rejoinLink, sendAction, type RoomSnapshot } from '../net';
 import { setSoundEnabled, sfx, soundEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
-import { Board, type BoardTargets, type Selection } from './Board';
+import { Board, hexCenter, type BoardTargets, type Selection } from './Board';
 import {
   BuildSheet,
   DevSheet,
@@ -33,7 +35,7 @@ import {
 
 type SheetName = 'build' | 'trade' | 'dev' | 'log' | 'menu' | 'help' | null;
 
-function Die({ value, rolling }: { value: number; rolling: boolean }) {
+function Die({ value, rolling, tone }: { value: number; rolling: boolean; tone: 'red' | 'yellow' }) {
   const spots: Record<number, Array<[number, number]>> = {
     1: [[50, 50]],
     2: [[28, 28], [72, 72]],
@@ -44,9 +46,20 @@ function Die({ value, rolling }: { value: number; rolling: boolean }) {
   };
   return (
     <svg viewBox="0 0 100 100" className={`die ${rolling ? 'rolling' : ''}`}>
-      <rect x="6" y="6" width="88" height="88" rx="18" fill="#d8392b" stroke="#7e1a10" strokeWidth="4" />
+      <defs>
+        <linearGradient id={`die-${tone}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={tone === 'red' ? '#ef5a43' : '#ffe27a'} />
+          <stop offset="100%" stopColor={tone === 'red' ? '#a51f12' : '#e0a91c'} />
+        </linearGradient>
+      </defs>
+      <rect x="9" y="11" width="86" height="86" rx="20" fill="rgba(0,0,0,0.3)" />
+      <rect x="5" y="5" width="86" height="86" rx="20" fill={`url(#die-${tone})`} stroke={tone === 'red' ? '#6e140b' : '#9a6f0c'} strokeWidth="3" />
+      <rect x="14" y="10" width="60" height="14" rx="7" fill="rgba(255,255,255,0.28)" />
       {spots[value].map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="8.5" fill="#f6e7bf" />
+        <g key={i}>
+          <circle cx={x - 2} cy={y - 2} r="8.6" fill={tone === 'red' ? '#fff6e6' : '#c0281c'} />
+          <circle cx={x - 3.5} cy={y - 4} r="2.6" fill="rgba(255,255,255,0.45)" />
+        </g>
       ))}
     </svg>
   );
@@ -67,6 +80,50 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [flash, setFlash] = useState<Partial<ResMap>>({});
   const [inspect, setInspect] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Cards that fly from producing lands to each player's hand.
+  const boardSvg = useRef<SVGSVGElement | null>(null);
+  const [flights, setFlights] = useState<Array<{ id: number; r: Resource; x: number; y: number; dx: number; dy: number; delay: number }>>([]);
+  const flightId = useRef(0);
+  const launchFlights = (hexes: number[], gains: ResMap[]) => {
+    const svg = boardSvg.current;
+    const root = svg?.querySelector('.board-root') as SVGGElement | null;
+    if (!svg || !root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const matrix = root.getScreenCTM();
+    if (!matrix) return;
+    const toScreen = (hex: number) => {
+      const c = hexCenter(hex);
+      const p = new DOMPoint(c.x, c.y).matrixTransform(matrix);
+      return { x: p.x, y: p.y };
+    };
+    const center = (el: Element | null) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const next: typeof flights = [];
+    let k = 0;
+    gains.forEach((g, player) => {
+      for (const r of RESOURCES) {
+        if (!g[r]) continue;
+        const hex = hexes.find((h) => TERRAIN_RESOURCE[view.board.hexes[h].terrain] === r);
+        if (hex === undefined) continue;
+        const from = toScreen(hex);
+        const target =
+          player === me
+            ? center(document.querySelector(`.hand-slot[data-res="${r}"]`))
+            : center(document.querySelector(`.player-chip[data-player="${player}"]`));
+        if (!target) continue;
+        for (let n = 0; n < Math.min(g[r], 3); n++) {
+          next.push({ id: ++flightId.current, r, x: from.x, y: from.y, dx: target.x - from.x, dy: target.y - from.y, delay: k++ * 90 });
+        }
+      }
+    });
+    if (!next.length) return;
+    setFlights((cur) => [...cur, ...next]);
+    const ids = new Set(next.map((f) => f.id));
+    setTimeout(() => setFlights((cur) => cur.filter((f) => !ids.has(f.id))), 1400 + k * 90);
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -120,6 +177,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           sfx.gain();
           setFlash(gain);
         }
+        launchFlights(roll.producingHexes, roll.gains);
         if (sum === 7) sfx.robber();
         setTimeout(() => setDice(null), 1500);
         setTimeout(() => {
@@ -231,7 +289,15 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       <PlayerStrip view={view} seats={snapshot.seats} />
 
       <div className="board-wrap">
-        <Board view={view} targets={targets} selection={selection} onSelect={setSelection} highlightHexes={highlight} onInspectHex={setInspect} />
+        <Board
+          view={view}
+          targets={targets}
+          selection={selection}
+          onSelect={setSelection}
+          highlightHexes={highlight}
+          onInspectHex={setInspect}
+          svgRef={boardSvg}
+        />
         <button className="icon-btn menu-btn" onClick={() => setSheet('menu')} aria-label={t('settings')}>
           ☰
         </button>
@@ -249,13 +315,22 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         )}
         {dice && (
           <div className={`dice-overlay ${dice.rolling ? 'rolling' : ''}`}>
-            <Die value={dice.faces[0]} rolling={dice.rolling} />
-            <Die value={dice.faces[1]} rolling={dice.rolling} />
+            <Die value={dice.faces[0]} rolling={dice.rolling} tone="red" />
+            <Die value={dice.faces[1]} rolling={dice.rolling} tone="yellow" />
             {!dice.rolling && <span className={`dice-sum ${dice.sum === 7 ? 'seven' : ''}`}>{dice.sum}</span>}
           </div>
         )}
         {toast && <div className="toast">{toast}</div>}
       </div>
+      {flights.map((f) => (
+        <img
+          key={f.id}
+          className="flying-card"
+          src={`/art/card-${f.r}.webp`}
+          alt=""
+          style={{ left: f.x, top: f.y, animationDelay: `${f.delay}ms`, ['--dx' as string]: `${f.dx}px`, ['--dy' as string]: `${f.dy}px` }}
+        />
+      ))}
 
       <div className="bottom">
         <div className={`hint ${myTurn ? 'mine' : ''}`}>

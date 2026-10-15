@@ -1,6 +1,6 @@
 // Minimal service worker: makes the app installable and caches the shell.
 // Game state always comes live from the server.
-const CACHE = 'hex-islands-v1';
+const CACHE = 'hex-islands-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon.svg', '/manifest.webmanifest'])));
