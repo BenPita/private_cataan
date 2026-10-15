@@ -1,0 +1,150 @@
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { io, type Socket } from 'socket.io-client';
+import type { Action, BotDifficulty, PlayerView } from '@hex/engine';
+
+export interface RoomConfig {
+  humans: number;
+  bots: number;
+  difficulty: BotDifficulty;
+  victoryTarget: number;
+  boardType: 'random' | 'beginner';
+}
+
+export interface PublicSeat {
+  kind: 'human' | 'bot';
+  name: string | null;
+  claimed: boolean;
+  ready: boolean;
+  connected: boolean;
+  difficulty?: BotDifficulty;
+}
+
+export interface RoomSnapshot {
+  id: string;
+  status: 'lobby' | 'playing' | 'finished';
+  config: RoomConfig;
+  seats: PublicSeat[];
+  revision: number;
+  you: number;
+  game: PlayerView | null;
+}
+
+export type Reply<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+
+export const socket: Socket = io({ autoConnect: true, transports: ['websocket', 'polling'] });
+
+let connected = socket.connected;
+const listeners = new Set<() => void>();
+socket.on('connect', () => {
+  connected = true;
+  listeners.forEach((l) => l());
+});
+socket.on('disconnect', () => {
+  connected = false;
+  listeners.forEach((l) => l());
+});
+
+export function useConnected(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => connected,
+  );
+}
+
+export function emit<T = object>(event: string, payload: unknown = {}): Promise<Reply<T>> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: 'No response from server' }), 10_000);
+    socket.emit(event, payload, (res: Reply<T>) => {
+      clearTimeout(timer);
+      resolve(res);
+    });
+  });
+}
+
+// --- Player tokens (one per room), kept on this device ---------------------
+
+const tokenKey = (roomId: string) => `hex-token:${roomId}`;
+
+export function saveToken(roomId: string, token: string) {
+  try {
+    localStorage.setItem(tokenKey(roomId), token);
+  } catch {
+    /* storage unavailable: the session still works until reload */
+  }
+}
+
+export function loadToken(roomId: string): string | null {
+  try {
+    return localStorage.getItem(tokenKey(roomId));
+  } catch {
+    return null;
+  }
+}
+
+export function rejoinLink(roomId: string): string | null {
+  const token = loadToken(roomId);
+  return token ? `${location.origin}/g/${roomId}#t=${token}` : null;
+}
+
+/** Live room state for this device's seat, resumed automatically on reconnect. */
+export function useRoom(roomId: string) {
+  const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
+  const [status, setStatus] = useState<'loading' | 'needs-join' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const snapshotRef = useRef<RoomSnapshot | null>(null);
+
+  useEffect(() => {
+    // A rejoin link carries the token in the URL hash (never sent to the server as a URL).
+    const hash = new URLSearchParams(location.hash.slice(1));
+    const fromHash = hash.get('t');
+    if (fromHash) {
+      saveToken(roomId, fromHash);
+      history.replaceState(null, '', location.pathname);
+    }
+
+    const onState = (s: RoomSnapshot) => {
+      if (s.id !== roomId) return;
+      if (snapshotRef.current && s.revision < snapshotRef.current.revision) return;
+      snapshotRef.current = s;
+      setSnapshot(s);
+      setStatus('ready');
+    };
+    socket.on('room:state', onState);
+
+    const resume = async () => {
+      const token = loadToken(roomId);
+      if (!token) {
+        setStatus((st) => (st === 'ready' ? st : 'needs-join'));
+        return;
+      }
+      const res = await emit('room:resume', { roomId, token });
+      if (!res.ok) {
+        if (res.error === 'Game not found') {
+          setError(res.error);
+          setStatus('error');
+        } else {
+          setStatus('needs-join');
+        }
+      }
+    };
+    resume();
+    socket.on('connect', resume);
+    return () => {
+      socket.off('room:state', onState);
+      socket.off('connect', resume);
+    };
+  }, [roomId]);
+
+  return { snapshot, status, error, setStatus };
+}
+
+export async function sendAction(snapshot: RoomSnapshot, action: Action): Promise<Reply> {
+  return emit('game:action', {
+    requestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+    expectedRevision: snapshot.revision,
+    action,
+  });
+}

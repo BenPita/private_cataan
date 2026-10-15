@@ -1,0 +1,24 @@
+{
+  "name": "@hex/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hex/engine": "*",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "socket.io": "^4.8.1",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "pg-mem": "^3.0.14",
+    "socket.io-client": "^4.8.1"
+  }
+}

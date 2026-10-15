@@ -1,0 +1,180 @@
+/**
+ * Static board graph for the classic 3-4-5-4-3 island.
+ *
+ * Hexes use pointy-top axial coordinates. Vertices and edges are derived once
+ * from hex corner positions and given stable, sorted ids ("v0".."v53",
+ * "e0".."e71"). Rules code works only with this graph, never with pixels;
+ * the pixel positions are exported for rendering.
+ */
+
+export interface HexGeo {
+  id: number;
+  q: number;
+  r: number;
+  x: number;
+  y: number;
+  vertices: string[];
+  edges: string[];
+  neighbors: number[];
+}
+
+export interface VertexGeo {
+  id: string;
+  x: number;
+  y: number;
+  hexes: number[];
+  edges: string[];
+  neighbors: string[];
+}
+
+export interface EdgeGeo {
+  id: string;
+  vertices: [string, string];
+  hexes: number[];
+  x: number;
+  y: number;
+}
+
+export interface BoardGraph {
+  hexes: HexGeo[];
+  vertices: Record<string, VertexGeo>;
+  edges: Record<string, EdgeGeo>;
+  vertexIds: string[];
+  edgeIds: string[];
+  /** Coastal edges (touching exactly one land hex) in clockwise order around the island. */
+  coastalEdges: string[];
+}
+
+const SQRT3 = Math.sqrt(3);
+
+function axialCoords(): Array<[number, number]> {
+  const coords: Array<[number, number]> = [];
+  for (let r = -2; r <= 2; r++) {
+    for (let q = -2; q <= 2; q++) {
+      const s = -q - r;
+      if (Math.abs(s) <= 2) coords.push([q, r]);
+    }
+  }
+  return coords;
+}
+
+function key(x: number, y: number): string {
+  return `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
+}
+
+function buildGraph(): BoardGraph {
+  const coords = axialCoords();
+  const rawVertices = new Map<string, { x: number; y: number; hexes: Set<number> }>();
+  const hexCorners: string[][] = [];
+
+  coords.forEach(([q, r], hexId) => {
+    const cx = SQRT3 * (q + r / 2);
+    const cy = 1.5 * r;
+    const corners: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 180) * (60 * i - 90);
+      const x = cx + Math.cos(angle);
+      const y = cy + Math.sin(angle);
+      const k = key(x, y);
+      if (!rawVertices.has(k)) rawVertices.set(k, { x, y, hexes: new Set() });
+      rawVertices.get(k)!.hexes.add(hexId);
+      corners.push(k);
+    }
+    hexCorners.push(corners);
+  });
+
+  // Stable vertex ids: sorted top-to-bottom, then left-to-right.
+  const sortedKeys = [...rawVertices.keys()].sort((a, b) => {
+    const va = rawVertices.get(a)!;
+    const vb = rawVertices.get(b)!;
+    return Math.abs(va.y - vb.y) > 1e-6 ? va.y - vb.y : va.x - vb.x;
+  });
+  const vid = new Map<string, string>();
+  sortedKeys.forEach((k, i) => vid.set(k, `v${i}`));
+
+  const vertices: Record<string, VertexGeo> = {};
+  for (const k of sortedKeys) {
+    const raw = rawVertices.get(k)!;
+    vertices[vid.get(k)!] = {
+      id: vid.get(k)!,
+      x: raw.x,
+      y: raw.y,
+      hexes: [...raw.hexes].sort((a, b) => a - b),
+      edges: [],
+      neighbors: [],
+    };
+  }
+
+  // Edges between consecutive hex corners.
+  const rawEdges = new Map<string, { a: string; b: string; hexes: Set<number> }>();
+  hexCorners.forEach((corners, hexId) => {
+    for (let i = 0; i < 6; i++) {
+      const a = vid.get(corners[i])!;
+      const b = vid.get(corners[(i + 1) % 6])!;
+      const [lo, hi] = Number(a.slice(1)) < Number(b.slice(1)) ? [a, b] : [b, a];
+      const k = `${lo}-${hi}`;
+      if (!rawEdges.has(k)) rawEdges.set(k, { a: lo, b: hi, hexes: new Set() });
+      rawEdges.get(k)!.hexes.add(hexId);
+    }
+  });
+  const edgeKeys = [...rawEdges.keys()].sort((ka, kb) => {
+    const ea = rawEdges.get(ka)!;
+    const eb = rawEdges.get(kb)!;
+    const ya = (vertices[ea.a].y + vertices[ea.b].y) / 2;
+    const yb = (vertices[eb.a].y + vertices[eb.b].y) / 2;
+    if (Math.abs(ya - yb) > 1e-6) return ya - yb;
+    return (vertices[ea.a].x + vertices[ea.b].x) / 2 - (vertices[eb.a].x + vertices[eb.b].x) / 2;
+  });
+
+  const edges: Record<string, EdgeGeo> = {};
+  const edgeIdByKey = new Map<string, string>();
+  edgeKeys.forEach((k, i) => {
+    const raw = rawEdges.get(k)!;
+    const id = `e${i}`;
+    edgeIdByKey.set(k, id);
+    edges[id] = {
+      id,
+      vertices: [raw.a, raw.b],
+      hexes: [...raw.hexes].sort((a, b) => a - b),
+      x: (vertices[raw.a].x + vertices[raw.b].x) / 2,
+      y: (vertices[raw.a].y + vertices[raw.b].y) / 2,
+    };
+    vertices[raw.a].edges.push(id);
+    vertices[raw.b].edges.push(id);
+    vertices[raw.a].neighbors.push(raw.b);
+    vertices[raw.b].neighbors.push(raw.a);
+  });
+
+  const hexes: HexGeo[] = coords.map(([q, r], id) => {
+    const vs = hexCorners[id].map((k) => vid.get(k)!);
+    const es: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = vs[i];
+      const b = vs[(i + 1) % 6];
+      const [lo, hi] = Number(a.slice(1)) < Number(b.slice(1)) ? [a, b] : [b, a];
+      es.push(edgeIdByKey.get(`${lo}-${hi}`)!);
+    }
+    return { id, q, r, x: SQRT3 * (q + r / 2), y: 1.5 * r, vertices: vs, edges: es, neighbors: [] };
+  });
+  for (const h of hexes) {
+    h.neighbors = hexes
+      .filter((o) => o.id !== h.id && o.vertices.filter((v) => h.vertices.includes(v)).length === 2)
+      .map((o) => o.id);
+  }
+
+  const coastalEdges = Object.values(edges)
+    .filter((e) => e.hexes.length === 1)
+    .sort((a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x))
+    .map((e) => e.id);
+
+  return {
+    hexes,
+    vertices,
+    edges,
+    vertexIds: Object.keys(vertices),
+    edgeIds: Object.keys(edges),
+    coastalEdges,
+  };
+}
+
+export const GRAPH: BoardGraph = buildGraph();

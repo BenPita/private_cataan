@@ -1,0 +1,17 @@
+# Render Blueprint: one free web service running the game server,
+# which also serves the built client. DATABASE_URL comes from Neon.
+services:
+  - type: web
+    name: hex-islands
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.19.4
+      - key: DATABASE_URL
+        sync: false
