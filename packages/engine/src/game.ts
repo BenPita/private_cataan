@@ -92,8 +92,10 @@ export function createGame(
     devDeck: rng.shuffle(deck),
     turn: 0,
     currentPlayer: 0,
-    phase: 'INITIAL_PLACEMENT',
-    setup: { order: ruleset.setupOrder(players.length), step: 0, lastSettlement: null },
+    phase: 'ORDER_ROLL',
+    turnOrder: players.map((_, i) => i),
+    orderRoll: { groups: [players.map((_, i) => i)], rolls: {}, history: [] },
+    setup: null,
     hasRolled: false,
     lastRoll: null,
     pendingDiscards: {},
@@ -105,7 +107,7 @@ export function createGame(
     longestRoad: { holder: null, lengths: players.map(() => 0) },
     largestArmy: null,
     winner: null,
-    log: [{ msg: 'The game begins. Place your starting settlements.' }],
+    log: [{ msg: 'Everyone rolls the dice — the highest roll goes first.' }],
     rng: rng.seed,
   };
   return state;
@@ -162,7 +164,7 @@ function updateLargestArmy(state: GameState, player: number): void {
 }
 
 function checkVictory(state: GameState): void {
-  if (state.phase === 'INITIAL_PLACEMENT' || state.winner !== null) return;
+  if (state.phase === 'ORDER_ROLL' || state.phase === 'INITIAL_PLACEMENT' || state.winner !== null) return;
   const p = state.currentPlayer;
   if (victoryPoints(state, p) >= state.config.victoryTarget) {
     state.winner = p;
@@ -262,6 +264,47 @@ function stealFrom(state: GameState, rng: Rng, thief: number, victim: number): v
   });
 }
 
+export function nextInTurnOrder(state: GameState, player: number): number {
+  const idx = state.turnOrder.indexOf(player);
+  return state.turnOrder[(idx + 1) % state.turnOrder.length];
+}
+
+/** The tied group that must roll next in the opening roll, or null when the order is decided. */
+export function orderRollGroup(state: GameState): number[] | null {
+  return state.orderRoll?.groups.find((g) => g.length > 1) ?? null;
+}
+
+function resolveOrderRound(state: GameState): void {
+  const order = state.orderRoll!;
+  const group = orderRollGroup(state)!;
+  if (!group.every((p) => order.rolls[p])) return;
+  const sum = (p: number) => order.rolls[p][0] + order.rolls[p][1];
+  // Split the tied group by this round's rolls, highest first; equal rolls stay tied.
+  const sorted = [...group].sort((a, b) => sum(b) - sum(a));
+  const split: number[][] = [];
+  for (const p of sorted) {
+    const last = split[split.length - 1];
+    if (last && sum(last[0]) === sum(p)) last.push(p);
+    else split.push([p]);
+  }
+  const idx = order.groups.indexOf(group);
+  order.groups.splice(idx, 1, ...split);
+  order.rolls = {};
+  const stillTied = split.filter((g) => g.length > 1);
+  for (const g of stillTied) {
+    state.log.push({ msg: `${g.map((p) => state.players[p].name).join(' and ')} tied — roll again.` });
+  }
+  if (orderRollGroup(state)) return;
+
+  state.turnOrder = order.groups.flat();
+  state.phase = 'INITIAL_PLACEMENT';
+  state.setup = { order: rulesetFor(state.players.length).setupOrder(state.turnOrder), step: 0, lastSettlement: null };
+  state.currentPlayer = state.turnOrder[0];
+  state.log.push({
+    msg: `Turn order: ${state.turnOrder.map((p) => state.players[p].name).join(' → ')}. ${state.players[state.turnOrder[0]].name} places first.`,
+  });
+}
+
 function startTurn(state: GameState, player: number): void {
   state.currentPlayer = player;
   state.turn++;
@@ -338,6 +381,19 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
   const me = state.players[player];
 
   switch (action.type) {
+    case 'rollForOrder': {
+      requirePhase(state, 'ORDER_ROLL');
+      const group = orderRollGroup(state);
+      if (!group || !group.includes(player)) fail('You do not need to roll now');
+      if (state.orderRoll!.rolls[player]) fail('You already rolled');
+      const dice: [number, number] = [rng.int(6) + 1, rng.int(6) + 1];
+      state.orderRoll!.rolls[player] = dice;
+      state.orderRoll!.history.push({ player, dice });
+      state.log.push({ msg: `${me.name} rolled ${dice[0] + dice[1]} for turn order.` });
+      resolveOrderRound(state);
+      return;
+    }
+
     case 'placeSetupSettlement': {
       requirePhase(state, 'INITIAL_PLACEMENT');
       requireActive(state, player);
@@ -379,7 +435,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         state.setup = null;
         state.log.push({ msg: 'Setup complete. Let the game begin!' });
         updateLongestRoad(state);
-        startTurn(state, 0);
+        startTurn(state, state.turnOrder[0]);
       } else {
         state.currentPlayer = setup.order[setup.step];
       }
@@ -707,7 +763,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
-      startTurn(state, (player + 1) % state.players.length);
+      startTurn(state, nextInTurnOrder(state, player));
       return;
     }
 

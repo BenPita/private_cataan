@@ -28,8 +28,12 @@ Read this file instead of the originals; consult them only for fine detail.
   if several entitled → nobody gets that resource that roll.
 - Pieces per player: 15 roads, 5 settlements, 4 cities.
 - Costs: road L+B; settlement L+B+W+G; city 2G+3O; dev card W+G+O.
-- Setup snake order (n players): 0..n-1, n-1..0. Settlement + connected road each
-  step. Second settlement yields starting resources. Seat 0 (host) goes first.
+- Opening roll (owner's decision, phase `ORDER_ROLL`): every player rolls 2 dice; the
+  turn order is the ranking by roll, highest first (tied players reroll among themselves).
+  Note: the official rule is "highest starts, then clockwise"; here the whole order is by roll.
+- Setup snake order over the turn order (A,B,C,C,B,A). Settlement + connected road each
+  step. Second settlement yields 1 card per adjacent producing hex. Nobody starts with
+  any other cards. Regular turns follow the same turn order.
 - Distance rule; roads connect to own network, can't pass through opponent buildings.
 - 7: everyone with >7 cards discards floor(n/2) (simultaneously, players choose),
   then active moves robber to a different hex, then steals 1 random card from a
@@ -65,12 +69,12 @@ order, RNG seed.
 
 ## Milestones
 1. Engine: board, graph, setup, production, building — DONE
-2. Engine: robber, trading, dev cards, achievements, victory + tests — DONE (69 tests)
+2. Engine: robber, trading, dev cards, achievements, victory + tests — DONE (75 tests)
 3. Multiplayer server + client → playable on two phones — DONE (verified with two browsers locally)
 4. Medium bot (then Easy/Hard as strategy variants) — NEXT. Server currently rejects bots>0
    (`BOTS_ENABLED` in `packages/server/src/rooms.ts`); Home screen shows bots as "coming soon".
 5. Mobile polish, animations, sounds, PWA — basic versions exist (sfx, dice anim, sw.js)
-6. Deploy to Render + Neon, Playwright e2e tests
+6. Deploy to Render + Neon — LIVE at https://hex-islands-j3bn.onrender.com (auto-deploys on push to main). Playwright e2e still TODO
 
 ## Code map
 - `packages/engine/src/game.ts` — createGame, applyAction (all rules), scoring

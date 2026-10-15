@@ -20,6 +20,7 @@ import {
   DevSheet,
   DiscardSheet,
   IncomingTrade,
+  OrderRollPanel,
   PlayerStrip,
   ResList,
   ResourceBar,
@@ -36,7 +37,7 @@ const DIE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
   const view = snapshot.game!;
   const me = view.me!;
-  const myTurn = view.currentPlayer === me && view.phase !== 'GAME_OVER';
+  const myTurn = view.currentPlayer === me && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL';
   const myRes = view.players[me].resources!;
   const [mode, setMode] = useState<BuildMode | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
@@ -113,6 +114,23 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     return () => clearInterval(timer);
   }, [view.lastRoll?.id]);
 
+  // Keep the opening-roll result on screen after the order is decided.
+  const [showOrderResult, setShowOrderResult] = useState(false);
+  const prevPhase = useRef(view.phase);
+  useEffect(() => {
+    if (prevPhase.current === 'ORDER_ROLL' && view.phase !== 'ORDER_ROLL') setShowOrderResult(true);
+    if (view.phase !== 'INITIAL_PLACEMENT') setShowOrderResult(false);
+    prevPhase.current = view.phase;
+  }, [view.phase]);
+
+  // Dice sound for opening rolls.
+  const orderRolls = view.orderRoll?.history.length ?? 0;
+  const prevOrderRolls = useRef(orderRolls);
+  useEffect(() => {
+    if (orderRolls > prevOrderRolls.current) sfx.dice();
+    prevOrderRolls.current = orderRolls;
+  }, [orderRolls]);
+
   // Victory sound.
   useEffect(() => {
     if (view.phase === 'GAME_OVER') sfx.win();
@@ -163,6 +181,7 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
   const pendingDiscard = view.pendingDiscards[me];
   const hint = (() => {
     if (view.phase === 'GAME_OVER') return 'Game over';
+    if (view.phase === 'ORDER_ROLL') return 'Rolling for turn order…';
     if (!myTurn) {
       if (view.phase === 'ROBBER_DISCARD') return pendingDiscard ? `Discard ${pendingDiscard} cards` : 'Waiting for players to discard…';
       if (view.phase === 'INITIAL_PLACEMENT') return `${current.name} is placing…`;
@@ -321,6 +340,9 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
 
       {pendingDiscard !== undefined && view.phase === 'ROBBER_DISCARD' && (
         <DiscardSheet view={view} required={pendingDiscard} dispatch={dispatch} />
+      )}
+      {(view.phase === 'ORDER_ROLL' || showOrderResult) && view.orderRoll && (
+        <OrderRollPanel view={view} dispatch={dispatch} onClose={() => setShowOrderResult(false)} />
       )}
       {myTurn && view.phase === 'ROBBER_STEAL' && <StealSheet view={view} dispatch={dispatch} />}
       {incoming && <IncomingTrade view={view} dispatch={dispatch} />}

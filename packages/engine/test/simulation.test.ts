@@ -11,6 +11,7 @@ import {
   legalSettlements,
   legalSetupRoads,
   legalSetupSettlements,
+  orderRollGroup,
   resOf,
   totalRes,
   type Action,
@@ -23,6 +24,8 @@ function candidates(s: GameState, rng: Rng): Array<[number, Action]> {
   const me = s.players[p];
   const out: Array<[number, Action]> = [];
   switch (s.phase) {
+    case 'ORDER_ROLL':
+      return orderRollGroup(s)!.filter((pl) => !s.orderRoll!.rolls[pl]).map((pl) => [pl, { type: 'rollForOrder' }]);
     case 'INITIAL_PLACEMENT':
       if (s.setup!.lastSettlement) {
         for (const e of legalSetupRoads(s, s.setup!.lastSettlement)) out.push([p, { type: 'placeSetupRoad', edge: e }]);

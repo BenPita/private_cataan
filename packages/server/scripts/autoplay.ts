@@ -46,6 +46,10 @@ function choose(v: PlayerView): Action | null {
   if (v.trade && v.trade.to.includes(me) && v.trade.responses[me] === 'pending') {
     return { type: 'respondTrade', tradeId: v.trade.id, response: 'reject' };
   }
+  if (v.phase === 'ORDER_ROLL') {
+    const group = v.orderRoll!.groups.find((g) => g.length > 1);
+    return group?.includes(me) && !v.orderRoll!.rolls[me] ? { type: 'rollForOrder' } : null;
+  }
   if (v.currentPlayer !== me) return null;
   switch (v.phase) {
     case 'INITIAL_PLACEMENT': {
@@ -119,4 +123,4 @@ for (const token of tokens) {
 setTimeout(() => {
   console.log('timeout');
   process.exit(1);
-}, 120_000);
+}, 900_000);

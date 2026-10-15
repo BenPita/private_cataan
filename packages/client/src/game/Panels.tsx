@@ -107,7 +107,7 @@ export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap
 export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSeat[] }) {
   return (
     <div className="player-strip">
-      {view.players.map((p, i) => (
+      {view.turnOrder.map((i) => ({ p: view.players[i], i })).map(({ p, i }) => (
         <div
           key={i}
           className={`player-chip ${view.currentPlayer === i && view.phase !== 'GAME_OVER' ? 'active' : ''}`}
@@ -590,5 +590,62 @@ export function StealSheet({ view, dispatch }: { view: PlayerView; dispatch: Dis
         ))}
       </div>
     </Sheet>
+  );
+}
+
+// --- Opening roll ------------------------------------------------------------
+
+const DIE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+export function OrderRollPanel({ view, dispatch, onClose }: { view: PlayerView; dispatch: Dispatch; onClose?: () => void }) {
+  const order = view.orderRoll!;
+  const decided = view.phase !== 'ORDER_ROLL';
+  const me = view.me!;
+  const group = order.groups.find((g) => g.length > 1) ?? [];
+  const mustRoll = group.includes(me) && !order.rolls[me];
+  const tiebreak = order.history.length >= view.players.length;
+  const waiting = group.filter((p) => !order.rolls[p]).map((p) => view.players[p].name);
+  return (
+    <div className="order-roll">
+      <div className="order-card">
+        <h2>🎲 Who goes first?</h2>
+        <p className="muted">
+          {decided ? 'Turn order is set:' : tiebreak ? 'Tie! The tied players roll again.' : 'Everyone rolls — the highest roll starts, then the next highest, and so on.'}
+        </p>
+        <ul className="order-list">
+          {(decided ? view.turnOrder : view.players.map((_, i) => i)).map((i, pos) => {
+            const p = view.players[i];
+            const rolls = order.history.filter((h) => h.player === i);
+            return (
+              <li key={i} className={group.includes(i) ? 'rolling' : ''}>
+                {decided && <span className="seat-num">{pos + 1}</span>}
+                <span className="dot" style={{ background: p.color }} />
+                <b>{p.name}</b>
+                <span className="order-dice">
+                  {rolls.map((r, k) => (
+                    <span key={k} className={k < rolls.length - 1 ? 'old' : ''}>
+                      {DIE[r.dice[0]]}
+                      {DIE[r.dice[1]]} <b>{r.dice[0] + r.dice[1]}</b>
+                    </span>
+                  ))}
+                  {group.includes(i) && !order.rolls[i] && <span className="muted">waiting…</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        {decided ? (
+          <button className="btn primary wide big" onClick={onClose}>
+            {view.players[view.turnOrder[0]].name} starts — let's go!
+          </button>
+        ) : mustRoll ? (
+          <button className="btn primary wide big pulse" onClick={() => dispatch({ type: 'rollForOrder' })}>
+            🎲 Roll
+          </button>
+        ) : (
+          <p className="muted center">Waiting for {waiting.join(', ')}…</p>
+        )}
+      </div>
+    </div>
   );
 }

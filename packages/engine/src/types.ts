@@ -9,6 +9,7 @@ export type DevCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPl
 export type HarborType = Resource | 'generic';
 
 export type Phase =
+  | 'ORDER_ROLL'
   | 'INITIAL_PLACEMENT'
   | 'PRE_ROLL'
   | 'ROLL_RESOLUTION'
@@ -114,6 +115,18 @@ export interface GameState {
   turn: number;
   currentPlayer: number;
   phase: Phase;
+  /** Seats in playing order, decided by the opening dice roll. */
+  turnOrder: number[];
+  /**
+   * Opening roll to decide who starts. `groups` is the ranking so far: each
+   * inner array is a set of players still tied with each other. The first
+   * group with more than one player rolls next; `rolls` holds this round's dice.
+   */
+  orderRoll: {
+    groups: number[][];
+    rolls: Record<number, [number, number]>;
+    history: Array<{ player: number; dice: [number, number] }>;
+  } | null;
   setup: { order: number[]; step: number; lastSettlement: string | null } | null;
   hasRolled: boolean;
   lastRoll: LastRoll | null;
@@ -132,6 +145,7 @@ export interface GameState {
 }
 
 export type Action =
+  | { type: 'rollForOrder' }
   | { type: 'placeSetupSettlement'; vertex: string }
   | { type: 'placeSetupRoad'; edge: string }
   | { type: 'rollDice' }

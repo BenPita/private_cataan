@@ -5,16 +5,33 @@ import {
   emptyRes,
   legalSetupRoads,
   legalSetupSettlements,
+  orderRollGroup,
   type Action,
   type GameState,
   type ResMap,
 } from '../src';
 
+/** A new game with the opening roll skipped: seats play in order 0, 1, 2, ... */
 export function newGame(n = 2, seed = 42): GameState {
-  return createGame(
+  const s = createGame(
     Array.from({ length: n }, (_, i) => ({ name: `P${i}`, kind: 'human' as const })),
     seed,
   );
+  s.phase = 'INITIAL_PLACEMENT';
+  s.orderRoll = null;
+  s.setup = { order: [...s.turnOrder, ...s.turnOrder.slice().reverse()], step: 0, lastSettlement: null };
+  return s;
+}
+
+/** Everyone rolls for turn order until it is decided. */
+export function completeOrderRoll(state: GameState): GameState {
+  let s = state;
+  while (s.phase === 'ORDER_ROLL') {
+    const group = orderRollGroup(s)!;
+    const p = group.find((x) => !s.orderRoll!.rolls[x])!;
+    s = act(s, p, { type: 'rollForOrder' });
+  }
+  return s;
 }
 
 export function act(state: GameState, player: number, action: Action): GameState {

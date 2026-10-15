@@ -52,14 +52,11 @@ export const DISCARD_THRESHOLD = 7;
 
 export interface Ruleset {
   id: GameState['ruleset'];
-  /** Seat order for initial placement (snake order). */
-  setupOrder(playerCount: number): number[];
+  /** Seat order for initial placement (snake order over the turn order). */
+  setupOrder(turnOrder: number[]): number[];
 }
 
-const snakeOrder = (n: number): number[] => {
-  const forward = Array.from({ length: n }, (_, i) => i);
-  return [...forward, ...forward.slice().reverse()];
-};
+const snakeOrder = (turnOrder: number[]): number[] => [...turnOrder, ...turnOrder.slice().reverse()];
 
 /** Standard base-game rules, used for 3-4 participants. */
 export const CLASSIC: Ruleset = {
