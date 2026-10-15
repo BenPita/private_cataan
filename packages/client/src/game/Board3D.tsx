@@ -176,7 +176,7 @@ interface Tween {
   update(t: number): boolean; // returns false when finished
 }
 
-export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
+export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef, odds }: BoardProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const engine = useRef<ReturnType<typeof createEngine> | null>(null);
   const propsRef = useRef({ onSelect, onInspectHex, targets });
@@ -200,7 +200,10 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
   useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
   useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.players.length]);
   useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
-  useEffect(() => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'), [targets, selection]);
+  useEffect(
+    () => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff', odds),
+    [targets, selection, odds],
+  );
   useEffect(() => engine.current?.setHighlight(highlightHexes), [highlightHexes]);
 
   return <div ref={mountRef} className="board-3d" />;
@@ -578,9 +581,31 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const vertexOutlineGeo = new THREE.TorusGeometry(0.15, 0.09, 10, 28);
   const hexRingGeo = new THREE.TorusGeometry(0.82, 0.035, 6, 6);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+  const oddsMats = new Map<number, THREE.SpriteMaterial>();
+  const oddsMaterial = (pct: number) => {
+    if (!oddsMats.has(pct)) {
+      const c = document.createElement('canvas');
+      c.width = 128;
+      c.height = 64;
+      const g = c.getContext('2d')!;
+      g.fillStyle = 'rgba(42,30,20,0.88)';
+      g.beginPath();
+      g.roundRect(4, 6, 120, 52, 26);
+      g.fill();
+      g.fillStyle = pct >= 30 ? '#ffd25a' : '#fff3cf';
+      g.font = '800 36px Rubik, Arial, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`${pct}%`, 64, 34);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      oddsMats.set(pct, new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
+    }
+    return oddsMats.get(pct)!;
+  };
   let pulse: Tween | null = null;
 
-  function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string) {
+  function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string, odds?: Record<string, number>) {
     clear(targetsGroup, false);
     if (pulse) tweens.delete(pulse);
     const marks: THREE.Mesh[] = [];
@@ -597,6 +622,13 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       mark.rotation.x = -Math.PI / 2;
       mark.position.set(v.x, TILE_H + 0.07, v.y);
       if (selected) mark.scale.setScalar(1.5);
+      if (odds?.[vid] !== undefined) {
+        const label = new THREE.Sprite(oddsMaterial(odds[vid]));
+        label.scale.set(0.42, 0.21, 1);
+        label.position.set(v.x + 0.18, TILE_H + 0.42, v.y - 0.1);
+        label.renderOrder = 3;
+        targetsGroup.add(label);
+      }
       const outline = new THREE.Mesh(vertexOutlineGeo, outlineMat);
       outline.rotation.x = -Math.PI / 2;
       outline.position.set(v.x, TILE_H + 0.065, v.y);

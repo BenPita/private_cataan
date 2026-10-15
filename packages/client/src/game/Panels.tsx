@@ -16,7 +16,7 @@ import {
   type ResMap,
   type Resource,
 } from '@hex/engine';
-import { DevCardFace, ResourceCard } from '../art';
+import { DevCardFace, PieceIcon, ResourceCard } from '../art';
 import { devInfo, displayName, resourceName, t } from '../i18n';
 import type { PublicSeat } from '../net';
 
@@ -167,6 +167,70 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
 // --- Build ------------------------------------------------------------------
 
 export type BuildMode = 'road' | 'settlement' | 'city';
+export type BuildKey = BuildMode | 'devCard';
+
+export interface BuildOption {
+  key: BuildKey;
+  left: string;
+  leftN: number;
+  spots: number;
+  /** Why it cannot be built right now, or null when it can. */
+  reason: string | null;
+}
+
+/** What the player could build right now, and why not when they can't. */
+export function buildOptions(view: PlayerView): BuildOption[] {
+  const me = view.me!;
+  const p = view.players[me];
+  const res = p.resources!;
+  const canAct = view.currentPlayer === me && view.phase === 'MAIN_ACTIONS' && view.freeRoads === 0;
+  const items: BuildOption[] = [
+    { key: 'road', leftN: PIECE_LIMITS.roads - p.roadsBuilt, left: '', spots: legalRoads(view, me).length, reason: null },
+    {
+      key: 'settlement',
+      leftN: PIECE_LIMITS.settlements - (p.settlementsBuilt - p.citiesBuilt),
+      left: '',
+      spots: legalSettlements(view, me).length,
+      reason: null,
+    },
+    { key: 'city', leftN: PIECE_LIMITS.cities - p.citiesBuilt, left: '', spots: legalCities(view, me).length, reason: null },
+    { key: 'devCard', leftN: view.devDeckCount, left: '', spots: view.devDeckCount, reason: null },
+  ];
+  for (const it of items) {
+    it.left = it.key === 'devCard' ? t('inDeck', { n: it.leftN }) : t('left', { n: it.leftN });
+    const cost = COSTS[it.key];
+    if (!canAct) it.reason = view.currentPlayer !== me ? t('reasonNotTurn') : view.phase === 'PRE_ROLL' ? t('reasonRollFirst') : t('reasonNotNow');
+    else if (it.leftN <= 0) it.reason = it.key === 'devCard' ? t('reasonDeckEmpty') : t('reasonNoPieces');
+    else if (it.spots === 0) it.reason = t('reasonNoSpot');
+    else if (!hasRes(res, cost)) it.reason = t('reasonNoRes');
+  }
+  return items;
+}
+
+/** Always-visible build tray: what's affordable glows; tapping explains what's missing. */
+export function BuildTray({ view, active, onPick }: { view: PlayerView; active: BuildKey | null; onPick: (o: BuildOption) => void }) {
+  const color = view.players[view.me!].color;
+  return (
+    <div className="build-tray">
+      {buildOptions(view).map((o) => (
+        <button
+          key={o.key}
+          className={`tray-item ${o.reason ? 'blocked' : 'ready'} ${active === o.key ? 'active' : ''}`}
+          onClick={() => onPick(o)}
+          aria-label={`${t(o.key)} — ${o.reason ?? ''}`}
+        >
+          <PieceIcon kind={o.key} color={color} />
+          <span className="tray-name">{t(o.key)}</span>
+          <span className="tray-cost">
+            {RESOURCES.flatMap((r) => Array.from({ length: COSTS[o.key][r] ?? 0 }, (_, i) => (
+              <img key={`${r}${i}`} src={`/art/card-${r}.webp`} alt="" />
+            )))}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function BuildSheet({
   view,

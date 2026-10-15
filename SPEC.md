@@ -42,6 +42,11 @@ Read this file instead of the originals; consult them only for fine detail.
   both dice lie flat), records it, then paints the die faces so the server's values land on
   top (opposite faces still sum to 7) and replays the motion with impact sounds from real
   collisions. 2D board / reduced motion keep the flat dice overlay. Test: client/test/dice.test.ts.
+- Phase 3 UX (2026-10-16): build tray (`BuildTray` in Panels.tsx) replaces the Build button —
+  affordable items glow gold, tapping a blocked item explains why, dev card buys via the confirm
+  bar; chance hints (`game/odds.ts`): % per roll next to settlement spots (2D badges / 3D
+  sprites) and on tapped lands; first-time contextual tips (`game/tips.tsx`, once per device,
+  resettable); effects volume slider; settings toggles for tips and chance hints (`prefs.ts`).
 - Design roadmap (remaining): (tilted camera, extruded tiles with
   normal maps, 3D pieces, physics dice, 2D fallback); phase 3 = UX (tutorial, build tray,
   probability hints, landscape layout, volume settings); phase 4 = ambience (waves,

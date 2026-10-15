@@ -13,16 +13,20 @@ import {
   type Resource,
 } from '@hex/engine';
 import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../net';
-import { canVibrate, setSoundEnabled, setVibrationEnabled, sfx, soundEnabled, vibrationEnabled } from '../sound';
+import { canVibrate, getVolume, setVibrationEnabled, setVolume, sfx, vibrationEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
+import { TipBubble } from './tips';
+import { numberOdds, oddsFor } from './odds';
+import { oddsEnabled, resetTips, setOddsEnabled, setTipsEnabled, tipsEnabled } from '../prefs';
 import { getBoardMode, saveBoardMode, webglAvailable, type BoardMode } from './boardMode';
 
 const Board3D = lazy(() => import('./Board3D'));
 import {
   BuildSheet,
+  BuildTray,
   DevSheet,
   DiscardSheet,
   IncomingTrade,
@@ -84,6 +88,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [flash, setFlash] = useState<Partial<ResMap>>({});
   const [inspect, setInspect] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [buyingDev, setBuyingDev] = useState(false);
   const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
 
   // Cards that fly from producing lands to each player's hand.
@@ -257,10 +262,15 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     }
     return null;
   };
-  const confirm = confirmFor(selection);
+  const confirm = buyingDev
+    ? { label: <>{t('buyDevConfirm')} <ResList res={COSTS.devCard} />?</>, action: { type: 'buyDevCard' } as Action }
+    : confirmFor(selection);
+  const showOdds = oddsEnabled() && !!targets.vertices?.length && (view.phase === 'INITIAL_PLACEMENT' || mode === 'settlement');
+  const odds = useMemo(() => (showOdds ? oddsFor(view, targets.vertices!) : undefined), [showOdds, targets, view.board.robberHex]);
   const boardProps = {
     view,
     targets,
+    odds,
     selection,
     onSelect: setSelection,
     highlightHexes: highlight,
@@ -323,7 +333,9 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         {inspect !== null && (
           <div className="inspect" onClick={() => setInspect(null)}>
             {terrainName(view.board.hexes[inspect].terrain)}
-            {view.board.hexes[inspect].number ? ` · ${view.board.hexes[inspect].number}` : ''}
+            {view.board.hexes[inspect].number
+              ? ` · ${view.board.hexes[inspect].number} · ${t('oddsPerRoll', { n: numberOdds(view.board.hexes[inspect].number!) })}`
+              : ''}
             {view.board.robberHex === inspect ? ` · ${t('robberHere')}` : ''}
           </div>
         )}
@@ -335,6 +347,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           </div>
         )}
         {toast && <div className="toast">{toast}</div>}
+        {!confirm && <TipBubble view={view} myTurn={myTurn} incomingTrade={!!incoming} board3d={boardMode === '3d'} />}
       </div>
       {fx}
       {flights.map((f) => (
@@ -356,7 +369,13 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           <div className="confirm-bar">
             <span>{confirm.label}</span>
             <div className="row">
-              <button className="btn ghost" onClick={() => setSelection(null)}>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setSelection(null);
+                  setBuyingDev(false);
+                }}
+              >
                 {t('cancel')}
               </button>
               <button
@@ -365,6 +384,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
                 onClick={async () => {
                   if (await dispatch(confirm.action)) {
                     setSelection(null);
+                    setBuyingDev(false);
                     if (confirm.action.type.startsWith('build')) setMode(null);
                   }
                 }}
@@ -375,6 +395,21 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           </div>
         ) : (
           <>
+            {view.phase !== 'INITIAL_PLACEMENT' && view.phase !== 'ORDER_ROLL' && (
+              <BuildTray
+                view={view}
+                active={mode}
+                onPick={(o) => {
+                  if (o.reason) {
+                    sfx.error();
+                    showToast(`${t(o.key)}: ${o.reason}`);
+                    return;
+                  }
+                  if (o.key === 'devCard') setBuyingDev(true);
+                  else setMode(mode === o.key ? null : o.key);
+                }}
+              />
+            )}
             <ResourceBar res={myRes} flash={flash} />
             <div className="actions">
               {mode ? (
@@ -387,9 +422,6 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
                 </button>
               ) : (
                 <>
-                  <button className="btn action" onClick={() => setSheet('build')}>
-                    🔨<span>{t('build')}</span>
-                  </button>
                   <button className="btn action" onClick={() => setSheet('trade')}>
                     🤝<span>{t('trade')}</span>
                   </button>
@@ -549,8 +581,11 @@ function MenuSheet({
   boardMode: BoardMode;
   onBoardMode: (m: BoardMode) => void;
 }) {
-  const [sound, setSound] = useState(soundEnabled());
+  const [vol, setVol] = useState(Math.round(getVolume() * 100));
   const [vibrate, setVibrate] = useState(vibrationEnabled());
+  const [odds, setOdds] = useState(oddsEnabled());
+  const [tips, setTips] = useState(tipsEnabled());
+  const [tipsReset, setTipsReset] = useState(false);
   const [copied, setCopied] = useState(false);
   const link = rejoinLink(roomId);
   return (
@@ -568,16 +603,23 @@ function MenuSheet({
           </div>
         </div>
       )}
-      <label className="check big">
+      <label className="volume">
+        <span>
+          {vol === 0 ? '🔇' : vol < 50 ? '🔉' : '🔊'} {t('volume')}
+        </span>
         <input
-          type="checkbox"
-          checked={sound}
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={vol}
           onChange={(e) => {
-            setSound(e.target.checked);
-            setSoundEnabled(e.target.checked);
+            const v = Number(e.target.value);
+            setVol(v);
+            setVolume(v / 100);
           }}
+          onPointerUp={() => sfx.card()}
         />
-        {t('sound')}
       </label>
       {canVibrate() && (
         <label className="check big">
@@ -592,6 +634,38 @@ function MenuSheet({
           {t('vibration')}
         </label>
       )}
+      <label className="check big">
+        <input
+          type="checkbox"
+          checked={odds}
+          onChange={(e) => {
+            setOdds(e.target.checked);
+            setOddsEnabled(e.target.checked);
+          }}
+        />
+        {t('oddsHints')}
+      </label>
+      <label className="check big">
+        <input
+          type="checkbox"
+          checked={tips}
+          onChange={(e) => {
+            setTips(e.target.checked);
+            setTipsEnabled(e.target.checked);
+          }}
+        />
+        {t('tipsOn')}
+      </label>
+      <button
+        className="btn ghost wide"
+        onClick={() => {
+          resetTips();
+          setTips(true);
+          setTipsReset(true);
+        }}
+      >
+        {tipsReset ? t('tipsResetDone') : t('tipsReset')}
+      </button>
       <button className="btn wide" onClick={onHelp}>
         📖 {t('rules')}
       </button>
@@ -623,6 +697,7 @@ function MenuSheet({
 /** Asks before leaving: leaving closes and deletes the game for everyone. */
 export function ExitConfirm({ roomId, onCancel }: { roomId: string; onCancel: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [buyingDev, setBuyingDev] = useState(false);
   const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
   return (
     <Sheet title={t('exitTitle')} onClose={onCancel}>

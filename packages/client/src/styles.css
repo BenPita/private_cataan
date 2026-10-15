@@ -1816,3 +1816,168 @@ h3,
   font-size: 30px;
   margin: 0;
 }
+
+.odds-badge {
+  fill: rgba(42, 30, 20, 0.88);
+}
+.odds-text {
+  fill: #ffe9a8;
+  font: 800 10px Rubik, Arial, sans-serif;
+  text-anchor: middle;
+}
+
+.volume {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 17px;
+}
+.volume input[type='range'] {
+  width: 100%;
+  accent-color: #e8a317;
+  height: 28px;
+}
+
+/* ---------- Build tray ---------- */
+.build-tray {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.tray-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 4px;
+  padding: 5px 6px 6px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 248, 226, 0.95), rgba(226, 204, 156, 0.95));
+  border: 1.5px solid #8a6a36;
+  box-shadow: 0 2px 0 #5d4422;
+  text-align: start;
+  min-height: 52px;
+}
+.tray-item.blocked {
+  filter: saturate(0.4);
+  opacity: 0.72;
+}
+.tray-item.ready {
+  border-color: #e8a317;
+  box-shadow: 0 2px 0 #a86e04, 0 0 0 2px rgba(255, 210, 90, 0.55), 0 0 14px rgba(255, 210, 90, 0.55);
+  animation: trayGlow 1.6s ease-in-out infinite;
+}
+.tray-item.active {
+  background: linear-gradient(180deg, #ffd25a, #f0a913);
+}
+@keyframes trayGlow {
+  50% {
+    box-shadow: 0 2px 0 #a86e04, 0 0 0 3px rgba(255, 210, 90, 0.85), 0 0 20px rgba(255, 210, 90, 0.8);
+  }
+}
+.piece-icon {
+  grid-row: span 2;
+  width: 30px;
+  height: 24px;
+}
+.piece-icon.devcard {
+  width: 18px;
+  height: 25px;
+  border-radius: 3px;
+  margin-inline: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.tray-name {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.tray-cost {
+  display: flex;
+  align-items: center;
+}
+.tray-cost img {
+  width: 10px;
+  aspect-ratio: 5 / 7;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  margin-inline-end: -1px;
+}
+.hand-slot .rcard {
+  max-width: 54px;
+}
+.actions {
+  grid-template-columns: 1fr 1fr 1.6fr;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tray-item.ready {
+    animation: none;
+  }
+}
+
+/* ---------- Tips ---------- */
+.tip {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(94%, 460px);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: url('/art/parchment.webp') center / cover, #f6e8c3;
+  border: 2px solid #e8a317;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  z-index: 12;
+  animation: rise 0.3s ease-out;
+}
+.tip p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.tip-icon {
+  font-size: 22px;
+}
+
+/* Tray must fit a 360px phone: columns may shrink, content truncates. */
+.build-tray {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.tray-item {
+  min-width: 0;
+  padding: 4px 4px 5px;
+  column-gap: 3px;
+}
+.tray-item .piece-icon {
+  width: 24px;
+  height: 20px;
+}
+.tray-item .piece-icon.devcard {
+  width: 14px;
+  height: 20px;
+  margin-inline: 4px;
+}
+.tray-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.tray-cost {
+  min-width: 0;
+  overflow: hidden;
+}
+.tray-cost img {
+  width: 9px;
+}
+.game {
+  overflow-x: hidden;
+}

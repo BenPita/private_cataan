@@ -23,14 +23,38 @@ function writeFlag(key: string, on: boolean) {
   }
 }
 
-let soundOn = readFlag('hex-sound');
+function readVolume(): number {
+  try {
+    const raw = localStorage.getItem('hex-volume');
+    if (raw !== null) return Math.min(1, Math.max(0, Number(raw)));
+    return localStorage.getItem('hex-sound') === 'off' ? 0 : 0.7;
+  } catch {
+    return 0.7;
+  }
+}
+
+let volume = readVolume();
+let soundOn = volume > 0;
 let vibrateOn = readFlag('hex-vibrate');
 
 export const soundEnabled = () => soundOn;
 export const vibrationEnabled = () => vibrateOn;
+export const getVolume = () => volume;
+
+/** Effects volume, 0 (silent) to 1. */
+export function setVolume(v: number) {
+  volume = Math.min(1, Math.max(0, v));
+  soundOn = volume > 0;
+  if (master && ctx) master.gain.setTargetAtTime(volume, ctx.currentTime, 0.02);
+  try {
+    localStorage.setItem('hex-volume', String(volume));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function setSoundEnabled(on: boolean) {
-  soundOn = on;
-  writeFlag('hex-sound', on);
+  setVolume(on ? Math.max(volume, 0.7) : 0);
 }
 export function setVibrationEnabled(on: boolean) {
   vibrateOn = on;
@@ -45,7 +69,7 @@ function audio(): AudioContext | null {
     if (!Ctor) return null;
     ctx = new Ctor();
     master = ctx.createGain();
-    master.gain.value = 0.7;
+    master.gain.value = volume;
     // Gentle compression keeps stacked effects from clipping on phone speakers.
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
