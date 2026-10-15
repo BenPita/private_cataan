@@ -9,7 +9,7 @@ import { GRAPH, RESOURCES, type DevCardType, type LogItem, type PlayerView, type
 import { DevCardFace } from '../art';
 import { devInfo, logText, t } from '../i18n';
 import { sfx } from '../sound';
-import { S } from './Board';
+import { S, type BoardApi } from './Board';
 
 interface Point {
   x: number;
@@ -60,7 +60,7 @@ function expand(res: Partial<ResMap> | undefined, max = 4): Resource[] {
   return out;
 }
 
-export function useGameFx(view: PlayerView, names: string[], boardSvg: MutableRefObject<SVGSVGElement | null>) {
+export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRefObject<BoardApi | null>) {
   const me = view.me!;
   const [flights, setFlights] = useState<Flight[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -71,13 +71,7 @@ export function useGameFx(view: PlayerView, names: string[], boardSvg: MutableRe
   const prevTurnKey = useRef(`${view.turn}-${view.currentPlayer}`);
 
   // --- Screen positions -----------------------------------------------------
-  const boardPoint = (x: number, y: number): Point | null => {
-    const root = boardSvg.current?.querySelector('.board-root') as SVGGElement | null;
-    const m = root?.getScreenCTM();
-    if (!m) return null;
-    const p = new DOMPoint(x, y).matrixTransform(m);
-    return { x: p.x, y: p.y };
-  };
+  const boardPoint = (x: number, y: number): Point | null => boardApi.current?.project(x, y) ?? null;
   const bank = (): Point | null => {
     const wrap = document.querySelector('.board-wrap')?.getBoundingClientRect();
     return wrap ? { x: wrap.left + wrap.width / 2, y: wrap.top + 70 } : null;

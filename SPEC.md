@@ -31,7 +31,13 @@ Read this file instead of the originals; consult them only for fine detail.
   banners, "Your turn!" banner, dust puffs on new pieces. Sounds are synthesized in
   `sound.ts` (dice on wood, wooden clacks, card swishes, coins, bells); vibration
   patterns via navigator.vibrate (Android) with toggles in ☰ settings.
-- Design roadmap: phase 2 = three.js 2.5D/3D board (tilted camera, extruded tiles with
+- Phase 2 3D board (2026-10-16): `packages/client/src/game/Board3D.tsx` (three.js, lazy-loaded
+  chunk ~140 KB gzip). Cardboard hex tiles with thickness (painted textures on top), sea frame
+  plate on a wooden table, wooden 3D pieces, pawn robber, real sun shadows, tilted camera
+  (drag = rotate, pinch = zoom, double tap = reset), raycast tap picking with gold pulsing
+  markers, drop/slide animations, on-demand rendering. Same props/BoardApi as the 2D board;
+  ☰ menu toggles 3D/2D (saved per device; 2D automatically when WebGL is missing).
+- Design roadmap (remaining): phase 2b = physics dice in 3D (tilted camera, extruded tiles with
   normal maps, 3D pieces, physics dice, 2D fallback); phase 3 = UX (tutorial, build tray,
   probability hints, landscape layout, volume settings); phase 4 = ambience (waves,
   birds, victory camera orbit, emotes).

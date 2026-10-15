@@ -1792,3 +1792,14 @@ h3,
     animation: none !important;
   }
 }
+
+.board-3d {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+.board-3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

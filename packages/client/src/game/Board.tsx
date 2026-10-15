@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
 import { GRAPH, type PlayerView } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
 
@@ -21,15 +21,20 @@ export interface BoardTargets {
   hexes?: number[];
 }
 
-interface Props {
+/** Lets effects find where a board point (in SVG board units) is on screen. */
+export interface BoardApi {
+  project(x: number, y: number): { x: number; y: number } | null;
+}
+
+export interface BoardProps {
   view: PlayerView;
   targets: BoardTargets;
   selection: Selection;
   onSelect: (s: Selection) => void;
   highlightHexes: number[];
   onInspectHex?: (hex: number) => void;
-  /** Lets the game screen find hex positions on screen (for flying cards). */
-  svgRef?: React.MutableRefObject<SVGSVGElement | null>;
+  /** Filled in by the board so effects can map board points to the screen. */
+  apiRef?: React.MutableRefObject<BoardApi | null>;
 }
 
 function hexPoints(cx: number, cy: number, r: number) {
@@ -185,7 +190,20 @@ function PanZoom({ children, svgRef }: { children: ReactNode; svgRef?: React.Mut
   );
 }
 
-export function Board({ view, targets, selection, onSelect, highlightHexes, onInspectHex, svgRef }: Props) {
+export function Board({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = {
+      project(x, y) {
+        const root = svgRef.current?.querySelector('.board-root') as SVGGElement | null;
+        const m = root?.getScreenCTM();
+        if (!m) return null;
+        const p = new DOMPoint(x, y).matrixTransform(m);
+        return { x: p.x, y: p.y };
+      },
+    };
+  }, [apiRef]);
   const colors = view.players.map((p) => p.color);
   const vSet = useMemo(() => new Set(targets.vertices ?? []), [targets.vertices]);
   const eSet = useMemo(() => new Set(targets.edges ?? []), [targets.edges]);

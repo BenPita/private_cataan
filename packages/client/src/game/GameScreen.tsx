@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   COSTS,
   RESOURCES,
@@ -16,8 +16,11 @@ import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../n
 import { canVibrate, setSoundEnabled, setVibrationEnabled, sfx, soundEnabled, vibrationEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
-import { Board, hexCenter, type BoardTargets, type Selection } from './Board';
+import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
+import { getBoardMode, saveBoardMode, webglAvailable, type BoardMode } from './boardMode';
+
+const Board3D = lazy(() => import('./Board3D'));
 import {
   BuildSheet,
   DevSheet,
@@ -81,22 +84,19 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [flash, setFlash] = useState<Partial<ResMap>>({});
   const [inspect, setInspect] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
 
   // Cards that fly from producing lands to each player's hand.
-  const boardSvg = useRef<SVGSVGElement | null>(null);
-  const fx = useGameFx(view, names, boardSvg);
+  const boardApi = useRef<BoardApi | null>(null);
+  const fx = useGameFx(view, names, boardApi);
   const [flights, setFlights] = useState<Array<{ id: number; r: Resource; x: number; y: number; dx: number; dy: number; delay: number }>>([]);
   const flightId = useRef(0);
   const launchFlights = (hexes: number[], gains: ResMap[]) => {
-    const svg = boardSvg.current;
-    const root = svg?.querySelector('.board-root') as SVGGElement | null;
-    if (!svg || !root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const matrix = root.getScreenCTM();
-    if (!matrix) return;
+    const api = boardApi.current;
+    if (!api || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const toScreen = (hex: number) => {
       const c = hexCenter(hex);
-      const p = new DOMPoint(c.x, c.y).matrixTransform(matrix);
-      return { x: p.x, y: p.y };
+      return api.project(c.x, c.y) ?? { x: 0, y: 0 };
     };
     const center = (el: Element | null) => {
       if (!el) return null;
@@ -246,6 +246,15 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     return null;
   };
   const confirm = confirmFor(selection);
+  const boardProps = {
+    view,
+    targets,
+    selection,
+    onSelect: setSelection,
+    highlightHexes: highlight,
+    onInspectHex: setInspect,
+    apiRef: boardApi,
+  };
 
   const currentName = names[view.currentPlayer];
   const pendingDiscard = view.pendingDiscards[me];
@@ -284,15 +293,13 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       <PlayerStrip view={view} seats={snapshot.seats} />
 
       <div className="board-wrap">
-        <Board
-          view={view}
-          targets={targets}
-          selection={selection}
-          onSelect={setSelection}
-          highlightHexes={highlight}
-          onInspectHex={setInspect}
-          svgRef={boardSvg}
-        />
+        {boardMode === '3d' ? (
+          <Suspense fallback={<Board {...boardProps} />}>
+            <Board3D {...boardProps} />
+          </Suspense>
+        ) : (
+          <Board {...boardProps} />
+        )}
         <button className="icon-btn menu-btn" onClick={() => setSheet('menu')} aria-label={t('settings')}>
           ☰
         </button>
@@ -412,7 +419,18 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         </Sheet>
       )}
       {sheet === 'menu' && (
-        <MenuSheet roomId={snapshot.id} onClose={() => setSheet(null)} onHelp={() => setSheet('help')} onLang={onLang} onExit={() => setSheet('exit')} />
+        <MenuSheet
+          roomId={snapshot.id}
+          onClose={() => setSheet(null)}
+          onHelp={() => setSheet('help')}
+          onLang={onLang}
+          onExit={() => setSheet('exit')}
+          boardMode={boardMode}
+          onBoardMode={(m) => {
+            saveBoardMode(m);
+            setBoardMode(m);
+          }}
+        />
       )}
       {sheet === 'exit' && <ExitConfirm roomId={snapshot.id} onCancel={() => setSheet(null)} />}
       {sheet === 'help' && (
@@ -508,12 +526,16 @@ function MenuSheet({
   onHelp,
   onLang,
   onExit,
+  boardMode,
+  onBoardMode,
 }: {
   roomId: string;
   onClose: () => void;
   onHelp: () => void;
   onLang: (l: Lang) => void;
   onExit: () => void;
+  boardMode: BoardMode;
+  onBoardMode: (m: BoardMode) => void;
 }) {
   const [sound, setSound] = useState(soundEnabled());
   const [vibrate, setVibrate] = useState(vibrationEnabled());
@@ -522,6 +544,18 @@ function MenuSheet({
   return (
     <Sheet title={t('settings')} onClose={onClose}>
       <LanguagePicker onLang={onLang} />
+      {webglAvailable() && (
+        <div className="seg">
+          <span>{t('boardView')}</span>
+          <div className="seg-buttons">
+            {(['3d', '2d'] as const).map((m) => (
+              <button key={m} className={boardMode === m ? 'on' : ''} onClick={() => onBoardMode(m)}>
+                {m === '3d' ? t('view3d') : t('view2d')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <label className="check big">
         <input
           type="checkbox"
@@ -577,6 +611,7 @@ function MenuSheet({
 /** Asks before leaving: leaving closes and deletes the game for everyone. */
 export function ExitConfirm({ roomId, onCancel }: { roomId: string; onCancel: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
   return (
     <Sheet title={t('exitTitle')} onClose={onCancel}>
       <p className="hint-text">{t('exitText')}</p>

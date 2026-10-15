@@ -189,6 +189,9 @@ const en = {
   closedGone: 'This game no longer exists. It may have ended or been closed.',
   newGame: 'Start a new game',
   yourTurn: 'Your turn!',
+  boardView: 'Board view',
+  view3d: '3D',
+  view2d: '2D',
   vibration: 'Vibration',
 };
 
@@ -362,6 +365,9 @@ const he: Dict = {
   closedGone: 'המשחק הזה כבר לא קיים — הוא הסתיים או נסגר.',
   newGame: 'משחק חדש',
   yourTurn: 'תורך!',
+  boardView: 'תצוגת לוח',
+  view3d: 'תלת-ממד',
+  view2d: 'דו-ממד',
   vibration: 'רטט',
 };
 
