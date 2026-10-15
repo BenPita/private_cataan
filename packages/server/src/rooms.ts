@@ -28,7 +28,11 @@ export interface Seat {
   tokenHash: string | null;
   ready: boolean;
   difficulty?: BotDifficulty;
+  /** Last time this human was seen (connected or acting), ms since epoch. */
+  lastSeen?: number;
 }
+
+export type CloseReason = 'left' | 'inactive';
 
 export interface Room {
   id: string;
@@ -40,6 +44,8 @@ export interface Room {
   revision: number;
   /** Recently processed request ids, so a retried request is not applied twice. */
   recentRequests: Array<{ id: string; seat: number; ok: boolean; error?: string }>;
+  /** Set (in memory only) once the room is closed, so nothing saves it again. */
+  closed?: boolean;
 }
 
 export interface PublicSeat {
@@ -135,14 +141,72 @@ export class RoomManager {
   private saving = new Map<string, Promise<void>>();
 
   readonly bots: BotRunner;
+  private absenceLimitMs: number;
+  private now: () => number;
+  private onClosed: (room: Room, reason: CloseReason, by: number | null) => void;
 
   constructor(
     private store: RoomStore,
     private onChange: (room: Room) => void = () => {},
     private seedSource: () => number = () => randomInt(1, 2 ** 31 - 1),
-    options: { botDelayMs?: number } = {},
+    options: {
+      botDelayMs?: number;
+      /** A game is deleted when a player has been away this long (default 10 minutes). */
+      absenceLimitMs?: number;
+      now?: () => number;
+      onClosed?: (room: Room, reason: CloseReason, by: number | null) => void;
+    } = {},
   ) {
     this.bots = new BotRunner(this, options.botDelayMs ?? 900);
+    this.absenceLimitMs = options.absenceLimitMs ?? 10 * 60_000;
+    this.now = options.now ?? Date.now;
+    this.onClosed = options.onClosed ?? (() => {});
+  }
+
+  /** Rooms currently held in memory. */
+  loaded(): Room[] {
+    return [...this.rooms.values()];
+  }
+
+  /** Records that a human seat is present right now. */
+  touch(room: Room, seat: number): void {
+    const s = room.seats[seat];
+    if (s && s.kind === 'human') s.lastSeen = this.now();
+  }
+
+  /** The first claimed human seat that has been away longer than the limit, or -1. */
+  staleSeat(room: Room, connected: (seat: number) => boolean): number {
+    const limit = this.now() - this.absenceLimitMs;
+    return room.seats.findIndex(
+      (s, i) => s.kind === 'human' && !!s.tokenHash && !connected(i) && (s.lastSeen ?? room.createdAt) < limit,
+    );
+  }
+
+  /** Saves presence info without broadcasting. */
+  async persist(room: Room): Promise<void> {
+    if (room.closed) return;
+    const previous = this.saving.get(room.id) ?? Promise.resolve();
+    const snapshot = structuredClone(room);
+    const next = previous.then(() => this.store.save(snapshot)).catch((err) => console.error('save failed', err));
+    this.saving.set(room.id, next);
+    await next;
+  }
+
+  /** Ends the game for everyone and deletes it completely. */
+  async close(room: Room, reason: CloseReason, by: number | null): Promise<void> {
+    if (room.closed) return;
+    room.closed = true;
+    this.bots.forget(room.id);
+    this.onClosed(room, reason, by);
+    this.rooms.delete(room.id);
+    await (this.saving.get(room.id) ?? Promise.resolve());
+    this.saving.delete(room.id);
+    await this.store.delete(room.id);
+  }
+
+  async leave(room: Room, seat: number): Promise<Result> {
+    await this.close(room, 'left', seat);
+    return { ok: true };
   }
 
   async get(id: unknown): Promise<Room | null> {
@@ -150,16 +214,22 @@ export class RoomManager {
     const cached = this.rooms.get(id);
     if (cached) return cached;
     const loaded = await this.store.load(id);
-    if (loaded) {
-      this.rooms.set(id, migrate(loaded));
-      // Resume bot turns after a server restart.
-      this.bots.schedule(loaded);
+    if (!loaded) return null;
+    // Nobody is connected to a freshly loaded room; drop it if someone has been away too long.
+    const stale = this.staleSeat(loaded, () => false);
+    if (stale >= 0) {
+      await this.close(loaded, 'inactive', stale);
+      return null;
     }
+    this.rooms.set(id, migrate(loaded));
+    // Resume bot turns after a server restart.
+    this.bots.schedule(loaded);
     return loaded;
   }
 
   /** Persists then broadcasts. Saves for one room are serialized. */
   private async commit(room: Room): Promise<void> {
+    if (room.closed) return;
     const previous = this.saving.get(room.id) ?? Promise.resolve();
     const snapshot = structuredClone(room);
     const next = previous.then(() => this.store.save(snapshot)).catch((err) => console.error('save failed', err));
@@ -182,12 +252,12 @@ export class RoomManager {
     if (!v.ok) return v;
     const token = randomBytes(24).toString('base64url');
     const seats = buildSeats(v.config);
-    seats[0] = { kind: 'human', name, tokenHash: hashToken(token), ready: true };
+    seats[0] = { kind: 'human', name, tokenHash: hashToken(token), ready: true, lastSeen: this.now() };
     let id = newRoomId();
     while (this.rooms.has(id) || (await this.store.load(id))) id = newRoomId();
     const room: Room = {
       id,
-      createdAt: Date.now(),
+      createdAt: this.now(),
       config: v.config,
       seats,
       status: 'lobby',
@@ -209,7 +279,7 @@ export class RoomManager {
     const seat = room.seats.findIndex((s) => s.kind === 'human' && !s.tokenHash);
     if (seat < 0) return { ok: false, error: 'This game is full' };
     const token = randomBytes(24).toString('base64url');
-    room.seats[seat] = { kind: 'human', name, tokenHash: hashToken(token), ready: false };
+    room.seats[seat] = { kind: 'human', name, tokenHash: hashToken(token), ready: false, lastSeen: this.now() };
     room.revision++;
     await this.commit(room);
     return { ok: true, seat, token };
@@ -291,6 +361,7 @@ export class RoomManager {
       return { ok: false, error: 'Your game was out of date — please try again' };
     }
 
+    this.touch(room, seat);
     const result = applyAction(room.game, seat, action);
     room.recentRequests.push({ id: requestId, seat, ok: result.ok, error: result.ok ? undefined : result.error });
     if (room.recentRequests.length > 100) room.recentRequests.splice(0, room.recentRequests.length - 100);

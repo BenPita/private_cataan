@@ -178,6 +178,16 @@ const en = {
   resCards: 'Resource cards',
   devCount: 'Development cards',
   knights: 'Knights played',
+  // Leaving / closed games
+  exitGame: 'Exit game',
+  exitTitle: 'Exit this game?',
+  exitText: 'The game will close for every player and be deleted. Nobody can come back to it.',
+  exitConfirm: 'Exit and close the game',
+  closedTitle: 'This game has ended',
+  closedLeft: '{name} left, so the game was closed and deleted.',
+  closedInactive: 'The game was closed because {name} was away for more than 10 minutes.',
+  closedGone: 'This game no longer exists. It may have ended or been closed.',
+  newGame: 'Start a new game',
 };
 
 type Dict = typeof en;
@@ -340,6 +350,15 @@ const he: Dict = {
   resCards: 'קלפי משאבים',
   devCount: 'קלפי פיתוח',
   knights: 'אבירים ששוחקו',
+  exitGame: 'יציאה מהמשחק',
+  exitTitle: 'לצאת מהמשחק?',
+  exitText: 'המשחק ייסגר לכל המשתתפים ויימחק. אי אפשר יהיה לחזור אליו.',
+  exitConfirm: 'יציאה וסגירת המשחק',
+  closedTitle: 'המשחק הסתיים',
+  closedLeft: '{name} יצא/ה מהמשחק, ולכן המשחק נסגר ונמחק.',
+  closedInactive: 'המשחק נסגר כי {name} לא היה/תה במשחק יותר מ-10 דקות.',
+  closedGone: 'המשחק הזה כבר לא קיים — הוא הסתיים או נסגר.',
+  newGame: 'משחק חדש',
 };
 
 export type Key = keyof Dict;

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
 import type { Room } from './rooms';
@@ -7,6 +7,7 @@ import type { Room } from './rooms';
 export interface RoomStore {
   load(id: string): Promise<Room | null>;
   save(room: Room): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export class MemoryStore implements RoomStore {
@@ -17,6 +18,9 @@ export class MemoryStore implements RoomStore {
   }
   async save(room: Room) {
     this.rooms.set(room.id, JSON.stringify(room));
+  }
+  async delete(id: string) {
+    this.rooms.delete(id);
   }
 }
 
@@ -42,6 +46,10 @@ export class FileStore implements RoomStore {
     const tmp = `${target}.${process.pid}.tmp`;
     await writeFile(tmp, JSON.stringify(room));
     await rename(tmp, target); // atomic replace
+  }
+
+  async delete(id: string) {
+    await rm(this.file(id), { force: true });
   }
 }
 
@@ -84,6 +92,11 @@ export class PostgresStore implements RoomStore {
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
       [room.id, JSON.stringify(room)],
     );
+  }
+
+  async delete(id: string) {
+    await this.ready;
+    await this.pool.query('DELETE FROM rooms WHERE id = $1', [id]);
   }
 }
 

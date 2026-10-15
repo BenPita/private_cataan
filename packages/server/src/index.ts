@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { RoomManager, type Room } from './rooms';
+import { RoomManager, type CloseReason, type Room } from './rooms';
 import { createStore } from './store';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -40,9 +40,40 @@ function broadcast(room: Room) {
   }
 }
 
+/** Tells everyone in a closed room why it ended, then forgets their seats. */
+function announceClosed(room: Room, reason: CloseReason, by: number | null) {
+  const seats = presence.get(room.id);
+  presence.delete(room.id);
+  if (!seats) return;
+  const payload = { roomId: room.id, reason, by: by === null ? null : room.seats[by]?.name ?? null };
+  for (const socketIds of seats.values()) {
+    for (const id of socketIds) {
+      const sock = io.sockets.sockets.get(id);
+      if (!sock) continue;
+      sock.emit('room:closed', payload);
+      const session = sock.data as SocketSession;
+      session.roomId = undefined;
+      session.seat = undefined;
+    }
+  }
+}
+
 const manager = new RoomManager(createStore(), broadcast, undefined, {
   botDelayMs: Number(process.env.BOT_DELAY_MS ?? 900),
+  absenceLimitMs: Number(process.env.ABSENCE_LIMIT_MS ?? 10 * 60_000),
+  onClosed: announceClosed,
 });
+
+// Every minute: refresh "last seen" for connected players and close games
+// where someone has been away longer than the limit.
+setInterval(() => {
+  for (const room of manager.loaded()) {
+    const connected = isConnected(room.id);
+    room.seats.forEach((_, i) => connected(i) && manager.touch(room, i));
+    const stale = manager.staleSeat(room, connected);
+    if (stale >= 0) void manager.close(room, 'inactive', stale);
+  }
+}, 60_000).unref();
 
 interface SocketSession {
   roomId?: string;
@@ -58,6 +89,7 @@ function attach(socket: Socket, room: Room, seat: number) {
   const seats = presence.get(room.id)!;
   if (!seats.has(seat)) seats.set(seat, new Set());
   seats.get(seat)!.add(socket.id);
+  manager.touch(room, seat);
   broadcast(room);
 }
 
@@ -67,9 +99,16 @@ function detach(socket: Socket) {
   const seats = presence.get(session.roomId);
   seats?.get(session.seat)?.delete(socket.id);
   const roomId = session.roomId;
+  const seat = session.seat;
   session.roomId = undefined;
   session.seat = undefined;
-  manager.get(roomId).then((room) => room && broadcast(room));
+  manager.get(roomId).then((room) => {
+    if (!room) return;
+    // Remember when this player left, so the 10-minute rule survives a restart.
+    manager.touch(room, seat);
+    void manager.persist(room);
+    broadcast(room);
+  });
 }
 
 type Ack = (response: unknown) => void;
@@ -139,6 +178,10 @@ const handlers = {
   'room:rematch': handler(async (socket) => {
     const c = await current(socket);
     return c ? manager.rematch(c.room, c.seat) : { ok: false, error: 'Not in a game' };
+  }),
+  'room:leave': handler(async (socket) => {
+    const c = await current(socket);
+    return c ? manager.leave(c.room, c.seat) : { ok: true };
   }),
   'game:action': handler(async (socket, p) => {
     const c = await current(socket);

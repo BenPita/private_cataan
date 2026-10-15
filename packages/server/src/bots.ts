@@ -47,7 +47,7 @@ export class BotRunner {
   }
 
   schedule(room: Room): void {
-    if (this.timers.has(room.id)) return;
+    if (room.closed || this.timers.has(room.id)) return;
     if (room.status !== 'playing' || !room.game) {
       this.memory.delete(room.id);
       this.offerSeen.delete(room.id);
@@ -83,6 +83,7 @@ export class BotRunner {
   }
 
   private async run(room: Room): Promise<void> {
+    if (room.closed) return;
     const game = room.game;
     if (room.status !== 'playing' || !game) return;
     let step = this.next(room);
@@ -128,6 +129,16 @@ export class BotRunner {
     const failures = (this.failures.get(room.id) ?? 0) + 1;
     this.failures.set(room.id, failures);
     if (failures < 5) this.schedule(room);
+  }
+
+  /** Stops everything for a closed room. */
+  forget(roomId: string): void {
+    const t = this.timers.get(roomId);
+    if (t) clearTimeout(t);
+    this.timers.delete(roomId);
+    this.memory.delete(roomId);
+    this.offerSeen.delete(roomId);
+    this.failures.delete(roomId);
   }
 
   /** True while a bot action is scheduled for this room. */

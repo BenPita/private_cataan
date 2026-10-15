@@ -12,7 +12,7 @@ import {
   type ResMap,
   type Resource,
 } from '@hex/engine';
-import { emit, rejoinLink, sendAction, type RoomSnapshot } from '../net';
+import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../net';
 import { setSoundEnabled, sfx, soundEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
@@ -33,7 +33,7 @@ import {
   type BuildMode,
 } from './Panels';
 
-type SheetName = 'build' | 'trade' | 'dev' | 'log' | 'menu' | 'help' | null;
+type SheetName = 'build' | 'trade' | 'dev' | 'log' | 'menu' | 'help' | 'exit' | null;
 
 function Die({ value, rolling, tone }: { value: number; rolling: boolean; tone: 'red' | 'yellow' }) {
   const spots: Record<number, Array<[number, number]>> = {
@@ -415,7 +415,10 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
           </ol>
         </Sheet>
       )}
-      {sheet === 'menu' && <MenuSheet roomId={snapshot.id} onClose={() => setSheet(null)} onHelp={() => setSheet('help')} onLang={onLang} />}
+      {sheet === 'menu' && (
+        <MenuSheet roomId={snapshot.id} onClose={() => setSheet(null)} onHelp={() => setSheet('help')} onLang={onLang} onExit={() => setSheet('exit')} />
+      )}
+      {sheet === 'exit' && <ExitConfirm roomId={snapshot.id} onCancel={() => setSheet(null)} />}
       {sheet === 'help' && (
         <Sheet title={t('rules')} onClose={() => setSheet(null)}>
           <HelpContent />
@@ -450,8 +453,14 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
                 })}
             </ol>
             <div className="row">
-              <button className="btn ghost" onClick={() => (location.href = '/')}>
-                {t('home')}
+              <button
+                className="btn ghost"
+                onClick={async () => {
+                  await leaveGame(snapshot.id);
+                  location.href = '/';
+                }}
+              >
+                {t('exitGame')}
               </button>
               {me === 0 ? (
                 <button
@@ -497,7 +506,19 @@ export function LanguagePicker({ onLang }: { onLang: (l: Lang) => void }) {
   );
 }
 
-function MenuSheet({ roomId, onClose, onHelp, onLang }: { roomId: string; onClose: () => void; onHelp: () => void; onLang: (l: Lang) => void }) {
+function MenuSheet({
+  roomId,
+  onClose,
+  onHelp,
+  onLang,
+  onExit,
+}: {
+  roomId: string;
+  onClose: () => void;
+  onHelp: () => void;
+  onLang: (l: Lang) => void;
+  onExit: () => void;
+}) {
   const [sound, setSound] = useState(soundEnabled());
   const [copied, setCopied] = useState(false);
   const link = rejoinLink(roomId);
@@ -536,9 +557,35 @@ function MenuSheet({ roomId, onClose, onHelp, onLang }: { roomId: string; onClos
           </button>
         </div>
       )}
-      <button className="btn ghost wide" onClick={() => (location.href = '/')}>
-        {t('home')}
+      <button className="btn danger wide" onClick={onExit}>
+        {t('exitGame')}
       </button>
+    </Sheet>
+  );
+}
+
+/** Asks before leaving: leaving closes and deletes the game for everyone. */
+export function ExitConfirm({ roomId, onCancel }: { roomId: string; onCancel: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet title={t('exitTitle')} onClose={onCancel}>
+      <p className="hint-text">{t('exitText')}</p>
+      <div className="row">
+        <button className="btn ghost" onClick={onCancel}>
+          {t('cancel')}
+        </button>
+        <button
+          className="btn danger"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await leaveGame(roomId);
+            location.href = '/';
+          }}
+        >
+          {t('exitConfirm')}
+        </button>
+      </div>
     </Sheet>
   );
 }

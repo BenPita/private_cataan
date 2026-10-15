@@ -78,6 +78,18 @@ Read this file instead of the originals; consult them only for fine detail.
 - Hosting (free): Render web service + Neon free Postgres. Accept ~30–50s cold start.
 - Tests: Vitest (engine/server), Playwright two-browser later.
 
+## Leaving and abandoned games (owner decision, 2026-10-16)
+- Any player can choose "Exit game" (☰ menu, lobby, or victory screen) after a confirmation.
+  Exiting closes the game for EVERY player and deletes it completely (no trace in storage).
+  Other players see "X left, so the game was closed and deleted".
+- If any human player has been away (not connected) for more than 10 minutes, the game is
+  closed and deleted ("closed because X was away more than 10 minutes"). Applies to games
+  vs friends and solo games vs bots. `lastSeen` per seat is persisted, so the rule also
+  holds after a server restart / Render sleep (checked when the room is loaded) and a
+  sweep runs every minute (`ABSENCE_LIMIT_MS` env, default 600000).
+- This replaces the original PRD rule "a disconnected player can always rejoin later";
+  reconnecting within 10 minutes still restores the game.
+
 ## Hidden info
 Others see only: structures, public VP, resource-card count, dev-card count,
 knights played, achievements. Never: their resources, dev card identities, deck

@@ -1596,3 +1596,22 @@ h3,
   outline: 2px solid #e8a317;
   outline-offset: 1px;
 }
+
+.btn.danger {
+  background: linear-gradient(180deg, #e0574a, #b3261a);
+  color: #fff;
+  border-color: #7e1a10;
+  box-shadow: 0 3px 0 #6e140b, 0 4px 8px rgba(0, 0, 0, 0.18);
+}
+.closed-card p {
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* The menu (and anything it opens) stays reachable above full-screen overlays. */
+.menu-btn {
+  z-index: 30;
+}
+.sheet-backdrop {
+  z-index: 35;
+}

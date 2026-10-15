@@ -1,15 +1,33 @@
 import { useEffect, useState } from 'react';
 import { emit, saveToken, useConnected, useRoom, type RoomSnapshot } from '../net';
 import { displayName, errorText, t, type Lang } from '../i18n';
-import { GameScreen } from '../game/GameScreen';
+import { ExitConfirm, GameScreen } from '../game/GameScreen';
 import { DifficultyPicker, Stepper, fitConfig, loadNickname, saveNickname } from './Home';
 
 export function Room({ roomId, navigate, onLang }: { roomId: string; navigate: (p: string) => void; onLang: (l: Lang) => void }) {
-  const { snapshot, status, error } = useRoom(roomId);
+  const { snapshot, status, error, closed } = useRoom(roomId);
   const connected = useConnected();
 
   let body;
-  if (status === 'error') {
+  if (status === 'closed') {
+    const message =
+      closed?.reason === 'left'
+        ? t('closedLeft', { name: closed.by ?? '' })
+        : closed?.reason === 'inactive'
+          ? t('closedInactive', { name: closed.by ?? '' })
+          : t('closedGone');
+    body = (
+      <div className="screen center">
+        <div className="card parchment closed-card">
+          <h2>{t('closedTitle')}</h2>
+          <p>{message}</p>
+          <button className="btn primary wide big" onClick={() => navigate('/')}>
+            {t('newGame')}
+          </button>
+        </div>
+      </div>
+    );
+  } else if (status === 'error') {
     body = (
       <div className="screen center">
         <div className="card parchment">
@@ -43,13 +61,29 @@ function JoinForm({ roomId }: { roomId: string }) {
   const [info, setInfo] = useState<{ host: string; openSeats: number; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [gone, setGone] = useState(false);
 
   useEffect(() => {
     emit<{ host: string; openSeats: number; status: string }>('room:peek', { roomId }).then((r) => {
       if (r.ok) setInfo(r);
+      else if (r.error === 'Game not found') setGone(true);
       else setError(errorText(r.error));
     });
   }, [roomId]);
+
+  if (gone) {
+    return (
+      <div className="screen center">
+        <div className="card parchment closed-card">
+          <h2>{t('closedTitle')}</h2>
+          <p>{t('closedGone')}</p>
+          <button className="btn primary wide big" onClick={() => (location.href = '/')}>
+            {t('newGame')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const join = async () => {
     setBusy(true);
@@ -86,6 +120,7 @@ function JoinForm({ roomId }: { roomId: string }) {
 
 function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
   const [copied, setCopied] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const link = `${location.origin}/g/${snapshot.id}`;
   const isHost = snapshot.you === 0;
@@ -181,6 +216,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
       </div>
 
       {error && <p className="error on-dark">{error}</p>}
+      {confirmExit && <ExitConfirm roomId={snapshot.id} onCancel={() => setConfirmExit(false)} />}
       {isHost ? (
         <button className="btn primary wide big" disabled={!allReady} onClick={() => call('room:start')}>
           {allReady ? t('start') : t('waitingFor')}
@@ -190,6 +226,9 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
           {me.ready ? `✓ ${t('readyWaitHost')}` : t('imReady')}
         </button>
       )}
+      <button className="btn ghost on-dark" onClick={() => setConfirmExit(true)}>
+        {t('exitGame')}
+      </button>
     </div>
   );
 }

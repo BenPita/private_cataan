@@ -84,6 +84,25 @@ export function loadToken(roomId: string): string | null {
   }
 }
 
+export function forgetToken(roomId: string) {
+  try {
+    localStorage.removeItem(tokenKey(roomId));
+  } catch {
+    /* ignore */
+  }
+}
+
+export interface ClosedInfo {
+  reason: 'left' | 'inactive' | 'gone';
+  by: string | null;
+}
+
+/** Leaves the game: it closes for everyone and is deleted on the server. */
+export async function leaveGame(roomId: string) {
+  await emit('room:leave');
+  forgetToken(roomId);
+}
+
 export function rejoinLink(roomId: string): string | null {
   const token = loadToken(roomId);
   return token ? `${location.origin}/g/${roomId}#t=${token}` : null;
@@ -92,7 +111,8 @@ export function rejoinLink(roomId: string): string | null {
 /** Live room state for this device's seat, resumed automatically on reconnect. */
 export function useRoom(roomId: string) {
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
-  const [status, setStatus] = useState<'loading' | 'needs-join' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'needs-join' | 'ready' | 'error' | 'closed'>('loading');
+  const [closed, setClosed] = useState<ClosedInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const snapshotRef = useRef<RoomSnapshot | null>(null);
 
@@ -113,6 +133,13 @@ export function useRoom(roomId: string) {
       setStatus('ready');
     };
     socket.on('room:state', onState);
+    const onClosed = (info: { roomId: string; reason: 'left' | 'inactive'; by: string | null }) => {
+      if (info.roomId !== roomId) return;
+      forgetToken(roomId);
+      setClosed({ reason: info.reason, by: info.by });
+      setStatus('closed');
+    };
+    socket.on('room:closed', onClosed);
 
     const resume = async () => {
       const token = loadToken(roomId);
@@ -123,8 +150,9 @@ export function useRoom(roomId: string) {
       const res = await emit('room:resume', { roomId, token });
       if (!res.ok) {
         if (res.error === 'Game not found') {
-          setError(res.error);
-          setStatus('error');
+          forgetToken(roomId);
+          setClosed((c) => c ?? { reason: 'gone', by: null });
+          setStatus('closed');
         } else {
           setStatus('needs-join');
         }
@@ -134,11 +162,12 @@ export function useRoom(roomId: string) {
     socket.on('connect', resume);
     return () => {
       socket.off('room:state', onState);
+      socket.off('room:closed', onClosed);
       socket.off('connect', resume);
     };
   }, [roomId]);
 
-  return { snapshot, status, error, setStatus };
+  return { snapshot, status, error, closed, setStatus };
 }
 
 export async function sendAction(snapshot: RoomSnapshot, action: Action): Promise<Reply> {
