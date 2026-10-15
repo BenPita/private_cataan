@@ -122,3 +122,19 @@ describe('bots on the server', () => {
     expect(new Set(restored.recentRequests.map((r) => r.id)).size).toBe(restored.recentRequests.length);
   });
 });
+
+describe('per-bot difficulty', () => {
+  it('gives each bot its own level and lets the host change one', async () => {
+    const m = manager();
+    const c = await m.create('Host', { humans: 2, bots: 2, botDifficulties: ['easy', 'hard'] });
+    if (!c.ok) throw new Error(c.error);
+    const room = (await m.get(c.roomId))!;
+    expect(room.seats.filter((s) => s.kind === 'bot').map((s) => s.difficulty)).toEqual(['easy', 'hard']);
+    await m.updateConfig(room, 0, { botDifficulties: ['medium', 'hard'] });
+    expect(room.seats.filter((s) => s.kind === 'bot').map((s) => s.difficulty)).toEqual(['medium', 'hard']);
+    // Adding a bot fills its level from the default.
+    await m.updateConfig(room, 0, { humans: 1, bots: 3 });
+    expect(room.seats.filter((s) => s.kind === 'bot').map((s) => s.difficulty)).toEqual(['medium', 'hard', 'medium']);
+    expect(await m.create('X', { humans: 1, bots: 1, botDifficulties: ['godlike' as never] })).toMatchObject({ ok: false });
+  });
+});

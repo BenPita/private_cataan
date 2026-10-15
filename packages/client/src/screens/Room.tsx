@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { emit, saveToken, useConnected, useRoom, type RoomSnapshot } from '../net';
 import { displayName, errorText, t, type Lang } from '../i18n';
 import { ExitConfirm, GameScreen } from '../game/GameScreen';
-import { DifficultyPicker, Stepper, fitConfig, loadNickname, saveNickname } from './Home';
+import { BotLevels, Stepper, fitConfig, loadNickname, saveNickname } from './Home';
 
 export function Room({ roomId, navigate, onLang }: { roomId: string; navigate: (p: string) => void; onLang: (l: Lang) => void }) {
   const { snapshot, status, error, closed } = useRoom(roomId);
@@ -210,7 +210,12 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
               max={4 - snapshot.config.humans}
               onChange={(bots) => setConfig({ bots })}
             />
-            {snapshot.config.bots > 0 && <DifficultyPicker value={snapshot.config.difficulty} onChange={(difficulty) => setConfig({ difficulty })} />}
+            {snapshot.config.bots > 0 && (
+              <BotLevels
+                levels={fitConfig(snapshot.config).botDifficulties}
+                onChange={(botDifficulties) => setConfig({ botDifficulties })}
+              />
+            )}
           </div>
         )}
       </div>

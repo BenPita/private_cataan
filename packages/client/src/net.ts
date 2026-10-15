@@ -6,6 +6,7 @@ export interface RoomConfig {
   humans: number;
   bots: number;
   difficulty: BotDifficulty;
+  botDifficulties: BotDifficulty[];
   victoryTarget: number;
   boardType: 'random' | 'beginner';
 }

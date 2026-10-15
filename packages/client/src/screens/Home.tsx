@@ -65,18 +65,47 @@ export function DifficultyPicker({ value, onChange }: { value: BotDifficulty; on
   );
 }
 
-/** Keeps humans + bots within 2..4 while the user changes either one. */
+/** One level picker per bot. */
+export function BotLevels({ levels, onChange }: { levels: BotDifficulty[]; onChange: (levels: BotDifficulty[]) => void }) {
+  return (
+    <div className="bot-levels">
+      {levels.map((level, i) => (
+        <div key={i} className="seg">
+          <span>🤖 {t('botName', { n: i + 1 })}</span>
+          <div className="seg-buttons">
+            {(['easy', 'medium', 'hard'] as const).map((d) => (
+              <button key={d} className={level === d ? 'on' : ''} onClick={() => onChange(levels.map((l, k) => (k === i ? d : l)))}>
+                {t(d)}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Keeps humans + bots within 2..4 and one level per bot. */
 export function fitConfig(c: RoomConfig): RoomConfig {
   const humans = Math.min(4, Math.max(1, c.humans));
   let bots = Math.min(3, Math.max(0, c.bots));
   if (humans + bots > 4) bots = 4 - humans;
   if (humans + bots < 2) bots = 2 - humans;
-  return { ...c, humans, bots };
+  const current = c.botDifficulties ?? [];
+  const botDifficulties = Array.from({ length: bots }, (_, i) => current[i] ?? c.difficulty ?? 'medium');
+  return { ...c, humans, bots, botDifficulties };
 }
 
 export function Home({ navigate, onLang }: { navigate: (path: string) => void; onLang: (l: Lang) => void }) {
   const [name, setName] = useState(loadNickname());
-  const [config, setConfig] = useState<RoomConfig>({ humans: 2, bots: 2, difficulty: 'medium', victoryTarget: 10, boardType: 'random' });
+  const [config, setConfig] = useState<RoomConfig>({
+    humans: 2,
+    bots: 2,
+    difficulty: 'medium',
+    botDifficulties: ['medium', 'medium'],
+    victoryTarget: 10,
+    boardType: 'random',
+  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
@@ -115,7 +144,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
         </label>
         <Stepper label={t('humans')} value={config.humans} min={1} max={4} onChange={(humans) => update({ humans })} />
         <Stepper label={t('bots')} value={config.bots} min={config.humans === 1 ? 1 : 0} max={4 - config.humans} onChange={(bots) => update({ bots })} />
-        {config.bots > 0 && <DifficultyPicker value={config.difficulty} onChange={(difficulty) => update({ difficulty })} />}
+        {config.bots > 0 && <BotLevels levels={config.botDifficulties} onChange={(botDifficulties) => update({ botDifficulties })} />}
         <p className="tiny muted">
           {t('participants', { n: config.humans + config.bots })}
           {config.humans === 1 ? ` · ${t('soloHint')}` : ''}

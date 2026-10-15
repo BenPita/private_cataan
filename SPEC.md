@@ -28,7 +28,7 @@ Read this file instead of the originals; consult them only for fine detail.
 ## Participants (update.md is binding)
 - 2–4 total participants, any mix of humans and bots: `2 <= humans + bots <= 4`, bots ≤ 3.
 - All 9 combos supported (1H+1-3B, 2H+0-2B, 3H+0-1B, 4H).
-- Default config: 2 humans + 2 Medium bots, target 10 VP.
+- Default config: 2 humans + 2 Medium bots, target 10 VP. Each bot has its own level (`botDifficulties`), chosen per bot on the Home screen and by the host in the lobby.
 - Config fixed once the match starts. Never silently add bots.
 - 3–4 participants → classic base rules. 2 participants → "simplified two-player"
   ruleset (same rules, A→B→B→A setup, no neutral players), modular in

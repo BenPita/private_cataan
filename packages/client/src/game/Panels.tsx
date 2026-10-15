@@ -55,12 +55,23 @@ export function ResList({ res }: { res: Partial<ResMap> }) {
 }
 
 /** +/- counters per resource. */
-export function ResCounter({ value, onChange, max }: { value: ResMap; onChange: (v: ResMap) => void; max?: ResMap }) {
+export function ResCounter({
+  value,
+  onChange,
+  max,
+  owned,
+}: {
+  value: ResMap;
+  onChange: (v: ResMap) => void;
+  max?: ResMap;
+  /** Cards the player holds, shown on each card so they know what they have. */
+  owned?: ResMap;
+}) {
   return (
     <div className="res-counter">
       {RESOURCES.map((r) => (
         <div key={r} className="res-counter-row">
-          <ResourceCard r={r} small />
+          <ResourceCard r={r} small count={owned ? owned[r] : undefined} dim={owned ? owned[r] === 0 : false} />
           <span className="res-name">{resourceName(r)}</span>
           <button className="round" disabled={value[r] <= 0} onClick={() => onChange({ ...value, [r]: value[r] - 1 })}>
             −
@@ -325,7 +336,7 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
           <div className="pick-row">
             {RESOURCES.map((r) => (
               <button key={r} className={`pick ${give === r ? 'on' : ''}`} disabled={res[r] < rates[r]} onClick={() => setGive(r)}>
-                <ResourceCard r={r} small />
+                <ResourceCard r={r} small count={res[r]} />
                 <span>{rates[r]}:1</span>
               </button>
             ))}
@@ -354,11 +365,11 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
           <div className="two-col">
             <div>
               <p className="label">{t('youGive')}</p>
-              <ResCounter value={offerGive} onChange={setOfferGive} max={res} />
+              <ResCounter value={offerGive} onChange={setOfferGive} max={res} owned={res} />
             </div>
             <div>
               <p className="label">{t('youWant')}</p>
-              <ResCounter value={offerGet} onChange={setOfferGet} />
+              <ResCounter value={offerGet} onChange={setOfferGet} owned={res} />
             </div>
           </div>
           {opponents.length > 1 && (
@@ -437,11 +448,11 @@ export function IncomingTrade({ view, dispatch }: { view: PlayerView; dispatch: 
           <div className="two-col">
             <div>
               <p className="label">{t('youGive')}</p>
-              <ResCounter value={cGive} onChange={setCGive} max={res} />
+              <ResCounter value={cGive} onChange={setCGive} max={res} owned={res} />
             </div>
             <div>
               <p className="label">{t('youWant')}</p>
-              <ResCounter value={cGet} onChange={setCGet} />
+              <ResCounter value={cGet} onChange={setCGet} owned={res} />
             </div>
           </div>
           <div className="row">
@@ -561,7 +572,7 @@ export function DiscardSheet({ view, required, dispatch }: { view: PlayerView; r
   return (
     <Sheet title={t('discardTitle', { n: required })}>
       <p className="hint-text">{t('discardText', { n: required })}</p>
-      <ResCounter value={pick} onChange={setPick} max={res} />
+      <ResCounter value={pick} onChange={setPick} max={res} owned={res} />
       <button
         className="btn primary wide"
         disabled={n !== required}

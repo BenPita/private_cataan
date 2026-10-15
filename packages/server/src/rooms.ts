@@ -16,7 +16,10 @@ import type { RoomStore } from './store';
 export interface RoomConfig {
   humans: number;
   bots: number;
+  /** Default level for bots without their own setting. */
   difficulty: BotDifficulty;
+  /** Level of each bot, in seat order (length = bots). */
+  botDifficulties: BotDifficulty[];
   victoryTarget: number;
   boardType: 'random' | 'beginner';
 }
@@ -73,6 +76,7 @@ const DEFAULT_CONFIG: RoomConfig = {
   humans: 2,
   bots: 2,
   difficulty: 'medium',
+  botDifficulties: [],
   victoryTarget: 10,
   boardType: 'random',
 };
@@ -94,7 +98,11 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > 3) return { ok: false, error: 'Bots must be 0-3' };
   const total = c.humans + c.bots;
   if (total < MIN_PLAYERS || total > MAX_PLAYERS) return { ok: false, error: 'A game needs 2-4 participants' };
-  if (!['easy', 'medium', 'hard'].includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
+  const LEVELS = ['easy', 'medium', 'hard'];
+  if (!LEVELS.includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
+  const given = Array.isArray(c.botDifficulties) ? c.botDifficulties : [];
+  if (given.some((d) => !LEVELS.includes(d))) return { ok: false, error: 'Invalid difficulty' };
+  const botDifficulties = Array.from({ length: c.bots }, (_, i) => given[i] ?? c.difficulty);
   if (![10, 12].includes(c.victoryTarget)) return { ok: false, error: 'Target must be 10 or 12' };
   if (!['random', 'beginner'].includes(c.boardType)) return { ok: false, error: 'Invalid board type' };
   return {
@@ -103,6 +111,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
       humans: c.humans,
       bots: c.bots,
       difficulty: c.difficulty,
+      botDifficulties,
       victoryTarget: c.victoryTarget,
       boardType: c.boardType,
     },
@@ -117,7 +126,7 @@ function buildSeats(config: RoomConfig, existing: Seat[] = []): Seat[] {
     name: `Bot ${i + 1}`,
     tokenHash: null,
     ready: true,
-    difficulty: config.difficulty,
+    difficulty: config.botDifficulties?.[i] ?? config.difficulty,
   }));
   return [...humans, ...bots];
 }
