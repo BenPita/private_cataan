@@ -44,7 +44,8 @@ export const DEV_DECK: Record<DevCardType, number> = {
   monopoly: 2,
 };
 
-export const PLAYER_COLORS = ['#e2483d', '#2f7de1', '#f2a516', '#8a4fd8'];
+// Red, blue, white, orange — the classic piece colours.
+export const PLAYER_COLORS = ['#d8392b', '#2f6fd6', '#f4f1e8', '#f08a1c'];
 
 export const LONGEST_ROAD_MIN = 5;
 export const LARGEST_ARMY_MIN = 3;

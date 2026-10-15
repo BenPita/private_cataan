@@ -59,6 +59,7 @@ describe('player trading', () => {
     expect(expectFail(s, 0, { type: 'proposeTrade', give: R({ lumber: 1 }), get: R({}), to: [1] })).toMatch(/at least one/);
     expect(expectFail(s, 0, { type: 'proposeTrade', give: R({ lumber: 3 }), get: R({ ore: 1 }), to: [1] })).toMatch(/do not have/);
     expect(expectFail(s, 1, { type: 'proposeTrade', give: R({ ore: 1 }), get: R({ lumber: 1 }), to: [0] })).toMatch(/not your turn/);
+    expect(expectFail(s, 0, { type: 'proposeTrade', give: R({ lumber: 2 }), get: R({ lumber: 1, ore: 1 }), to: [1] })).toMatch(/same resource/);
   });
 
   it('revalidates when accepting an offer that became invalid', () => {

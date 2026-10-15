@@ -1,3 +1,5 @@
+import type { LogKey, LogParams } from './log';
+
 export const RESOURCES = ['lumber', 'brick', 'wool', 'grain', 'ore'] as const;
 export type Resource = (typeof RESOURCES)[number];
 export type ResMap = Record<Resource, number>;
@@ -83,9 +85,13 @@ export interface TradeOffer {
 }
 
 export interface LogEntry {
+  /** English rendering, for debugging and tests. */
   msg: string;
-  /** Private variant of the message for specific players (e.g. which resource was stolen). */
-  secret?: { to: number[]; msg: string };
+  /** Translatable form (see log.ts). */
+  key: LogKey;
+  params: LogParams;
+  /** Private variant for specific players (e.g. which resource was stolen). */
+  secret?: { to: number[]; msg: string; key: LogKey; params: LogParams };
 }
 
 export interface LastRoll {

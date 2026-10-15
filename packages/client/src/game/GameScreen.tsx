@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   COSTS,
   RESOURCES,
@@ -12,7 +12,7 @@ import {
 } from '@hex/engine';
 import { emit, rejoinLink, sendAction, type RoomSnapshot } from '../net';
 import { setSoundEnabled, sfx, soundEnabled } from '../sound';
-import { TERRAIN_LABEL, t } from '../strings';
+import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
 import { Board, type BoardTargets, type Selection } from './Board';
 import {
@@ -27,18 +27,37 @@ import {
   Sheet,
   StealSheet,
   TradeSheet,
+  playerName,
   type BuildMode,
 } from './Panels';
 
 type SheetName = 'build' | 'trade' | 'dev' | 'log' | 'menu' | 'help' | null;
 
-const DIE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+function Die({ value, rolling }: { value: number; rolling: boolean }) {
+  const spots: Record<number, Array<[number, number]>> = {
+    1: [[50, 50]],
+    2: [[28, 28], [72, 72]],
+    3: [[28, 28], [50, 50], [72, 72]],
+    4: [[28, 28], [72, 28], [28, 72], [72, 72]],
+    5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]],
+    6: [[28, 26], [72, 26], [28, 50], [72, 50], [28, 74], [72, 74]],
+  };
+  return (
+    <svg viewBox="0 0 100 100" className={`die ${rolling ? 'rolling' : ''}`}>
+      <rect x="6" y="6" width="88" height="88" rx="18" fill="#d8392b" stroke="#7e1a10" strokeWidth="4" />
+      {spots[value].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="8.5" fill="#f6e7bf" />
+      ))}
+    </svg>
+  );
+}
 
-export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
+export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLang: (l: Lang) => void }) {
   const view = snapshot.game!;
   const me = view.me!;
   const myTurn = view.currentPlayer === me && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL';
   const myRes = view.players[me].resources!;
+  const names = view.players.map((_, i) => playerName(view, i));
   const [mode, setMode] = useState<BuildMode | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
@@ -61,7 +80,7 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     setBusy(false);
     if (!res.ok) {
       sfx.error();
-      showToast(res.error);
+      showToast(errorText(res.error));
       return false;
     }
     if (/build|place|buy/.test(action.type)) sfx.build();
@@ -69,13 +88,11 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     return true;
   };
 
-  // Reset local interaction state when the phase or turn changes.
   useEffect(() => {
     setSelection(null);
     if (view.phase !== 'MAIN_ACTIONS' || !myTurn) setMode(null);
   }, [view.phase, view.currentPlayer, view.freeRoads, myTurn]);
 
-  // Turn chime.
   const prevPlayer = useRef(view.currentPlayer);
   useEffect(() => {
     if (prevPlayer.current !== view.currentPlayer && myTurn && view.phase === 'PRE_ROLL') sfx.turn();
@@ -104,7 +121,7 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
           setFlash(gain);
         }
         if (sum === 7) sfx.robber();
-        setTimeout(() => setDice(null), 1400);
+        setTimeout(() => setDice(null), 1500);
         setTimeout(() => {
           setHighlight([]);
           setFlash({});
@@ -114,7 +131,6 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     return () => clearInterval(timer);
   }, [view.lastRoll?.id]);
 
-  // Keep the opening-roll result on screen after the order is decided.
   const [showOrderResult, setShowOrderResult] = useState(false);
   const prevPhase = useRef(view.phase);
   useEffect(() => {
@@ -123,7 +139,6 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     prevPhase.current = view.phase;
   }, [view.phase]);
 
-  // Dice sound for opening rolls.
   const orderRolls = view.orderRoll?.history.length ?? 0;
   const prevOrderRolls = useRef(orderRolls);
   useEffect(() => {
@@ -131,7 +146,6 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     prevOrderRolls.current = orderRolls;
   }, [orderRolls]);
 
-  // Victory sound.
   useEffect(() => {
     if (view.phase === 'GAME_OVER') sfx.win();
   }, [view.phase]);
@@ -154,94 +168,89 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
     return {};
   }, [view, myTurn, mode, me]);
 
-  const confirmFor = (sel: Selection): { label: React.ReactNode; action: Action } | null => {
+  const confirmFor = (sel: Selection): { label: ReactNode; action: Action } | null => {
     if (!sel) return null;
     if (view.phase === 'INITIAL_PLACEMENT') {
-      if (sel.kind === 'vertex') return { label: 'Place settlement here?', action: { type: 'placeSetupSettlement', vertex: sel.id } };
-      if (sel.kind === 'edge') return { label: 'Place road here?', action: { type: 'placeSetupRoad', edge: sel.id } };
+      if (sel.kind === 'vertex') return { label: t('confirmSetupSettlement'), action: { type: 'placeSetupSettlement', vertex: sel.id } };
+      if (sel.kind === 'edge') return { label: t('confirmSetupRoad'), action: { type: 'placeSetupRoad', edge: sel.id } };
     }
     if (view.phase === 'ROBBER_MOVE' && sel.kind === 'hex') {
-      return { label: `Move the robber to this ${TERRAIN_LABEL[view.board.hexes[sel.id].terrain].toLowerCase()}?`, action: { type: 'moveRobber', hex: sel.id } };
+      return {
+        label: t('confirmRobber', { terrain: terrainName(view.board.hexes[sel.id].terrain) }),
+        action: { type: 'moveRobber', hex: sel.id },
+      };
     }
-    if (view.freeRoads > 0 && sel.kind === 'edge') return { label: 'Place a free road here?', action: { type: 'placeFreeRoad', edge: sel.id } };
+    if (view.freeRoads > 0 && sel.kind === 'edge') return { label: t('confirmFreeRoad'), action: { type: 'placeFreeRoad', edge: sel.id } };
     if (mode === 'road' && sel.kind === 'edge') {
-      return { label: <>Build road for <ResList res={COSTS.road} />?</>, action: { type: 'buildRoad', edge: sel.id } };
+      return { label: <>{t('confirmRoad')} <ResList res={COSTS.road} />?</>, action: { type: 'buildRoad', edge: sel.id } };
     }
     if (mode === 'settlement' && sel.kind === 'vertex') {
-      return { label: <>Build settlement for <ResList res={COSTS.settlement} />?</>, action: { type: 'buildSettlement', vertex: sel.id } };
+      return { label: <>{t('confirmSettlement')} <ResList res={COSTS.settlement} />?</>, action: { type: 'buildSettlement', vertex: sel.id } };
     }
     if (mode === 'city' && sel.kind === 'vertex') {
-      return { label: <>Upgrade to city for <ResList res={COSTS.city} />?</>, action: { type: 'buildCity', vertex: sel.id } };
+      return { label: <>{t('confirmCity')} <ResList res={COSTS.city} />?</>, action: { type: 'buildCity', vertex: sel.id } };
     }
     return null;
   };
   const confirm = confirmFor(selection);
 
-  const current = view.players[view.currentPlayer];
+  const currentName = names[view.currentPlayer];
   const pendingDiscard = view.pendingDiscards[me];
   const hint = (() => {
-    if (view.phase === 'GAME_OVER') return 'Game over';
-    if (view.phase === 'ORDER_ROLL') return 'Rolling for turn order…';
+    if (view.phase === 'GAME_OVER') return t('hintGameOver');
+    if (view.phase === 'ORDER_ROLL') return t('hintOrderRoll');
     if (!myTurn) {
-      if (view.phase === 'ROBBER_DISCARD') return pendingDiscard ? `Discard ${pendingDiscard} cards` : 'Waiting for players to discard…';
-      if (view.phase === 'INITIAL_PLACEMENT') return `${current.name} is placing…`;
-      return `${current.name}'s turn`;
+      if (view.phase === 'ROBBER_DISCARD') return pendingDiscard ? t('hintDiscard', { n: pendingDiscard }) : t('hintWaitDiscards');
+      if (view.phase === 'INITIAL_PLACEMENT') return t('hintPlacing', { name: currentName });
+      return t('hintTheirTurn', { name: currentName });
     }
     switch (view.phase) {
       case 'INITIAL_PLACEMENT':
-        return view.setup?.lastSettlement ? 'Place a road next to your settlement' : 'Tap a spot to place a settlement';
+        return view.setup?.lastSettlement ? t('hintPlaceRoad') : t('hintPlaceSettlement');
       case 'PRE_ROLL':
-        return 'Your turn — roll the dice';
+        return t('hintRoll');
       case 'ROBBER_DISCARD':
-        return pendingDiscard ? `Discard ${pendingDiscard} cards` : 'Waiting for players to discard…';
+        return pendingDiscard ? t('hintDiscard', { n: pendingDiscard }) : t('hintWaitDiscards');
       case 'ROBBER_MOVE':
-        return 'Move the robber: tap a hex';
+        return t('hintMoveRobber');
       case 'ROBBER_STEAL':
-        return 'Choose who to steal from';
+        return t('hintSteal');
       default:
-        if (view.freeRoads > 0) return `Place ${view.freeRoads} free road${view.freeRoads > 1 ? 's' : ''}`;
-        if (mode) return `Tap a highlighted spot to build a ${mode}`;
-        return 'Build, trade, or end your turn';
+        if (view.freeRoads > 0) return t('hintFreeRoads', { n: view.freeRoads });
+        if (mode) return t('hintBuildMode');
+        return t('hintMain');
     }
   })();
 
-  const incoming =
-    view.trade && view.trade.to.includes(me) && view.trade.responses[me] === 'pending' && view.phase === 'MAIN_ACTIONS';
-  const tradeAnswered =
-    view.trade && view.trade.to.includes(me) && ['accepted', 'countered'].includes(view.trade.responses[me]);
-
-  const winner = view.winner !== null ? view.players[view.winner] : null;
+  const incoming = view.trade && view.trade.to.includes(me) && view.trade.responses[me] === 'pending' && view.phase === 'MAIN_ACTIONS';
+  const tradeAnswered = view.trade && view.trade.to.includes(me) && ['accepted', 'countered'].includes(view.trade.responses[me]);
+  const lastLog = view.log[view.log.length - 1];
 
   return (
     <div className={`game ${myTurn ? 'my-turn' : ''}`}>
       <PlayerStrip view={view} seats={snapshot.seats} />
 
       <div className="board-wrap">
-        <Board
-          view={view}
-          targets={targets}
-          selection={selection}
-          onSelect={setSelection}
-          highlightHexes={highlight}
-          onInspectHex={setInspect}
-        />
-        <button className="icon-btn menu-btn" onClick={() => setSheet('menu')} aria-label={t.settings}>
+        <Board view={view} targets={targets} selection={selection} onSelect={setSelection} highlightHexes={highlight} onInspectHex={setInspect} />
+        <button className="icon-btn menu-btn" onClick={() => setSheet('menu')} aria-label={t('settings')}>
           ☰
         </button>
-        <button className="log-ticker" onClick={() => setSheet('log')}>
-          {view.log[view.log.length - 1]}
-        </button>
+        {lastLog && (
+          <button className="log-ticker" onClick={() => setSheet('log')}>
+            {logText(lastLog, names)}
+          </button>
+        )}
         {inspect !== null && (
           <div className="inspect" onClick={() => setInspect(null)}>
-            {TERRAIN_LABEL[view.board.hexes[inspect].terrain]}
+            {terrainName(view.board.hexes[inspect].terrain)}
             {view.board.hexes[inspect].number ? ` · ${view.board.hexes[inspect].number}` : ''}
-            {view.board.robberHex === inspect ? ' · robber' : ''}
+            {view.board.robberHex === inspect ? ` · ${t('robberHere')}` : ''}
           </div>
         )}
         {dice && (
           <div className={`dice-overlay ${dice.rolling ? 'rolling' : ''}`}>
-            <span className="die">{DIE_FACES[dice.faces[0]]}</span>
-            <span className="die">{DIE_FACES[dice.faces[1]]}</span>
+            <Die value={dice.faces[0]} rolling={dice.rolling} />
+            <Die value={dice.faces[1]} rolling={dice.rolling} />
             {!dice.rolling && <span className={`dice-sum ${dice.sum === 7 ? 'seven' : ''}`}>{dice.sum}</span>}
           </div>
         )}
@@ -251,14 +260,14 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
       <div className="bottom">
         <div className={`hint ${myTurn ? 'mine' : ''}`}>
           {hint}
-          {tradeAnswered && <span className="muted"> · waiting for {current.name} to finish the trade</span>}
+          {tradeAnswered && <span className="muted"> · {t('hintWaitTrade', { name: currentName })}</span>}
         </div>
         {confirm ? (
           <div className="confirm-bar">
             <span>{confirm.label}</span>
             <div className="row">
               <button className="btn ghost" onClick={() => setSelection(null)}>
-                {t.cancel}
+                {t('cancel')}
               </button>
               <button
                 className="btn primary"
@@ -270,7 +279,7 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
                   }
                 }}
               >
-                {t.confirm}
+                {t('confirm')}
               </button>
             </div>
           </div>
@@ -280,28 +289,28 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
             <div className="actions">
               {mode ? (
                 <button className="btn wide" onClick={() => setMode(null)}>
-                  {t.cancel} build
+                  {t('cancelBuild')}
                 </button>
               ) : view.freeRoads > 0 && myTurn ? (
                 <button className="btn wide" onClick={() => dispatch({ type: 'finishRoadBuilding' })}>
-                  Skip remaining free roads
+                  {t('skipFreeRoads')}
                 </button>
               ) : (
                 <>
                   <button className="btn action" onClick={() => setSheet('build')}>
-                    🔨<span>{t.build}</span>
+                    🔨<span>{t('build')}</span>
                   </button>
                   <button className="btn action" onClick={() => setSheet('trade')}>
-                    🤝<span>{t.trade}</span>
+                    🤝<span>{t('trade')}</span>
                   </button>
                   <button className="btn action" onClick={() => setSheet('dev')}>
                     📜<span>
-                      {t.cards} ({view.players[me].devCardCount})
+                      {t('cards')} ({view.players[me].devCardCount})
                     </span>
                   </button>
                   {myTurn && view.phase === 'PRE_ROLL' ? (
                     <button className="btn primary big pulse" disabled={busy} onClick={() => dispatch({ type: 'rollDice' })}>
-                      🎲 {t.roll}
+                      🎲 {t('roll')}
                     </button>
                   ) : (
                     <button
@@ -309,7 +318,7 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
                       disabled={!myTurn || view.phase !== 'MAIN_ACTIONS' || busy}
                       onClick={() => dispatch({ type: 'endTurn' })}
                     >
-                      {t.endTurn}
+                      {t('endTurn')}
                     </button>
                   )}
                 </>
@@ -323,67 +332,64 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
       {sheet === 'trade' && <TradeSheet view={view} onClose={() => setSheet(null)} dispatch={dispatch} />}
       {sheet === 'dev' && <DevSheet view={view} onClose={() => setSheet(null)} dispatch={dispatch} />}
       {sheet === 'log' && (
-        <Sheet title="Game log" onClose={() => setSheet(null)}>
+        <Sheet title={t('gameLog')} onClose={() => setSheet(null)}>
           <ol className="log-list">
             {[...view.log].reverse().map((l, i) => (
-              <li key={i}>{l}</li>
+              <li key={i}>{logText(l, names)}</li>
             ))}
           </ol>
         </Sheet>
       )}
-      {sheet === 'menu' && <MenuSheet roomId={snapshot.id} onClose={() => setSheet(null)} onHelp={() => setSheet('help')} />}
+      {sheet === 'menu' && <MenuSheet roomId={snapshot.id} onClose={() => setSheet(null)} onHelp={() => setSheet('help')} onLang={onLang} />}
       {sheet === 'help' && (
-        <Sheet title={t.rules} onClose={() => setSheet(null)}>
+        <Sheet title={t('rules')} onClose={() => setSheet(null)}>
           <HelpContent />
         </Sheet>
       )}
 
-      {pendingDiscard !== undefined && view.phase === 'ROBBER_DISCARD' && (
-        <DiscardSheet view={view} required={pendingDiscard} dispatch={dispatch} />
-      )}
       {(view.phase === 'ORDER_ROLL' || showOrderResult) && view.orderRoll && (
         <OrderRollPanel view={view} dispatch={dispatch} onClose={() => setShowOrderResult(false)} />
       )}
+      {pendingDiscard !== undefined && view.phase === 'ROBBER_DISCARD' && <DiscardSheet view={view} required={pendingDiscard} dispatch={dispatch} />}
       {myTurn && view.phase === 'ROBBER_STEAL' && <StealSheet view={view} dispatch={dispatch} />}
       {incoming && <IncomingTrade view={view} dispatch={dispatch} />}
 
-      {winner && (
+      {view.winner !== null && (
         <div className="victory">
           <div className="victory-card">
             <div className="confetti" />
-            <h1>{view.winner === me ? 'You win! 🎉' : `${winner.name} wins!`}</h1>
+            <h1>{view.winner === me ? t('youWin') : t('theyWin', { name: names[view.winner] })}</h1>
             <ol className="scores">
               {view.players
                 .map((p, i) => ({ p, i }))
                 .sort((a, b) => b.p.victoryPoints - a.p.victoryPoints)
-                .map(({ p, i }) => (
-                  <li key={i}>
-                    <span className="dot" style={{ background: p.color }} /> {p.name}
-                    <b>{p.victoryPoints} pts</b>
-                    <span className="muted">
-                      {p.devCards?.filter((c) => c.type === 'victoryPoint').length
-                        ? ` (${p.devCards.filter((c) => c.type === 'victoryPoint').length} VP cards)`
-                        : ''}
-                    </span>
-                  </li>
-                ))}
+                .map(({ p, i }) => {
+                  const vpCards = p.devCards?.filter((c) => c.type === 'victoryPoint').length ?? 0;
+                  return (
+                    <li key={i}>
+                      <span className="dot" style={{ background: p.color }} /> {names[i]}
+                      <b>{t('pts', { n: p.victoryPoints })}</b>
+                      {vpCards > 0 && <span className="muted">{t('vpCards', { n: vpCards })}</span>}
+                    </li>
+                  );
+                })}
             </ol>
             <div className="row">
               <button className="btn ghost" onClick={() => (location.href = '/')}>
-                {t.home}
+                {t('home')}
               </button>
               {me === 0 ? (
                 <button
                   className="btn primary"
                   onClick={async () => {
                     const r = await emit('room:rematch');
-                    if (!r.ok) showToast(r.error);
+                    if (!r.ok) showToast(errorText(r.error));
                   }}
                 >
-                  {t.rematch}
+                  {t('rematch')}
                 </button>
               ) : (
-                <span className="muted">Waiting for the host to start a rematch…</span>
+                <span className="muted">{t('waitRematch')}</span>
               )}
             </div>
           </div>
@@ -393,12 +399,36 @@ export function GameScreen({ snapshot }: { snapshot: RoomSnapshot }) {
   );
 }
 
-function MenuSheet({ roomId, onClose, onHelp }: { roomId: string; onClose: () => void; onHelp: () => void }) {
+export function LanguagePicker({ onLang }: { onLang: (l: Lang) => void }) {
+  const lang = getLang();
+  return (
+    <div className="seg">
+      <span>{t('language')}</span>
+      <div className="seg-buttons">
+        {(['he', 'en'] as const).map((l) => (
+          <button
+            key={l}
+            className={lang === l ? 'on' : ''}
+            onClick={() => {
+              setLang(l);
+              onLang(l);
+            }}
+          >
+            {l === 'he' ? 'עברית' : 'English'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MenuSheet({ roomId, onClose, onHelp, onLang }: { roomId: string; onClose: () => void; onHelp: () => void; onLang: (l: Lang) => void }) {
   const [sound, setSound] = useState(soundEnabled());
   const [copied, setCopied] = useState(false);
   const link = rejoinLink(roomId);
   return (
-    <Sheet title={t.settings} onClose={onClose}>
+    <Sheet title={t('settings')} onClose={onClose}>
+      <LanguagePicker onLang={onLang} />
       <label className="check big">
         <input
           type="checkbox"
@@ -408,14 +438,14 @@ function MenuSheet({ roomId, onClose, onHelp }: { roomId: string; onClose: () =>
             setSoundEnabled(e.target.checked);
           }}
         />
-        {t.sound}
+        {t('sound')}
       </label>
       <button className="btn wide" onClick={onHelp}>
-        📖 {t.rules}
+        📖 {t('rules')}
       </button>
       {link && (
         <div className="rejoin">
-          <p className="muted">{t.rejoin}</p>
+          <p className="muted">{t('rejoin')}</p>
           <button
             className="btn wide"
             onClick={async () => {
@@ -423,16 +453,16 @@ function MenuSheet({ roomId, onClose, onHelp }: { roomId: string; onClose: () =>
                 await navigator.clipboard.writeText(link);
                 setCopied(true);
               } catch {
-                prompt('Copy this link', link);
+                prompt('', link);
               }
             }}
           >
-            {copied ? t.copied : 'Copy rejoin link'}
+            {copied ? t('copied') : t('copyRejoin')}
           </button>
         </div>
       )}
       <button className="btn ghost wide" onClick={() => (location.href = '/')}>
-        {t.home}
+        {t('home')}
       </button>
     </Sheet>
   );

@@ -10,6 +10,7 @@ import {
   tradeRates,
 } from './queries';
 import { addRes, emptyRes, hasRes, isResource, isValidResMap, resOf, totalRes } from './resources';
+import { LOG_EN, englishFormatter, formatLog, type LogKey, type LogParams } from './log';
 import { Rng } from './rng';
 import {
   BANK_SUPPLY_PER_RESOURCE,
@@ -30,6 +31,7 @@ import {
   type DevCardType,
   type GameConfig,
   type GameState,
+  type LogEntry,
   type PlayerSetup,
   type PlayerState,
   type ResMap,
@@ -37,6 +39,22 @@ import {
 } from './types';
 
 export class GameError extends Error {}
+
+type Secret = { to: number[]; key: LogKey; params: LogParams };
+
+function makeLog(names: string[], key: LogKey, params: LogParams, secret?: Secret): LogEntry {
+  const f = englishFormatter(names);
+  return {
+    msg: formatLog(LOG_EN[key], params, f),
+    key,
+    params,
+    secret: secret && { ...secret, msg: formatLog(LOG_EN[secret.key], secret.params, f) },
+  };
+}
+
+function say(state: GameState, key: LogKey, params: LogParams = {}, secret?: Secret): void {
+  state.log.push(makeLog(state.players.map((p) => p.name), key, params, secret));
+}
 
 function fail(msg: string): never {
   throw new GameError(msg);
@@ -107,7 +125,7 @@ export function createGame(
     longestRoad: { holder: null, lengths: players.map(() => 0) },
     largestArmy: null,
     winner: null,
-    log: [{ msg: 'Everyone rolls the dice — the highest roll goes first.' }],
+    log: [makeLog(players.map((p) => p.name), 'start', {})],
     rng: rng.seed,
   };
   return state;
@@ -144,11 +162,8 @@ function updateLongestRoad(state: GameState): void {
     else holder = null; // tie among non-holders after a broken road: nobody holds it
   }
   if (holder !== previous) {
-    state.log.push({
-      msg: holder === null
-        ? 'Longest Road is no longer held by anyone.'
-        : `${state.players[holder].name} takes Longest Road (${lengths[holder]}).`,
-    });
+    if (holder === null) say(state, 'longestRoadLost');
+    else say(state, 'longestRoad', { p: holder, n: lengths[holder] });
   }
   state.longestRoad = { holder, lengths };
 }
@@ -159,7 +174,7 @@ function updateLargestArmy(state: GameState, player: number): void {
   const holder = state.largestArmy;
   if (holder === null || knights > state.players[holder].knightsPlayed) {
     state.largestArmy = player;
-    state.log.push({ msg: `${state.players[player].name} takes Largest Army (${knights}).` });
+    say(state, 'largestArmy', { p: player, n: knights });
   }
 }
 
@@ -170,7 +185,7 @@ function checkVictory(state: GameState): void {
     state.winner = p;
     state.phase = 'GAME_OVER';
     state.trade = null;
-    state.log.push({ msg: `${state.players[p].name} wins with ${victoryPoints(state, p)} points!` });
+    say(state, 'win', { p, n: victoryPoints(state, p) });
   }
 }
 
@@ -237,10 +252,6 @@ function produce(state: GameState, roll: number): { producing: number[]; gains: 
   return { producing, gains };
 }
 
-function describeRes(r: Partial<ResMap>): string {
-  const parts = RESOURCES.filter((k) => (r[k] ?? 0) > 0).map((k) => `${r[k]} ${k}`);
-  return parts.length ? parts.join(', ') : 'nothing';
-}
 
 function finishRobber(state: GameState): void {
   state.stealCandidates = [];
@@ -252,16 +263,13 @@ function stealFrom(state: GameState, rng: Rng, thief: number, victim: number): v
   const pool: Resource[] = [];
   for (const r of RESOURCES) for (let i = 0; i < v.resources[r]; i++) pool.push(r);
   if (pool.length === 0) {
-    state.log.push({ msg: `${state.players[thief].name} found nothing to steal from ${v.name}.` });
+    say(state, 'stealNothing', { p: thief, q: victim });
     return;
   }
   const r = pool[rng.int(pool.length)];
   v.resources[r]--;
   state.players[thief].resources[r]++;
-  state.log.push({
-    msg: `${state.players[thief].name} stole a card from ${v.name}.`,
-    secret: { to: [thief, victim], msg: `${state.players[thief].name} stole 1 ${r} from ${v.name}.` },
-  });
+  say(state, 'steal', { p: thief, q: victim }, { to: [thief, victim], key: 'stealSecret', params: { p: thief, q: victim, r } });
 }
 
 export function nextInTurnOrder(state: GameState, player: number): number {
@@ -292,7 +300,7 @@ function resolveOrderRound(state: GameState): void {
   order.rolls = {};
   const stillTied = split.filter((g) => g.length > 1);
   for (const g of stillTied) {
-    state.log.push({ msg: `${g.map((p) => state.players[p].name).join(' and ')} tied — roll again.` });
+    say(state, 'orderTie', { players: g });
   }
   if (orderRollGroup(state)) return;
 
@@ -300,9 +308,7 @@ function resolveOrderRound(state: GameState): void {
   state.phase = 'INITIAL_PLACEMENT';
   state.setup = { order: rulesetFor(state.players.length).setupOrder(state.turnOrder), step: 0, lastSettlement: null };
   state.currentPlayer = state.turnOrder[0];
-  state.log.push({
-    msg: `Turn order: ${state.turnOrder.map((p) => state.players[p].name).join(' → ')}. ${state.players[state.turnOrder[0]].name} places first.`,
-  });
+  say(state, 'orderDone', { order: state.turnOrder, p: state.turnOrder[0] });
 }
 
 function startTurn(state: GameState, player: number): void {
@@ -337,6 +343,10 @@ function validateTradeSides(give: unknown, get: unknown): void {
   if (totalRes(give as ResMap) === 0 || totalRes(get as ResMap) === 0) {
     fail('Both sides of a trade must include at least one card');
   }
+  // Rulebook: trading matching resources (e.g. 3 ore for 1 ore) is giving cards away.
+  if (RESOURCES.some((r) => (give as ResMap)[r] > 0 && (get as ResMap)[r] > 0)) {
+    fail('You cannot trade a resource for the same resource');
+  }
 }
 
 function executePlayerTrade(state: GameState, from: number, to: number, give: ResMap, get: ResMap): void {
@@ -347,9 +357,7 @@ function executePlayerTrade(state: GameState, from: number, to: number, give: Re
   addRes(state.players[to].resources, get, -1);
   addRes(state.players[from].resources, get, 1);
   state.trade = null;
-  state.log.push({
-    msg: `${state.players[from].name} traded ${describeRes(give)} to ${state.players[to].name} for ${describeRes(get)}.`,
-  });
+  say(state, 'traded', { p: from, q: to, give, get });
 }
 
 // ---------------------------------------------------------------------------
@@ -389,7 +397,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       const dice: [number, number] = [rng.int(6) + 1, rng.int(6) + 1];
       state.orderRoll!.rolls[player] = dice;
       state.orderRoll!.history.push({ player, dice });
-      state.log.push({ msg: `${me.name} rolled ${dice[0] + dice[1]} for turn order.` });
+      say(state, 'orderRolled', { p: player, n: dice[0] + dice[1] });
       resolveOrderRound(state);
       return;
     }
@@ -412,9 +420,9 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         }
         addRes(me.resources, gained, 1);
         addRes(state.bank, gained, -1);
-        state.log.push({ msg: `${me.name} placed a settlement and received ${describeRes(gained)}.` });
+        say(state, 'setupSettlementRes', { p: player, res: gained });
       } else {
-        state.log.push({ msg: `${me.name} placed a settlement.` });
+        say(state, 'setupSettlement', { p: player });
       }
       return;
     }
@@ -433,7 +441,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       setup.step++;
       if (setup.step >= setup.order.length) {
         state.setup = null;
-        state.log.push({ msg: 'Setup complete. Let the game begin!' });
+        say(state, 'setupDone');
         updateLongestRoad(state);
         startTurn(state, state.turnOrder[0]);
       } else {
@@ -450,7 +458,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       const sum = dice[0] + dice[1];
       state.hasRolled = true;
       const rollId = (state.lastRoll?.id ?? 0) + 1;
-      state.log.push({ msg: `${me.name} rolled ${sum}.` });
+      say(state, 'rolled', { p: player, n: sum });
       if (sum === 7) {
         state.lastRoll = { id: rollId, dice, player, producingHexes: [], gains: state.players.map(() => emptyRes()) };
         state.pendingDiscards = {};
@@ -464,7 +472,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         const { producing, gains } = produce(state, sum);
         state.lastRoll = { id: rollId, dice, player, producingHexes: producing, gains };
         gains.forEach((g, i) => {
-          if (totalRes(g) > 0) state.log.push({ msg: `${state.players[i].name} received ${describeRes(g)}.` });
+          if (totalRes(g) > 0) say(state, 'received', { p: i, res: g });
         });
         state.phase = 'MAIN_ACTIONS';
       }
@@ -481,7 +489,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       addRes(me.resources, action.resources, -1);
       addRes(state.bank, action.resources, 1);
       delete state.pendingDiscards[player];
-      state.log.push({ msg: `${me.name} discarded ${required} cards.` });
+      say(state, 'discarded', { p: player, n: required });
       if (Object.keys(state.pendingDiscards).length === 0) state.phase = 'ROBBER_MOVE';
       return;
     }
@@ -492,7 +500,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (action.hex === state.board.robberHex) fail('The robber must move to a different hex');
       state.board.robberHex = action.hex;
-      state.log.push({ msg: `${me.name} moved the robber.` });
+      say(state, 'robberMoved', { p: player });
       const candidates = playersOnHex(state, action.hex).filter(
         (p) => p !== player && totalRes(state.players[p].resources) > 0,
       );
@@ -525,7 +533,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (!hasRes(me.resources, COSTS.road)) fail('Not enough resources for a road');
       placeRoad(state, player, action.edge);
       pay(state, player, COSTS.road, 'a road');
-      state.log.push({ msg: `${me.name} built a road.` });
+      say(state, 'builtRoad', { p: player });
       updateLongestRoad(state);
       checkVictory(state);
       return;
@@ -544,7 +552,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, COSTS.settlement, 'a settlement');
       state.buildings[action.vertex] = { owner: player, type: 'settlement' };
       me.settlementsBuilt++;
-      state.log.push({ msg: `${me.name} built a settlement.` });
+      say(state, 'builtSettlement', { p: player });
       updateLongestRoad(state); // may break an opponent's road
       checkVictory(state);
       return;
@@ -560,7 +568,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, COSTS.city, 'a city');
       state.buildings[action.vertex] = { owner: player, type: 'city' };
       me.citiesBuilt++;
-      state.log.push({ msg: `${me.name} upgraded a settlement to a city.` });
+      say(state, 'builtCity', { p: player });
       checkVictory(state);
       return;
     }
@@ -573,7 +581,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, COSTS.devCard, 'a development card');
       const card = state.devDeck.shift()!;
       me.devCards.push({ type: card, boughtTurn: state.turn });
-      state.log.push({ msg: `${me.name} bought a development card.` });
+      say(state, 'boughtDev', { p: player });
       checkVictory(state);
       return;
     }
@@ -588,7 +596,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       state.robberReturnPhase = state.phase === 'PRE_ROLL' ? 'PRE_ROLL' : 'MAIN_ACTIONS';
       state.trade = null;
       state.phase = 'ROBBER_MOVE';
-      state.log.push({ msg: `${me.name} played a Knight.` });
+      say(state, 'playedKnight', { p: player });
       updateLargestArmy(state, player);
       checkVictory(state);
       return;
@@ -602,7 +610,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       useCard(state, player, idx);
       state.freeRoads = Math.min(2, PIECE_LIMITS.roads - me.roadsBuilt);
       if (legalRoads(state, player).length === 0) state.freeRoads = 0;
-      state.log.push({ msg: `${me.name} played Road Building.` });
+      say(state, 'playedRoadBuilding', { p: player });
       return;
     }
 
@@ -612,7 +620,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       placeRoad(state, player, action.edge);
       state.freeRoads--;
       if (state.freeRoads > 0 && legalRoads(state, player).length === 0) state.freeRoads = 0;
-      state.log.push({ msg: `${me.name} placed a free road.` });
+      say(state, 'placedFreeRoad', { p: player });
       updateLongestRoad(state);
       checkVictory(state);
       return;
@@ -638,7 +646,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       useCard(state, player, idx);
       addRes(state.bank, want, -1);
       addRes(me.resources, want, 1);
-      state.log.push({ msg: `${me.name} played Year of Plenty and took ${describeRes(want)}.` });
+      say(state, 'playedYearOfPlenty', { p: player, res: want });
       return;
     }
 
@@ -657,7 +665,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       });
       me.resources[action.resource] += taken;
       state.trade = null;
-      state.log.push({ msg: `${me.name} played Monopoly on ${action.resource} and took ${taken}.` });
+      say(state, 'playedMonopoly', { p: player, r: action.resource, n: taken });
       return;
     }
 
@@ -672,7 +680,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, { [action.give]: rate }, 'this trade');
       state.bank[action.get]--;
       me.resources[action.get]++;
-      state.log.push({ msg: `${me.name} traded ${rate} ${action.give} with the bank for 1 ${action.get}.` });
+      say(state, 'bankTrade', { p: player, n: rate, r: action.give, r2: action.get });
       return;
     }
 
@@ -695,7 +703,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         responses: Object.fromEntries(to.map((t) => [t, 'pending' as const])),
         counters: {},
       };
-      state.log.push({ msg: `${me.name} offers ${describeRes(action.give)} for ${describeRes(action.get)}.` });
+      say(state, 'offer', { p: player, give: resOf(action.give), get: resOf(action.get) });
       return;
     }
 
@@ -706,7 +714,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (action.response === 'reject') {
         t!.responses[player] = 'rejected';
         delete t!.counters[player];
-        state.log.push({ msg: `${me.name} declined the trade.` });
+        say(state, 'declined', { p: player });
         return;
       }
       if (action.response !== 'accept') fail('Invalid response');
@@ -716,7 +724,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       } else {
         t!.responses[player] = 'accepted';
         delete t!.counters[player];
-        state.log.push({ msg: `${me.name} accepts the trade.` });
+        say(state, 'accepts', { p: player });
       }
       return;
     }
@@ -730,7 +738,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       // Stored from the proposer's point of view.
       t!.counters[player] = { give: resOf(action.get), get: resOf(action.give) };
       t!.responses[player] = 'countered';
-      state.log.push({ msg: `${me.name} counters: ${describeRes(action.give)} for ${describeRes(action.get)}.` });
+      say(state, 'counters', { p: player, give: resOf(action.give), get: resOf(action.get) });
       return;
     }
 
@@ -755,7 +763,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       if (!state.trade) fail('There is no trade to cancel');
       state.trade = null;
-      state.log.push({ msg: `${me.name} withdrew the trade offer.` });
+      say(state, 'withdrew', { p: player });
       return;
     }
 

@@ -40,7 +40,9 @@ function broadcast(room: Room) {
   }
 }
 
-const manager = new RoomManager(createStore(), broadcast);
+const manager = new RoomManager(createStore(), broadcast, undefined, {
+  botDelayMs: Number(process.env.BOT_DELAY_MS ?? 900),
+});
 
 interface SocketSession {
   roomId?: string;

@@ -10,6 +10,7 @@ import {
   type GameState,
   type PlayerView,
 } from '@hex/engine';
+import { BotRunner } from './bots';
 import type { RoomStore } from './store';
 
 export interface RoomConfig {
@@ -62,12 +63,9 @@ export interface RoomSnapshot {
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
-/** Bots are a later milestone; until then rooms are human-only. */
-export const BOTS_ENABLED = false;
-
 const DEFAULT_CONFIG: RoomConfig = {
   humans: 2,
-  bots: 0,
+  bots: 2,
   difficulty: 'medium',
   victoryTarget: 10,
   boardType: 'random',
@@ -90,7 +88,6 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > 3) return { ok: false, error: 'Bots must be 0-3' };
   const total = c.humans + c.bots;
   if (total < MIN_PLAYERS || total > MAX_PLAYERS) return { ok: false, error: 'A game needs 2-4 participants' };
-  if (!BOTS_ENABLED && c.bots > 0) return { ok: false, error: 'AI bots are coming soon' };
   if (!['easy', 'medium', 'hard'].includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
   if (![10, 12].includes(c.victoryTarget)) return { ok: false, error: 'Target must be 10 or 12' };
   if (!['random', 'beginner'].includes(c.boardType)) return { ok: false, error: 'Invalid board type' };
@@ -137,18 +134,27 @@ export class RoomManager {
   private rooms = new Map<string, Room>();
   private saving = new Map<string, Promise<void>>();
 
+  readonly bots: BotRunner;
+
   constructor(
     private store: RoomStore,
     private onChange: (room: Room) => void = () => {},
     private seedSource: () => number = () => randomInt(1, 2 ** 31 - 1),
-  ) {}
+    options: { botDelayMs?: number } = {},
+  ) {
+    this.bots = new BotRunner(this, options.botDelayMs ?? 900);
+  }
 
   async get(id: unknown): Promise<Room | null> {
     if (typeof id !== 'string' || !/^[A-Za-z0-9]{4,20}$/.test(id)) return null;
     const cached = this.rooms.get(id);
     if (cached) return cached;
     const loaded = await this.store.load(id);
-    if (loaded) this.rooms.set(id, migrate(loaded));
+    if (loaded) {
+      this.rooms.set(id, migrate(loaded));
+      // Resume bot turns after a server restart.
+      this.bots.schedule(loaded);
+    }
     return loaded;
   }
 
@@ -159,6 +165,7 @@ export class RoomManager {
     const next = previous.then(() => this.store.save(snapshot)).catch((err) => console.error('save failed', err));
     this.saving.set(room.id, next);
     this.onChange(room);
+    this.bots.schedule(room);
     await next;
   }
 

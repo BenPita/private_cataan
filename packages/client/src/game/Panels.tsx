@@ -10,16 +10,19 @@ import {
   legalSettlements,
   totalRes,
   tradeRates,
+  type Action,
   type DevCardType,
   type PlayerView,
   type ResMap,
   type Resource,
 } from '@hex/engine';
-import { DEV_LABEL, RESOURCE_COLOR, RESOURCE_ICON, RESOURCE_LABEL, t } from '../strings';
+import { DevCardFace, ResourceCard } from '../art';
+import { devInfo, displayName, resourceName, t } from '../i18n';
 import type { PublicSeat } from '../net';
-import type { Action } from '@hex/engine';
 
 export type Dispatch = (a: Action) => Promise<boolean>;
+
+export const playerName = (view: PlayerView, i: number) => displayName(view.players[i].name, view.players[i].kind);
 
 export function Sheet({ title, onClose, children }: { title: string; onClose?: () => void; children: ReactNode }) {
   return (
@@ -28,7 +31,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose?: (
         <div className="sheet-head">
           <h2>{title}</h2>
           {onClose && (
-            <button className="icon-btn" onClick={onClose} aria-label={t.close}>
+            <button className="icon-btn" onClick={onClose} aria-label={t('close')}>
               ✕
             </button>
           )}
@@ -39,22 +42,13 @@ export function Sheet({ title, onClose, children }: { title: string; onClose?: (
   );
 }
 
-export function ResChip({ r, n, dim }: { r: Resource; n?: number; dim?: boolean }) {
-  return (
-    <span className={`res-chip ${dim ? 'dim' : ''}`} style={{ background: RESOURCE_COLOR[r] }}>
-      {RESOURCE_ICON[r]}
-      {n !== undefined && <b>{n}</b>}
-    </span>
-  );
-}
-
 export function ResList({ res }: { res: Partial<ResMap> }) {
   const items = RESOURCES.filter((r) => (res[r] ?? 0) > 0);
-  if (!items.length) return <span className="muted">nothing</span>;
+  if (!items.length) return <span className="muted">{t('nothing')}</span>;
   return (
     <span className="res-list">
       {items.map((r) => (
-        <ResChip key={r} r={r} n={res[r]} />
+        <ResourceCard key={r} r={r} count={res[r]} small />
       ))}
     </span>
   );
@@ -66,8 +60,8 @@ export function ResCounter({ value, onChange, max }: { value: ResMap; onChange: 
     <div className="res-counter">
       {RESOURCES.map((r) => (
         <div key={r} className="res-counter-row">
-          <ResChip r={r} />
-          <span className="res-name">{RESOURCE_LABEL[r]}</span>
+          <ResourceCard r={r} small />
+          <span className="res-name">{resourceName(r)}</span>
           <button className="round" disabled={value[r] <= 0} onClick={() => onChange({ ...value, [r]: value[r] - 1 })}>
             −
           </button>
@@ -85,13 +79,13 @@ export function ResCounter({ value, onChange, max }: { value: ResMap; onChange: 
   );
 }
 
+/** The player's hand: one card per resource type with a count. */
 export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap> }) {
   return (
-    <div className="resource-bar">
+    <div className="hand">
       {RESOURCES.map((r) => (
-        <div key={r} className="res-card" style={{ background: RESOURCE_COLOR[r] }} title={RESOURCE_LABEL[r]}>
-          <span className="res-icon">{RESOURCE_ICON[r]}</span>
-          <b>{res[r]}</b>
+        <div key={r} className="hand-slot" title={resourceName(r)}>
+          <ResourceCard r={r} count={res[r]} dim={res[r] === 0} />
           {(flash[r] ?? 0) !== 0 && (
             <span className={`res-flash ${(flash[r] ?? 0) > 0 ? 'up' : 'down'}`}>
               {(flash[r] ?? 0) > 0 ? '+' : ''}
@@ -107,32 +101,40 @@ export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap
 export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSeat[] }) {
   return (
     <div className="player-strip">
-      {view.turnOrder.map((i) => ({ p: view.players[i], i })).map(({ p, i }) => (
-        <div
-          key={i}
-          className={`player-chip ${view.currentPlayer === i && view.phase !== 'GAME_OVER' ? 'active' : ''}`}
-          style={{ borderColor: p.color }}
-        >
-          <div className="chip-top">
-            <span className="dot" style={{ background: p.color }} />
-            <span className="pname">
-              {p.name}
-              {i === view.me ? ` (${t.you})` : ''}
-            </span>
-            {!seats[i]?.connected && <span className="offline-tag">{t.disconnected}</span>}
+      {view.turnOrder.map((i) => {
+        const p = view.players[i];
+        return (
+          <div
+            key={i}
+            className={`player-chip ${view.currentPlayer === i && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL' ? 'active' : ''}`}
+            style={{ ['--pc' as string]: p.color }}
+          >
+            <div className="chip-top">
+              <span className="dot" style={{ background: p.color }} />
+              <span className="pname">
+                {p.kind === 'bot' ? '🤖 ' : ''}
+                {playerName(view, i)}
+                {i === view.me ? ` (${t('you')})` : ''}
+              </span>
+              {!seats[i]?.connected && <span className="offline-tag">{t('disconnected')}</span>}
+            </div>
+            <div className="chip-stats">
+              <span title={t('vp')} className="vp">
+                ★ {p.victoryPoints}
+              </span>
+              <span title={t('resCards')}>🂠 {p.resourceCount}</span>
+              <span title={t('devCount')}>📜 {p.devCardCount}</span>
+              <span title={t('knights')}>⚔ {p.knightsPlayed}</span>
+            </div>
+            {(view.longestRoad.holder === i || view.largestArmy === i) && (
+              <div className="chip-badges">
+                {view.longestRoad.holder === i && <span className="badge">🛤 {t('longestRoad')}</span>}
+                {view.largestArmy === i && <span className="badge">🛡 {t('largestArmy')}</span>}
+              </div>
+            )}
           </div>
-          <div className="chip-stats">
-            <span title="Victory points">⭐ {p.victoryPoints}</span>
-            <span title="Resource cards">🂠 {p.resourceCount}</span>
-            <span title="Development cards">📜 {p.devCardCount}</span>
-            <span title="Knights played">⚔️ {p.knightsPlayed}</span>
-          </div>
-          <div className="chip-badges">
-            {view.longestRoad.holder === i && <span className="badge">🛤️ Road</span>}
-            {view.largestArmy === i && <span className="badge">🛡️ Army</span>}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -158,40 +160,29 @@ export function BuildSheet({
   const canAct = view.currentPlayer === me && view.phase === 'MAIN_ACTIONS' && view.freeRoads === 0;
   const [confirmDev, setConfirmDev] = useState(false);
 
-  const items: Array<{ key: BuildMode | 'devCard'; name: string; left: number | string; spots: number; reason: string | null }> = [
-    {
-      key: 'road',
-      name: 'Road',
-      left: PIECE_LIMITS.roads - p.roadsBuilt,
-      spots: legalRoads(view, me).length,
-      reason: null,
-    },
+  const items: Array<{ key: BuildMode | 'devCard'; left: string; leftN: number; spots: number; reason: string | null }> = [
+    { key: 'road', leftN: PIECE_LIMITS.roads - p.roadsBuilt, left: '', spots: legalRoads(view, me).length, reason: null },
     {
       key: 'settlement',
-      name: 'Settlement',
-      left: PIECE_LIMITS.settlements - (p.settlementsBuilt - p.citiesBuilt),
+      leftN: PIECE_LIMITS.settlements - (p.settlementsBuilt - p.citiesBuilt),
+      left: '',
       spots: legalSettlements(view, me).length,
       reason: null,
     },
-    {
-      key: 'city',
-      name: 'City',
-      left: PIECE_LIMITS.cities - p.citiesBuilt,
-      spots: legalCities(view, me).length,
-      reason: null,
-    },
-    { key: 'devCard', name: 'Development card', left: `${view.devDeckCount} in deck`, spots: view.devDeckCount, reason: null },
+    { key: 'city', leftN: PIECE_LIMITS.cities - p.citiesBuilt, left: '', spots: legalCities(view, me).length, reason: null },
+    { key: 'devCard', leftN: view.devDeckCount, left: '', spots: view.devDeckCount, reason: null },
   ];
   for (const it of items) {
+    it.left = it.key === 'devCard' ? t('inDeck', { n: it.leftN }) : t('left', { n: it.leftN });
     const cost = COSTS[it.key];
-    if (!canAct) it.reason = view.currentPlayer !== me ? 'Not your turn' : view.phase === 'PRE_ROLL' ? 'Roll the dice first' : 'Not now';
-    else if (typeof it.left === 'number' && it.left <= 0) it.reason = 'No pieces left';
-    else if (it.spots === 0) it.reason = it.key === 'devCard' ? 'Deck is empty' : 'No legal spot';
-    else if (!hasRes(res, cost)) it.reason = 'Not enough resources';
+    if (!canAct) it.reason = view.currentPlayer !== me ? t('reasonNotTurn') : view.phase === 'PRE_ROLL' ? t('reasonRollFirst') : t('reasonNotNow');
+    else if (it.leftN <= 0) it.reason = it.key === 'devCard' ? t('reasonDeckEmpty') : t('reasonNoPieces');
+    else if (it.spots === 0) it.reason = t('reasonNoSpot');
+    else if (!hasRes(res, cost)) it.reason = t('reasonNoRes');
   }
 
   return (
-    <Sheet title={t.build} onClose={onClose}>
+    <Sheet title={t('build')} onClose={onClose}>
       <div className="build-list">
         {items.map((it) => (
           <button
@@ -207,8 +198,8 @@ export function BuildSheet({
             }}
           >
             <div className="build-name">
-              <b>{it.name}</b>
-              <span className="muted">{typeof it.left === 'number' ? `${it.left} left` : it.left}</span>
+              <b>{t(it.key)}</b>
+              <span className="muted">{it.left}</span>
             </div>
             <ResList res={COSTS[it.key]} />
             {it.reason && <span className="reason">{it.reason}</span>}
@@ -218,11 +209,11 @@ export function BuildSheet({
       {confirmDev && (
         <div className="confirm-inline">
           <span>
-            Buy a development card for <ResList res={COSTS.devCard} />?
+            {t('buyDevConfirm')} <ResList res={COSTS.devCard} />?
           </span>
           <div className="row">
             <button className="btn ghost" onClick={() => setConfirmDev(false)}>
-              {t.cancel}
+              {t('cancel')}
             </button>
             <button
               className="btn primary"
@@ -230,7 +221,7 @@ export function BuildSheet({
                 if (await dispatch({ type: 'buyDevCard' })) onClose();
               }}
             >
-              {t.confirm}
+              {t('confirm')}
             </button>
           </div>
         </div>
@@ -254,16 +245,17 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
   const [to, setTo] = useState<number[]>(opponents);
   const canTrade = view.currentPlayer === me && view.phase === 'MAIN_ACTIONS';
   const trade = view.trade && view.trade.from === me ? view.trade : null;
+  const sameBoth = RESOURCES.some((r) => offerGive[r] > 0 && offerGet[r] > 0);
 
   if (trade) {
     return (
-      <Sheet title="Your offer" onClose={onClose}>
+      <Sheet title={t('yourOffer')} onClose={onClose}>
         <div className="offer-summary">
           <div>
-            You give <ResList res={trade.give} />
+            {t('youGive')} <ResList res={trade.give} />
           </div>
           <div>
-            You get <ResList res={trade.get} />
+            {t('youGet')} <ResList res={trade.get} />
           </div>
         </div>
         <div className="responses">
@@ -273,21 +265,21 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
             return (
               <div key={p} className="response-row">
                 <span className="dot" style={{ background: view.players[p].color }} />
-                <b>{view.players[p].name}</b>
-                {r === 'pending' && <span className="muted">thinking…</span>}
-                {r === 'rejected' && <span className="muted">declined</span>}
+                <b>{playerName(view, p)}</b>
+                {r === 'pending' && <span className="muted">{t('thinking')}</span>}
+                {r === 'rejected' && <span className="muted">{t('declinedTag')}</span>}
                 {r === 'accepted' && (
                   <button className="btn primary small" onClick={() => dispatch({ type: 'confirmTrade', tradeId: trade.id, with: p })}>
-                    Accept deal
+                    {t('acceptDeal')}
                   </button>
                 )}
                 {r === 'countered' && counter && (
                   <div className="counter-box">
                     <span>
-                      Counter: you give <ResList res={counter.give} /> get <ResList res={counter.get} />
+                      {t('youGive')} <ResList res={counter.give} /> · {t('youGet')} <ResList res={counter.get} />
                     </span>
                     <button className="btn primary small" onClick={() => dispatch({ type: 'confirmTrade', tradeId: trade.id, with: p })}>
-                      Accept counter
+                      {t('acceptCounter')}
                     </button>
                   </div>
                 )}
@@ -296,44 +288,39 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
           })}
         </div>
         <button className="btn ghost wide" onClick={() => dispatch({ type: 'cancelTrade' })}>
-          Withdraw offer
+          {t('withdraw')}
         </button>
       </Sheet>
     );
   }
 
   return (
-    <Sheet title={t.trade} onClose={onClose}>
+    <Sheet title={t('trade')} onClose={onClose}>
       <div className="tabs">
         <button className={tab === 'player' ? 'on' : ''} onClick={() => setTab('player')}>
-          Players
+          {t('tabPlayers')}
         </button>
         <button className={tab === 'bank' ? 'on' : ''} onClick={() => setTab('bank')}>
-          Bank & harbors
+          {t('tabBank')}
         </button>
       </div>
-      {!canTrade && <p className="hint-text">You can trade during your turn, after rolling.</p>}
+      {!canTrade && <p className="hint-text">{t('tradeWhen')}</p>}
       {tab === 'bank' ? (
         <div className="bank-trade">
-          <p className="label">Give</p>
+          <p className="label">{t('give')}</p>
           <div className="pick-row">
             {RESOURCES.map((r) => (
-              <button
-                key={r}
-                className={`pick ${give === r ? 'on' : ''}`}
-                disabled={res[r] < rates[r]}
-                onClick={() => setGive(r)}
-              >
-                <ResChip r={r} />
+              <button key={r} className={`pick ${give === r ? 'on' : ''}`} disabled={res[r] < rates[r]} onClick={() => setGive(r)}>
+                <ResourceCard r={r} small />
                 <span>{rates[r]}:1</span>
               </button>
             ))}
           </div>
-          <p className="label">Receive</p>
+          <p className="label">{t('receive')}</p>
           <div className="pick-row">
             {RESOURCES.map((r) => (
               <button key={r} className={`pick ${get === r ? 'on' : ''}`} disabled={r === give || view.bank[r] === 0} onClick={() => setGet(r)}>
-                <ResChip r={r} />
+                <ResourceCard r={r} small />
                 <span className="muted">{view.bank[r]}</span>
               </button>
             ))}
@@ -345,24 +332,24 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
               if (give && get && (await dispatch({ type: 'bankTrade', give, get }))) setGet(null);
             }}
           >
-            {give && get ? `Trade ${rates[give]} ${RESOURCE_LABEL[give]} → 1 ${RESOURCE_LABEL[get]}` : 'Choose resources'}
+            {give && get ? t('bankTradeBtn', { n: rates[give], give: resourceName(give), get: resourceName(get) }) : t('chooseRes')}
           </button>
         </div>
       ) : (
         <div className="player-trade">
           <div className="two-col">
             <div>
-              <p className="label">You give</p>
+              <p className="label">{t('youGive')}</p>
               <ResCounter value={offerGive} onChange={setOfferGive} max={res} />
             </div>
             <div>
-              <p className="label">You want</p>
+              <p className="label">{t('youWant')}</p>
               <ResCounter value={offerGet} onChange={setOfferGet} />
             </div>
           </div>
           {opponents.length > 1 && (
             <div className="recipients">
-              <span className="label">Send to</span>
+              <span className="label">{t('sendTo')}</span>
               {opponents.map((p) => (
                 <label key={p} className="check">
                   <input
@@ -370,17 +357,17 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
                     checked={to.includes(p)}
                     onChange={(e) => setTo(e.target.checked ? [...to, p] : to.filter((x) => x !== p))}
                   />
-                  {view.players[p].name}
+                  {playerName(view, p)}
                 </label>
               ))}
             </div>
           )}
           <button
             className="btn primary wide"
-            disabled={!canTrade || totalRes(offerGive) === 0 || totalRes(offerGet) === 0 || to.length === 0}
+            disabled={!canTrade || totalRes(offerGive) === 0 || totalRes(offerGet) === 0 || to.length === 0 || sameBoth}
             onClick={() => dispatch({ type: 'proposeTrade', give: offerGive, get: offerGet, to })}
           >
-            Send offer
+            {t('sendOffer')}
           </button>
         </div>
       )}
@@ -400,35 +387,34 @@ export function IncomingTrade({ view, dispatch }: { view: PlayerView; dispatch: 
     setCGive(trade.get);
     setCGet(trade.give);
   }, [trade.id]);
-  const from = view.players[trade.from];
   const affordable = hasRes(res, trade.get);
 
   return (
-    <Sheet title={`Trade offer from ${from.name}`}>
+    <Sheet title={t('offerFrom', { name: playerName(view, trade.from) })}>
       {!countering ? (
         <>
           <div className="offer-summary">
             <div>
-              You get <ResList res={trade.give} />
+              {t('youGet')} <ResList res={trade.give} />
             </div>
             <div>
-              You give <ResList res={trade.get} />
+              {t('youGive')} <ResList res={trade.get} />
             </div>
           </div>
-          {!affordable && <p className="hint-text">You don't have the cards they want.</p>}
+          {!affordable && <p className="hint-text">{t('cantAfford')}</p>}
           <div className="row">
             <button className="btn ghost" onClick={() => dispatch({ type: 'respondTrade', tradeId: trade.id, response: 'reject' })}>
-              Decline
+              {t('decline')}
             </button>
             <button className="btn" onClick={() => setCountering(true)}>
-              Counter
+              {t('counter')}
             </button>
             <button
               className="btn primary"
               disabled={!affordable}
               onClick={() => dispatch({ type: 'respondTrade', tradeId: trade.id, response: 'accept' })}
             >
-              Accept
+              {t('accept')}
             </button>
           </div>
         </>
@@ -436,24 +422,24 @@ export function IncomingTrade({ view, dispatch }: { view: PlayerView; dispatch: 
         <>
           <div className="two-col">
             <div>
-              <p className="label">You give</p>
+              <p className="label">{t('youGive')}</p>
               <ResCounter value={cGive} onChange={setCGive} max={res} />
             </div>
             <div>
-              <p className="label">You want</p>
+              <p className="label">{t('youWant')}</p>
               <ResCounter value={cGet} onChange={setCGet} />
             </div>
           </div>
           <div className="row">
             <button className="btn ghost" onClick={() => setCountering(false)}>
-              Back
+              {t('back')}
             </button>
             <button
               className="btn primary"
               disabled={totalRes(cGive) === 0 || totalRes(cGet) === 0}
               onClick={() => dispatch({ type: 'counterTrade', tradeId: trade.id, give: cGive, get: cGet })}
             >
-              Send counteroffer
+              {t('sendCounter')}
             </button>
           </div>
         </>
@@ -481,10 +467,10 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
   }
 
   const reason = (type: DevCardType, g: { playable: number }) => {
-    if (type === 'victoryPoint') return 'Counts automatically';
-    if (!turnOk) return 'Play on your turn';
-    if (p.playedDevThisTurn) return 'One card per turn';
-    if (g.playable === 0) return 'Bought this turn';
+    if (type === 'victoryPoint') return t('devAuto');
+    if (!turnOk) return t('devOnTurn');
+    if (p.playedDevThisTurn) return t('devOnePerTurn');
+    if (g.playable === 0) return t('devBoughtNow');
     return null;
   };
 
@@ -496,10 +482,8 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
 
   if (picking) {
     return (
-      <Sheet title={DEV_LABEL[picking].name} onClose={() => setPicking(null)}>
-        <p className="hint-text">
-          {picking === 'monopoly' ? 'Choose the resource to collect from every opponent.' : `Choose 2 resources (${yop.length}/2).`}
-        </p>
+      <Sheet title={devInfo(picking).name} onClose={() => setPicking(null)}>
+        <p className="hint-text">{picking === 'monopoly' ? t('monopolyPick') : t('inventionPick', { n: yop.length })}</p>
         <div className="pick-row">
           {RESOURCES.map((r) => (
             <button
@@ -518,8 +502,8 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
                 }
               }}
             >
-              <ResChip r={r} n={picking === 'yearOfPlenty' ? yop.filter((x) => x === r).length || undefined : undefined} />
-              <span>{RESOURCE_LABEL[r]}</span>
+              <ResourceCard r={r} small count={picking === 'yearOfPlenty' ? yop.filter((x) => x === r).length || undefined : undefined} />
+              <span>{resourceName(r)}</span>
             </button>
           ))}
         </div>
@@ -528,26 +512,27 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
   }
 
   return (
-    <Sheet title="Development cards" onClose={onClose}>
-      {cards.length === 0 && <p className="hint-text">You have no development cards. Buy one from the Build menu.</p>}
+    <Sheet title={t('devCards')} onClose={onClose}>
+      {cards.length === 0 && <p className="hint-text">{t('noDevCards')}</p>}
       <div className="dev-list">
         {[...groups.entries()].map(([type, g]) => {
           const why = reason(type, g);
+          const info = devInfo(type);
           return (
             <div key={type} className="dev-card">
-              <span className="dev-icon">{DEV_LABEL[type].icon}</span>
+              <DevCardFace type={type} title={info.name} />
               <div className="dev-text">
                 <b>
-                  {DEV_LABEL[type].name} ×{g.total}
+                  {info.name} ×{g.total}
                 </b>
-                <span className="muted">{DEV_LABEL[type].text}</span>
+                <span className="muted">{info.text}</span>
+                {why && <span className="reason">{why}</span>}
               </div>
               {type !== 'victoryPoint' && (
                 <button className="btn primary small" disabled={!!why} onClick={() => play(type)}>
-                  Play
+                  {t('play')}
                 </button>
               )}
-              {why && <span className="reason">{why}</span>}
             </div>
           );
         })}
@@ -563,8 +548,8 @@ export function DiscardSheet({ view, required, dispatch }: { view: PlayerView; r
   const [pick, setPick] = useState<ResMap>(emptyRes());
   const n = totalRes(pick);
   return (
-    <Sheet title={`Discard ${required} cards`}>
-      <p className="hint-text">A 7 was rolled and you hold more than 7 cards. Choose {required} to return to the bank.</p>
+    <Sheet title={t('discardTitle', { n: required })}>
+      <p className="hint-text">{t('discardText', { n: required })}</p>
       <ResCounter value={pick} onChange={setPick} max={res} />
       <button
         className="btn primary wide"
@@ -573,7 +558,7 @@ export function DiscardSheet({ view, required, dispatch }: { view: PlayerView; r
           if (await dispatch({ type: 'discard', resources: pick })) setPick(emptyRes());
         }}
       >
-        Discard {n}/{required}
+        {t('discardBtn', { k: n, n: required })}
       </button>
     </Sheet>
   );
@@ -581,11 +566,12 @@ export function DiscardSheet({ view, required, dispatch }: { view: PlayerView; r
 
 export function StealSheet({ view, dispatch }: { view: PlayerView; dispatch: Dispatch }) {
   return (
-    <Sheet title="Steal a card from…">
+    <Sheet title={t('stealTitle')}>
       <div className="steal-list">
         {view.stealCandidates.map((p) => (
           <button key={p} className="btn wide" onClick={() => dispatch({ type: 'steal', victim: p })}>
-            <span className="dot" style={{ background: view.players[p].color }} /> {view.players[p].name} ({view.players[p].resourceCount} cards)
+            <span className="dot" style={{ background: view.players[p].color }} /> {playerName(view, p)} (
+            {t('cardsCount', { n: view.players[p].resourceCount })})
           </button>
         ))}
       </div>
@@ -604,14 +590,12 @@ export function OrderRollPanel({ view, dispatch, onClose }: { view: PlayerView; 
   const group = order.groups.find((g) => g.length > 1) ?? [];
   const mustRoll = group.includes(me) && !order.rolls[me];
   const tiebreak = order.history.length >= view.players.length;
-  const waiting = group.filter((p) => !order.rolls[p]).map((p) => view.players[p].name);
+  const waiting = group.filter((p) => !order.rolls[p]).map((p) => playerName(view, p));
   return (
     <div className="order-roll">
       <div className="order-card">
-        <h2>🎲 Who goes first?</h2>
-        <p className="muted">
-          {decided ? 'Turn order is set:' : tiebreak ? 'Tie! The tied players roll again.' : 'Everyone rolls — the highest roll starts, then the next highest, and so on.'}
-        </p>
+        <h2>🎲 {t('whoFirst')}</h2>
+        <p className="muted">{decided ? t('orderSet') : tiebreak ? t('orderTie') : t('orderIntro')}</p>
         <ul className="order-list">
           {(decided ? view.turnOrder : view.players.map((_, i) => i)).map((i, pos) => {
             const p = view.players[i];
@@ -620,7 +604,7 @@ export function OrderRollPanel({ view, dispatch, onClose }: { view: PlayerView; 
               <li key={i} className={group.includes(i) ? 'rolling' : ''}>
                 {decided && <span className="seat-num">{pos + 1}</span>}
                 <span className="dot" style={{ background: p.color }} />
-                <b>{p.name}</b>
+                <b>{playerName(view, i)}</b>
                 <span className="order-dice">
                   {rolls.map((r, k) => (
                     <span key={k} className={k < rolls.length - 1 ? 'old' : ''}>
@@ -628,7 +612,7 @@ export function OrderRollPanel({ view, dispatch, onClose }: { view: PlayerView; 
                       {DIE[r.dice[1]]} <b>{r.dice[0] + r.dice[1]}</b>
                     </span>
                   ))}
-                  {group.includes(i) && !order.rolls[i] && <span className="muted">waiting…</span>}
+                  {group.includes(i) && !order.rolls[i] && <span className="muted">{t('waiting')}</span>}
                 </span>
               </li>
             );
@@ -636,14 +620,14 @@ export function OrderRollPanel({ view, dispatch, onClose }: { view: PlayerView; 
         </ul>
         {decided ? (
           <button className="btn primary wide big" onClick={onClose}>
-            {view.players[view.turnOrder[0]].name} starts — let's go!
+            {t('startsGo', { name: playerName(view, view.turnOrder[0]) })}
           </button>
         ) : mustRoll ? (
           <button className="btn primary wide big pulse" onClick={() => dispatch({ type: 'rollForOrder' })}>
-            🎲 Roll
+            🎲 {t('roll')}
           </button>
         ) : (
-          <p className="muted center">Waiting for {waiting.join(', ')}…</p>
+          <p className="muted center">{t('waitingNames', { names: waiting.join(', ') })}</p>
         )}
       </div>
     </div>

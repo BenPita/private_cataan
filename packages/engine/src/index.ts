@@ -7,3 +7,5 @@ export * from './rulesets';
 export * from './game';
 export * from './view';
 export { Rng } from './rng';
+export * from './bot';
+export * from './log';

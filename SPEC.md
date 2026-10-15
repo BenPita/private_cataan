@@ -8,8 +8,14 @@ Read this file instead of the originals; consult them only for fine detail.
 - Private online board game inspired by base CATAN (no expansions). Original
   name/art/sounds — no official logos/assets.
 - Owner plays with girlfriend/friends on separate phones via an invite link.
-- Mobile-first PWA. **UI language: English now**, all strings kept in one
-  place so Hebrew (RTL) can be added later.
+- Mobile-first PWA. **UI language: Hebrew (RTL) by default**, English selectable
+  (Home screen and in-game settings). All UI strings, log templates and error
+  translations live in `packages/client/src/i18n.ts`.
+- Visual style (owner request, 2026-10-15): look and feel of the official 6th-edition
+  rulebook — turquoise sea, sandy beach, painted terrain, cream number discs with red
+  6/8, wooden piers with parchment harbor tags, cream-framed resource cards, coloured
+  dev-card headers, block-style pieces in red/blue/white/orange. All art is drawn from
+  scratch in SVG (`packages/client/src/art.tsx`, `Board.tsx`); no official assets/logos.
 
 ## Participants (update.md is binding)
 - 2–4 total participants, any mix of humans and bots: `2 <= humans + bots <= 4`, bots ≤ 3.
@@ -38,7 +44,8 @@ Read this file instead of the originals; consult them only for fine detail.
 - 7: everyone with >7 cards discards floor(n/2) (simultaneously, players choose),
   then active moves robber to a different hex, then steals 1 random card from a
   chosen eligible victim (auto if only one).
-- Dev deck 25: 14 knight, 5 VP, 2 road building, 2 year of plenty, 2 monopoly.
+- Dev deck 25: 14 knight, 5 VP, 2 road building, 2 year of plenty ("Invention" in the
+  2025 rulebook, shown as "המצאה"), 2 monopoly.
   One non-VP card per turn, not on the turn bought, playable pre-roll or main phase.
   Knight pre-roll does not replace the roll. Monopoly takes from ALL opponents.
 - Longest Road ≥5 (2 VP), Largest Army ≥3 knights (2 VP); must strictly exceed holder.
@@ -49,7 +56,8 @@ Read this file instead of the originals; consult them only for fine detail.
 - Only active player proposes, in MAIN_ACTIONS. Offer sent to chosen opponents.
 - Recipients accept / reject / counter. Single recipient accepting → executes
   immediately. Multiple recipients → active player confirms with one of them.
-- Both sides must give ≥1 card. Revalidated on execution. Cancelled at end of turn.
+- Both sides must give ≥1 card. A resource may not appear on both sides (rulebook:
+  "3 ore for 1 ore" is giving cards away). Revalidated on execution. Cancelled at end of turn.
 
 ## Architecture
 - npm workspaces monorepo, TypeScript:
@@ -69,10 +77,14 @@ order, RNG seed.
 
 ## Milestones
 1. Engine: board, graph, setup, production, building — DONE
-2. Engine: robber, trading, dev cards, achievements, victory + tests — DONE (75 tests)
+2. Engine: robber, trading, dev cards, achievements, victory + tests — DONE
 3. Multiplayer server + client → playable on two phones — DONE (verified with two browsers locally)
-4. Medium bot (then Easy/Hard as strategy variants) — NEXT. Server currently rejects bots>0
-   (`BOTS_ENABLED` in `packages/server/src/rooms.ts`); Home screen shows bots as "coming soon".
+4. Bots Easy/Medium/Hard — DONE. `engine/src/bot.ts` decides from the bot's own PlayerView;
+   `server/src/bots.ts` runs them (900 ms pause, `BOT_DELAY_MS`), resumes after restart,
+   withdraws a bot's unanswered offer after 20 s. Solo play (1 human + 1–3 bots) supported.
+   Measured: 3-way games easy 1 / medium 22 / hard 37 wins of 60; hard vs medium 22–18.
+4b. Rulebook review (6th ed. 2025) — DONE; only gap found was same-resource trades (fixed).
+4c. Hebrew UI + visual redesign — DONE.
 5. Mobile polish, animations, sounds, PWA — basic versions exist (sfx, dice anim, sw.js)
 6. Deploy to Render + Neon — LIVE at https://hex-islands-j3bn.onrender.com (auto-deploys on push to main). Playwright e2e still TODO
 
@@ -83,7 +95,18 @@ order, RNG seed.
 - `packages/server/src/rooms.ts` — RoomManager (lobby, tokens, revision/dedupe, act)
 - `packages/server/scripts/autoplay.ts` — dev tool to fast-forward a live room
 - `packages/client/src/game/GameScreen.tsx` + `Panels.tsx` + `Board.tsx` — game UI
-- `packages/client/src/strings.ts` — all UI labels (add Hebrew here)
+- `packages/engine/src/bot.ts` — AI decisions; `packages/engine/src/log.ts` — log keys
+- `packages/server/src/bots.ts` — server-side bot runner
+- `packages/client/src/i18n.ts` — Hebrew/English strings, log + error translation
+- `packages/client/src/art.tsx` — original SVG art (resource/dev cards, pieces shading)
+
+## Hosting notes / open options
+- Render free sleeps after ~15 min idle → first visit takes ~30–50 s (owner noticed, 2026-10-15).
+- Option A (free, owner considering, not done yet): UptimeRobot HTTP(s) monitor on
+  `https://hex-islands-j3bn.onrender.com/healthz` every 5 min keeps it awake. Fits Render's
+  750 free hours/month. Gray area with Render's policy. Neon still sleeps but wakes in <1 s.
+- Option B (paid, ~$7/month): Render Starter plan — never sleeps, no workaround needed.
+- GitHub Actions cron was rejected: on a private repo it would exceed the free minutes.
 
 ## Documented interpretations / deviations
 - PostgreSQL replaced by file store locally (Postgres in prod) — simpler for a private game.

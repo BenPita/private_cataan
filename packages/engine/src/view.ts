@@ -1,4 +1,5 @@
 import { cloneState, publicVictoryPoints, victoryPoints } from './game';
+import type { LogKey, LogParams } from './log';
 import { totalRes } from './resources';
 import type { DevCard, GameState, LogEntry, PlayerState, ResMap } from './types';
 
@@ -28,7 +29,14 @@ export interface PlayerView extends Omit<GameState, 'players' | 'devDeck' | 'rng
   me: number | null;
   players: PublicPlayer[];
   devDeckCount: number;
-  log: string[];
+  log: LogItem[];
+}
+
+export interface LogItem {
+  key: LogKey;
+  params: LogParams;
+  /** English text, handy for debugging. */
+  msg: string;
 }
 
 export function getPlayerView(state: GameState, viewer: number | null): PlayerView {
@@ -58,8 +66,9 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
         playedDevThisTurn: p.playedDevThisTurn,
       };
     }),
-    log: log.map((entry: LogEntry) =>
-      entry.secret && viewer !== null && entry.secret.to.includes(viewer) ? entry.secret.msg : entry.msg,
-    ),
+    log: log.map((entry: LogEntry): LogItem => {
+      const e = entry.secret && viewer !== null && entry.secret.to.includes(viewer) ? entry.secret : entry;
+      return { key: e.key, params: e.params, msg: e.msg };
+    }),
   };
 }

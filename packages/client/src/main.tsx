@@ -1,11 +1,15 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { applyDocumentLang, getLang, type Lang } from './i18n';
 import { Home } from './screens/Home';
 import { Room } from './screens/Room';
 import './styles.css';
 
+applyDocumentLang();
+
 function App() {
   const [path, setPath] = useState(location.pathname);
+  const [lang, setLangState] = useState<Lang>(getLang());
   useEffect(() => {
     const onPop = () => setPath(location.pathname);
     window.addEventListener('popstate', onPop);
@@ -16,7 +20,12 @@ function App() {
     setPath(p);
   };
   const match = path.match(/^\/g\/([A-Za-z0-9]+)/);
-  return match ? <Room key={match[1]} roomId={match[1]} navigate={navigate} /> : <Home navigate={navigate} />;
+  // `lang` is part of the key so every screen re-renders in the new language.
+  return match ? (
+    <Room key={`${match[1]}-${lang}`} roomId={match[1]} navigate={navigate} onLang={setLangState} />
+  ) : (
+    <Home key={lang} navigate={navigate} onLang={setLangState} />
+  );
 }
 
 createRoot(document.getElementById('root')!).render(
