@@ -13,10 +13,11 @@ import {
   type Resource,
 } from '@hex/engine';
 import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../net';
-import { setSoundEnabled, sfx, soundEnabled } from '../sound';
+import { canVibrate, setSoundEnabled, setVibrationEnabled, sfx, soundEnabled, vibrationEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardTargets, type Selection } from './Board';
+import { useGameFx } from './fx';
 import {
   BuildSheet,
   DevSheet,
@@ -83,6 +84,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
 
   // Cards that fly from producing lands to each player's hand.
   const boardSvg = useRef<SVGSVGElement | null>(null);
+  const fx = useGameFx(view, names, boardSvg);
   const [flights, setFlights] = useState<Array<{ id: number; r: Resource; x: number; y: number; dx: number; dy: number; delay: number }>>([]);
   const flightId = useRef(0);
   const launchFlights = (hexes: number[], gains: ResMap[]) => {
@@ -140,8 +142,6 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       showToast(errorText(res.error));
       return false;
     }
-    if (/build|place|buy/.test(action.type)) sfx.build();
-    if (action.type === 'moveRobber') sfx.robber();
     return true;
   };
 
@@ -150,11 +150,6 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     if (view.phase !== 'MAIN_ACTIONS' || !myTurn) setMode(null);
   }, [view.phase, view.currentPlayer, view.freeRoads, myTurn]);
 
-  const prevPlayer = useRef(view.currentPlayer);
-  useEffect(() => {
-    if (prevPlayer.current !== view.currentPlayer && myTurn && view.phase === 'PRE_ROLL') sfx.turn();
-    prevPlayer.current = view.currentPlayer;
-  }, [view.currentPlayer, myTurn, view.phase]);
 
   // Dice animation + production highlight, triggered by a new roll id.
   const lastRollId = useRef(view.lastRoll?.id ?? 0);
@@ -174,7 +169,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         setHighlight(roll.producingHexes);
         const gain = roll.gains[me];
         if (gain && RESOURCES.some((r) => gain[r] > 0)) {
-          sfx.gain();
+          sfx.gain(RESOURCES.reduce((n, r) => n + gain[r], 0));
           setFlash(gain);
         }
         launchFlights(roll.producingHexes, roll.gains);
@@ -322,6 +317,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         )}
         {toast && <div className="toast">{toast}</div>}
       </div>
+      {fx}
       {flights.map((f) => (
         <img
           key={f.id}
@@ -378,7 +374,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
                   <button className="btn action" onClick={() => setSheet('trade')}>
                     🤝<span>{t('trade')}</span>
                   </button>
-                  <button className="btn action" onClick={() => setSheet('dev')}>
+                  <button className="btn action" data-fx="dev" onClick={() => setSheet('dev')}>
                     📜<span>
                       {t('cards')} ({view.players[me].devCardCount})
                     </span>
@@ -520,6 +516,7 @@ function MenuSheet({
   onExit: () => void;
 }) {
   const [sound, setSound] = useState(soundEnabled());
+  const [vibrate, setVibrate] = useState(vibrationEnabled());
   const [copied, setCopied] = useState(false);
   const link = rejoinLink(roomId);
   return (
@@ -536,6 +533,19 @@ function MenuSheet({
         />
         {t('sound')}
       </label>
+      {canVibrate() && (
+        <label className="check big">
+          <input
+            type="checkbox"
+            checked={vibrate}
+            onChange={(e) => {
+              setVibrate(e.target.checked);
+              setVibrationEnabled(e.target.checked);
+            }}
+          />
+          {t('vibration')}
+        </label>
+      )}
       <button className="btn wide" onClick={onHelp}>
         📖 {t('rules')}
       </button>

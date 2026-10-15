@@ -87,6 +87,8 @@ export interface TradeOffer {
 export interface LogEntry {
   /** English rendering, for debugging and tests. */
   msg: string;
+  /** Increasing event number, so clients can animate each new event exactly once. */
+  seq?: number;
   /** Translatable form (see log.ts). */
   key: LogKey;
   params: LogParams;
@@ -147,6 +149,8 @@ export interface GameState {
   largestArmy: number | null;
   winner: number | null;
   log: LogEntry[];
+  /** Total number of log events so far (the log itself is trimmed). */
+  logSeq?: number;
   rng: number;
 }
 

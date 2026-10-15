@@ -24,6 +24,17 @@ Read this file instead of the originals; consult them only for fine detail.
   Fonts: Frank Ruhl Libre (headings, numbers, card titles) + Rubik (UI text).
   Animations: cards fly from producing lands to hands, pieces drop in, dice tumble,
   robber slides; all disabled under prefers-reduced-motion.
+- Phase 1 "juice" (2026-10-16): `packages/client/src/game/fx.tsx` turns each new log event
+  (engine `logSeq` / per-entry `seq`) into an animation + sound: steals (face-up only for
+  thief/victim), player and bank trades, discards, dev card buy (deck → hand) and play
+  (big card reveal), Monopoly/Invention card flows, Longest Road / Largest Army award
+  banners, "Your turn!" banner, dust puffs on new pieces. Sounds are synthesized in
+  `sound.ts` (dice on wood, wooden clacks, card swishes, coins, bells); vibration
+  patterns via navigator.vibrate (Android) with toggles in ☰ settings.
+- Design roadmap: phase 2 = three.js 2.5D/3D board (tilted camera, extruded tiles with
+  normal maps, 3D pieces, physics dice, 2D fallback); phase 3 = UX (tutorial, build tray,
+  probability hints, landscape layout, volume settings); phase 4 = ambience (waves,
+  birds, victory camera orbit, emotes).
 
 ## Participants (update.md is binding)
 - 2–4 total participants, any mix of humans and bots: `2 <= humans + bots <= 4`, bots ≤ 3.

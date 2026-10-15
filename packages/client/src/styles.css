@@ -1624,3 +1624,171 @@ h3,
 .bot-levels .seg > span {
   font-size: 15px;
 }
+
+/* ---------- Game effects ---------- */
+.fx-card {
+  position: fixed;
+  width: 32px;
+  aspect-ratio: 5 / 7;
+  border-radius: 4px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: fxfly 0.9s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+}
+.fx-card.big {
+  width: 44px;
+}
+@keyframes fxfly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5) rotate(-12deg);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx) * 0.12), calc(-50% + var(--dy) * 0.12 - 34px)) scale(1.25) rotate(4deg);
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.85) rotate(10deg);
+  }
+}
+
+.fx-puff {
+  position: fixed;
+  width: 0;
+  height: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+.fx-puff i {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(236, 214, 160, 0.85);
+  animation: puff 0.6s ease-out forwards;
+}
+.fx-puff.big i {
+  width: 14px;
+  height: 14px;
+  left: -7px;
+  top: -7px;
+}
+@keyframes puff {
+  from {
+    transform: rotate(var(--a)) translateX(4px) scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: rotate(var(--a)) translateX(26px) scale(1.6);
+    opacity: 0;
+  }
+}
+
+.fx-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  animation: fade 0.2s;
+}
+.fx-banner.turn {
+  pointer-events: none;
+}
+.fx-turn {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 52px;
+  color: #fff3cf;
+  text-shadow: 0 4px 0 #6e4a1c, 0 8px 24px rgba(0, 0, 0, 0.55);
+  animation: turnIn 1.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+@keyframes turnIn {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+.fx-card-show,
+.fx-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(30, 20, 10, 0.72);
+  color: #fff3cf;
+  max-width: 300px;
+  text-align: center;
+  animation: cardShow 2s ease forwards;
+}
+.fx-card-show p,
+.fx-award p {
+  margin: 0;
+  font-weight: 600;
+}
+.fx-card-face {
+  width: 170px;
+  animation: cardFlip 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+@keyframes cardFlip {
+  from {
+    transform: perspective(600px) rotateY(90deg) scale(0.7);
+  }
+  to {
+    transform: perspective(600px) rotateY(0) scale(1);
+  }
+}
+@keyframes cardShow {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.fx-award img {
+  width: 150px;
+  border-radius: 10px;
+  border: 3px solid #e8a317;
+  box-shadow: 0 0 30px rgba(255, 210, 90, 0.7);
+  animation: cardFlip 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.fx-award h3 {
+  font-size: 28px;
+  color: #ffd25a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-card,
+  .fx-puff,
+  .fx-turn,
+  .fx-card-face,
+  .fx-award img {
+    animation: none !important;
+  }
+}

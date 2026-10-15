@@ -37,6 +37,7 @@ export interface LogItem {
   params: LogParams;
   /** English text, handy for debugging. */
   msg: string;
+  seq?: number;
 }
 
 export function getPlayerView(state: GameState, viewer: number | null): PlayerView {
@@ -68,7 +69,7 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
     }),
     log: log.map((entry: LogEntry): LogItem => {
       const e = entry.secret && viewer !== null && entry.secret.to.includes(viewer) ? entry.secret : entry;
-      return { key: e.key, params: e.params, msg: e.msg };
+      return { key: e.key, params: e.params, msg: e.msg, seq: entry.seq };
     }),
   };
 }

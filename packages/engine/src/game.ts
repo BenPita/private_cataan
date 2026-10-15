@@ -53,7 +53,10 @@ function makeLog(names: string[], key: LogKey, params: LogParams, secret?: Secre
 }
 
 function say(state: GameState, key: LogKey, params: LogParams = {}, secret?: Secret): void {
-  state.log.push(makeLog(state.players.map((p) => p.name), key, params, secret));
+  const entry = makeLog(state.players.map((p) => p.name), key, params, secret);
+  state.logSeq = (state.logSeq ?? state.log.length) + 1;
+  entry.seq = state.logSeq;
+  state.log.push(entry);
 }
 
 function fail(msg: string): never {
@@ -125,7 +128,8 @@ export function createGame(
     longestRoad: { holder: null, lengths: players.map(() => 0) },
     largestArmy: null,
     winner: null,
-    log: [makeLog(players.map((p) => p.name), 'start', {})],
+    log: [{ ...makeLog(players.map((p) => p.name), 'start', {}), seq: 1 }],
+    logSeq: 1,
     rng: rng.seed,
   };
   return state;

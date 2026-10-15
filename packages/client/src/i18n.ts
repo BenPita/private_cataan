@@ -188,6 +188,8 @@ const en = {
   closedInactive: 'The game was closed because {name} was away for more than 10 minutes.',
   closedGone: 'This game no longer exists. It may have ended or been closed.',
   newGame: 'Start a new game',
+  yourTurn: 'Your turn!',
+  vibration: 'Vibration',
 };
 
 type Dict = typeof en;
@@ -359,6 +361,8 @@ const he: Dict = {
   closedInactive: 'המשחק נסגר כי {name} לא היה/תה במשחק יותר מ-10 דקות.',
   closedGone: 'המשחק הזה כבר לא קיים — הוא הסתיים או נסגר.',
   newGame: 'משחק חדש',
+  yourTurn: 'תורך!',
+  vibration: 'רטט',
 };
 
 export type Key = keyof Dict;
