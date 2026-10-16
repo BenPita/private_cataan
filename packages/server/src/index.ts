@@ -15,6 +15,12 @@ const app = express();
 app.get('/healthz', (_req, res) => {
   res.json({ ok: true });
 });
+
+/** Technical events reported by clients (no personal data), newest last. */
+const diagLog: Array<{ at: string; room: string | null; event: string; detail: string; ua: string }> = [];
+app.get('/diag', (_req, res) => {
+  res.json(diagLog.slice(-300));
+});
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist, { index: false, maxAge: '1h' }));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
@@ -191,6 +197,18 @@ const handlers = {
 
 io.on('connection', (socket) => {
   for (const [event, make] of Object.entries(handlers)) socket.on(event, make(socket));
+  const ua = String(socket.handshake.headers['user-agent'] ?? '').replace(/\s+/g, ' ').slice(0, 160);
+  socket.on('client:diag', (p: { event?: unknown; detail?: unknown }) => {
+    if (!p || typeof p.event !== 'string') return;
+    diagLog.push({
+      at: new Date().toISOString(),
+      room: (socket.data as SocketSession).roomId ?? null,
+      event: p.event.slice(0, 60),
+      detail: String(p.detail ?? '').slice(0, 300),
+      ua,
+    });
+    if (diagLog.length > 1000) diagLog.splice(0, diagLog.length - 1000);
+  });
   socket.on('disconnect', () => detach(socket));
 });
 

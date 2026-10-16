@@ -13,6 +13,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { GRAPH, type PlayerView } from '@hex/engine';
 import { S, type BoardProps } from './Board';
 import { createDice } from './dice3d';
+import { diag } from '../diag';
 
 const U = 1 / S; // board units -> world units (hex radius = 1)
 const TILE_R = 0.965;
@@ -197,6 +198,7 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
       () => setEpoch((n) => n + 1),
     );
     engine.current = e;
+    if (epoch > 0) diag('3d-rebuilt', `epoch ${epoch}`);
     if (apiRef) apiRef.current = { project: e.project, rollDice: e.rollDice };
     return () => {
       e.dispose();
@@ -343,6 +345,29 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   let renderUntil = 0;
   let lastRender = 0;
   let lost = false;
+  let lostAt = 0;
+  let rebuilding = false;
+  let lastLostCheck = 0;
+  let lastSurfaceRefresh = performance.now();
+  const gl = renderer.getContext();
+  const refreshSurface = () => {
+    const size = renderer.getSize(new THREE.Vector2());
+    if (!size.x || !size.y || gl.isContextLost()) return;
+    renderer.setSize(size.x, size.y, false);
+    // Draw right away so the reset surface never shows up blank.
+    try {
+      renderer.render(scene, camera);
+    } catch {
+      /* the loop reports render errors */
+    }
+    renderUntil = Math.max(renderUntil, performance.now() + 100);
+  };
+  try {
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    diag('3d-start', `${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'gpu?'} dpr=${window.devicePixelRatio}`);
+  } catch {
+    /* ignore */
+  }
   const tweens = new Set<Tween>();
   const invalidate = () => {
     renderUntil = Math.max(renderUntil, performance.now() + 400);
@@ -351,7 +376,32 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   let raf = 0;
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop);
-    if (lost) return;
+    if (lost) {
+      // The browser took the GPU context away. If it has not come back within
+      // a moment, build a brand-new canvas instead of showing a blank board.
+      if (now - lostAt > 600 && !rebuilding) {
+        rebuilding = true;
+        diag('3d-rebuild', 'context not restored');
+        onContextRestored();
+      }
+      return;
+    }
+    // Belt and braces: some phones report loss only through isContextLost().
+    if (now - lastLostCheck > 1000) {
+      lastLostCheck = now;
+      if (gl.isContextLost()) {
+        lost = true;
+        lostAt = now;
+        diag('3d-lost', 'detected by poll');
+        return;
+      }
+      // Every few seconds re-create the drawing surface (same size) — the
+      // same thing a double tap used to do when the board turned white.
+      if (now - lastSurfaceRefresh > 5000) {
+        lastSurfaceRefresh = now;
+        refreshSurface();
+      }
+    }
     if (tweens.size) {
       for (const tw of [...tweens]) {
         try {
@@ -369,24 +419,39 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
       renderer.render(scene, camera);
     } catch (err) {
       console.error('3D render failed', err);
+      diag('3d-render-error', String((err as Error)?.message ?? err));
     }
   };
   raf = requestAnimationFrame(loop);
 
-  // Redraw when the page comes back (app switch, screen unlock, back/forward cache).
-  const wake = () => invalidate();
+  // Redraw (with a fresh surface) when the page comes back: app switch,
+  // screen unlock, back/forward cache, system overlays such as the volume panel.
+  const wake = () => {
+    refreshSurface();
+    invalidate();
+  };
   document.addEventListener('visibilitychange', wake);
   window.addEventListener('pageshow', wake);
   window.addEventListener('focus', wake);
   window.addEventListener('orientationchange', wake);
+  window.addEventListener('blur', wake);
+  window.visualViewport?.addEventListener('resize', wake);
 
   // The phone may drop the GPU context under memory pressure: let the browser
   // restore it and rebuild the scene instead of leaving a blank board.
   const onLost = (e: Event) => {
     e.preventDefault();
     lost = true;
+    lostAt = performance.now();
+    diag('3d-lost', 'event');
   };
-  const onRestored = () => onContextRestored();
+  const onRestored = () => {
+    diag('3d-restored');
+    if (!rebuilding) {
+      rebuilding = true;
+      onContextRestored();
+    }
+  };
   renderer.domElement.addEventListener('webglcontextlost', onLost);
   renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
@@ -730,6 +795,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
     window.removeEventListener('pageshow', wake);
     window.removeEventListener('focus', wake);
     window.removeEventListener('orientationchange', wake);
+    window.removeEventListener('blur', wake);
+    window.visualViewport?.removeEventListener('resize', wake);
     renderer.domElement.removeEventListener('webglcontextlost', onLost);
     renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
     dice.dispose();

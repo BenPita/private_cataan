@@ -18,6 +18,7 @@ import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from 
 import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
+import { diag } from '../diag';
 import { TipBubble } from './tips';
 import { resetTips, setTipsEnabled, tipsEnabled } from '../prefs';
 import { getBoardMode, saveBoardMode, webglAvailable, type BoardMode } from './boardMode';
@@ -611,7 +612,10 @@ function MenuSheet({
             setVol(v);
             setVolume(v / 100);
           }}
-          onPointerUp={() => sfx.card()}
+          onPointerUp={() => {
+            sfx.card();
+            diag('volume', String(vol));
+          }}
         />
       </label>
       {canVibrate() && (

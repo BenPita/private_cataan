@@ -48,6 +48,13 @@ Read this file instead of the originals; consult them only for fine detail.
 - Mobile robustness (2026-10-16): 3D renderer uses preserveDrawingBuffer, a short redraw burst
   after every change plus a 1 s heartbeat, redraws on visibility/focus/orientation, and rebuilds
   the scene after a lost GPU context (fix for the board turning white on Android).
+- 3D self-recovery (2026-10-16): the render loop polls gl.isContextLost() every second and
+  rebuilds a brand-new canvas if the context is not restored within 600 ms; every 5 s and on
+  page wake / window blur / visual-viewport resize the drawing surface is re-created at the
+  same size and drawn immediately (what a manual double tap used to fix).
+- Diagnostics: clients report technical events (`client/src/diag.ts`: GPU type, context lost /
+  rebuilt, render errors, JS errors, visibility, volume changes) via socket `client:diag`;
+  read the last 300 at GET /diag (no personal data; in-memory, cleared on restart).
 - Latency: the server acknowledges actions before the database save completes (saves stay
   ordered per room; `RoomManager.flush` for tests). Measure with `scripts/latency.ts <url>`.
 - Phase 3 UX (2026-10-16): build tray (`BuildTray` in Panels.tsx) replaces the Build button —
