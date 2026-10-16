@@ -171,7 +171,7 @@ export function createDice(scene: THREE.Scene, floorY: number, requestFrames: (m
     yellow: [1, 2, 3, 4, 5, 6].map((v) => faceTexture(v, '#f2c230', '#b3261a')),
   };
   const meshes = (['red', 'yellow'] as const).map((tone) => {
-    const mats = Array.from({ length: 6 }, () => new THREE.MeshPhongMaterial({ shininess: 45 }));
+    const mats = Array.from({ length: 6 }, () => new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 }));
     const m = new THREE.Mesh(geometry, mats);
     m.castShadow = true;
     m.visible = false;

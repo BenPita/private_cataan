@@ -241,23 +241,11 @@ export class RoomManager {
     if (room.closed) return;
     const previous = this.saving.get(room.id) ?? Promise.resolve();
     const snapshot = structuredClone(room);
-    const next = previous
-      .then(async () => {
-        const started = Date.now();
-        await this.store.save(snapshot);
-        const ms = Date.now() - started;
-        if (ms > 800) console.warn(`slow save ${room.id}: ${ms} ms`);
-      })
-      .catch((err) => console.error('save failed', err));
+    const next = previous.then(() => this.store.save(snapshot)).catch((err) => console.error('save failed', err));
     this.saving.set(room.id, next);
     this.onChange(room);
     this.bots.schedule(room);
     await next;
-  }
-
-  /** Resolves once every pending save for this room has reached the store. */
-  async flush(roomId: string): Promise<void> {
-    await (this.saving.get(roomId) ?? Promise.resolve());
   }
 
   seatForToken(room: Room, token: unknown): number {
@@ -391,9 +379,7 @@ export class RoomManager {
     room.game = result.state;
     if (room.game.phase === 'GAME_OVER') room.status = 'finished';
     room.revision++;
-    // Reply right away; the save to the database continues in the background
-    // (saves for a room stay in order, and the in-memory state is authoritative).
-    void this.commit(room);
+    await this.commit(room);
     return { ok: true };
   }
 

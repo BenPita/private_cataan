@@ -1,5 +1,16 @@
 # Eden's Island (האי של עדן) — Consolidated Spec (single source of truth)
 
+## Rollback (2026-10-16, owner request)
+The owner reported a white 3D board on Android starting with the "Phase 3 UX" version (963602f).
+On request, the code was rolled back to the version right before it — "Physics dice" (997e1db) —
+by reverting 963602f, d532305, c2ae6b8 and 445cc0d. Only diagnostics were re-added on top
+(client `diag.ts`, server GET /diag, log-only WebGL listeners in Board3D: GPU type, context
+lost/restored; plus the dev tool `scripts/latency.ts`). Everything described below for those
+four versions (build tray, tips, volume slider, chance %, the rename to "האי של עדן", percentage
+removal, renderer changes, 2D fallback, early server ack) is currently NOT in the code; the
+sections are kept as history so they can be re-applied selectively after the owner's test.
+
+
 Game name changed from "Hex Islands" to "האי של עדן" / "Eden's Island" (owner, 2026-10-16).
 
 Merges `prd-catan.md` (original) + `update.md` (binding override wherever the

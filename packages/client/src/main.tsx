@@ -1,8 +1,8 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { applyDocumentLang, getLang, type Lang } from './i18n';
-import { unlockAudio } from './sound';
 import { installErrorReporting } from './diag';
+import { unlockAudio } from './sound';
 import { Home } from './screens/Home';
 import { Room } from './screens/Room';
 import './styles.css';

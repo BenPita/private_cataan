@@ -114,39 +114,3 @@ export const PLAYER_SHADE: Record<string, string> = {
 export function shade(color: string): string {
   return PLAYER_SHADE[color] ?? 'rgba(0,0,0,0.35)';
 }
-
-/** Small icons of the wooden pieces for the build tray. */
-export function PieceIcon({ kind, color }: { kind: 'road' | 'settlement' | 'city' | 'devCard'; color: string }) {
-  const side = shade(color);
-  if (kind === 'devCard') return <img className="piece-icon devcard" src="/art/back-dev.webp" alt="" />;
-  return (
-    <svg className="piece-icon" viewBox="0 0 40 30" aria-hidden>
-      <ellipse cx={22} cy={26} rx={15} ry={3} fill="rgba(0,0,0,0.3)" />
-      {kind === 'road' && (
-        <g stroke="#1d150d" strokeWidth="1.4" strokeLinejoin="round">
-          <polygon points="4,20 30,8 36,11 10,23" fill={color} />
-          <polygon points="10,23 36,11 36,15 10,27" fill={side} />
-          <polygon points="4,20 10,23 10,27 4,24" fill={side} />
-        </g>
-      )}
-      {kind === 'settlement' && (
-        <g stroke="#1d150d" strokeWidth="1.4" strokeLinejoin="round">
-          <polygon points="10,25 10,14 22,14 22,25" fill={color} />
-          <polygon points="22,25 22,14 29,11 29,22" fill={side} />
-          <polygon points="8,15 16,5 24,15" fill={color} />
-          <polygon points="16,5 23,2 31,12 24,15" fill={side} />
-        </g>
-      )}
-      {kind === 'city' && (
-        <g stroke="#1d150d" strokeWidth="1.4" strokeLinejoin="round">
-          <polygon points="6,26 6,16 26,16 26,26" fill={color} />
-          <polygon points="26,26 26,16 33,13 33,23" fill={side} />
-          <polygon points="6,16 6,9 15,9 15,16" fill={color} />
-          <polygon points="15,16 15,9 21,6 21,13" fill={side} />
-          <polygon points="4,10 10.5,2 17,10" fill={color} />
-          <polygon points="10.5,2 16,0 23,7 17,10" fill={side} />
-        </g>
-      )}
-    </svg>
-  );
-}

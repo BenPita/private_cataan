@@ -6,7 +6,7 @@
  * Rendering is on demand: a frame is drawn only when something changed, the
  * camera moved, or an animation is running — important for phone batteries.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -22,13 +22,6 @@ const FRAME_TOP = 0;
 const PIPS: Record<number, number> = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
 
 const w = (x: number, y: number, h = 0) => new THREE.Vector3(x * U, h, y * U);
-
-/** Phones get a much lighter renderer: their GPUs drop the WebGL context under load. */
-export const IS_MOBILE =
-  typeof navigator !== 'undefined' && (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1);
-
-/** Lambert shading: far cheaper than physically based materials, fine for painted textures. */
-const lit = (p: { map?: THREE.Texture; color?: string }) => new THREE.MeshLambertMaterial(p);
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -132,7 +125,7 @@ function discTexture(n: number): THREE.CanvasTexture {
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = IS_MOBILE ? 1 : 4;
+  t.anisotropy = 4;
   return t;
 }
 
@@ -182,96 +175,63 @@ function flagTexture(type: string, onUpdate: () => void): THREE.CanvasTexture {
 
 interface Tween {
   update(t: number): boolean; // returns false when finished
-  /** Purely visual pulse/glow: needs redraws but not new shadows. */
-  ambient?: boolean;
 }
 
-export default function Board3D({
-  view,
-  targets,
-  selection,
-  onSelect,
-  highlightHexes,
-  onInspectHex,
-  apiRef,
-  onGiveUp,
-}: BoardProps & { onGiveUp?: () => void }) {
-  const lossTimes = useRef<number[]>([]);
-  const giveUpRef = useRef(onGiveUp);
-  giveUpRef.current = onGiveUp;
+export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const engine = useRef<ReturnType<typeof createEngine> | null>(null);
   const propsRef = useRef({ onSelect, onInspectHex, targets });
   propsRef.current = { onSelect, onInspectHex, targets };
 
-  // Bumped when the phone drops the GPU context, so the whole 3D scene is rebuilt.
-  const [epoch, setEpoch] = useState(0);
-
   useEffect(() => {
-    const e = createEngine(
-      mountRef.current!,
-      (hit) => {
-        const { onSelect: select, onInspectHex: inspect, targets: tg } = propsRef.current;
-        if (!hit) return;
-        if (hit.kind === 'hex' && !(tg.hexes ?? []).includes(hit.id as number)) inspect?.(hit.id as number);
-        else select(hit as never);
-      },
-      () => {
-        // A second GPU loss within two minutes means this phone can't keep the
-        // 3D board alive: hand over to the 2D board instead of flashing white.
-        const now = Date.now();
-        lossTimes.current = [...lossTimes.current.filter((t) => now - t < 120_000), now];
-        if (lossTimes.current.length >= 2 && giveUpRef.current) {
-          diag('3d-fallback-2d', `${lossTimes.current.length} losses`);
-          giveUpRef.current();
-        } else {
-          setEpoch((n) => n + 1);
-        }
-      },
-    );
+    const e = createEngine(mountRef.current!, (hit) => {
+      const { onSelect: select, onInspectHex: inspect, targets: tg } = propsRef.current;
+      if (!hit) return;
+      if (hit.kind === 'hex' && !(tg.hexes ?? []).includes(hit.id as number)) inspect?.(hit.id as number);
+      else select(hit as never);
+    });
     engine.current = e;
-    if (epoch > 0) diag('3d-rebuilt', `epoch ${epoch}`);
     if (apiRef) apiRef.current = { project: e.project, rollDice: e.rollDice };
     return () => {
       e.dispose();
       engine.current = null;
     };
-  }, [epoch]);
+  }, []);
 
-  useEffect(() => engine.current?.setBoard(view), [epoch, JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
-  useEffect(() => engine.current?.setPieces(view), [epoch, view.buildings, view.roads, view.players.length]);
-  useEffect(() => engine.current?.setRobber(view.board.robberHex), [epoch, view.board.robberHex]);
-  useEffect(
-    () => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'),
-    [epoch, targets, selection],
-  );
-  useEffect(() => engine.current?.setHighlight(highlightHexes), [epoch, highlightHexes]);
+  useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
+  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.players.length]);
+  useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
+  useEffect(() => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'), [targets, selection]);
+  useEffect(() => engine.current?.setHighlight(highlightHexes), [highlightHexes]);
 
   return <div ref={mountRef} className="board-3d" />;
 }
 
 type Hit = { kind: 'vertex' | 'edge' | 'hex'; id: string | number };
 
-function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, onContextRestored: () => void) {
-  // Diagnostics from a Mali phone showed the GPU dropping the WebGL context every
-  // few seconds under the old settings, so phones get a deliberately light setup.
-  const renderer = new THREE.WebGLRenderer({
-    antialias: !IS_MOBILE,
-    alpha: false,
-    powerPreference: 'default',
-    preserveDrawingBuffer: false,
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_MOBILE ? 1.5 : 2));
+function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = IS_MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = false; // shadows are re-rendered only when pieces change
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   mount.appendChild(renderer.domElement);
+  // Diagnostics only: report the GPU and any context loss; behaviour is unchanged.
+  try {
+    const gl = renderer.getContext();
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    diag('3d-start', `${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'gpu?'} dpr=${window.devicePixelRatio} rollback-997e1db`);
+  } catch {
+    /* ignore */
+  }
+  renderer.domElement.addEventListener('webglcontextlost', () => diag('3d-lost', 'event'));
+  renderer.domElement.addEventListener('webglcontextrestored', () => diag('3d-restored'));
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2b1a0d');
+  scene.fog = new THREE.Fog('#2b1a0d', 18, 34);
 
   const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -287,7 +247,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   const sun = new THREE.DirectionalLight('#fff1d6', 2.1);
   sun.position.set(-4, 11, 6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(IS_MOBILE ? 512 : 1024, IS_MOBILE ? 512 : 1024);
+  sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -7;
   sun.shadow.camera.right = 7;
   sun.shadow.camera.top = 7;
@@ -297,7 +257,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   scene.add(sun);
 
   const loader = new THREE.TextureLoader();
-  const maxAniso = IS_MOBILE ? 1 : Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const tex = (url: string, repeat?: number) => {
     const t = loader.load(url, () => invalidate());
     t.colorSpace = THREE.SRGBColorSpace;
@@ -312,7 +272,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   // Table
   const table = new THREE.Mesh(
     new THREE.PlaneGeometry(60, 60),
-    lit({ map: tex('/art/wood.webp', 14) }),
+    new THREE.MeshStandardMaterial({ map: tex('/art/wood.webp', 14), roughness: 0.8 }),
   );
   table.rotation.x = -Math.PI / 2;
   table.position.y = -0.16;
@@ -324,13 +284,13 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   const VIEW = 10.6;
   const frameTop = new THREE.Mesh(
     fanGeometry(hexPoints(FRAME_R, 0), VIEW, VIEW),
-    lit({ map: tex('/art/sea.webp') }),
+    new THREE.MeshStandardMaterial({ map: tex('/art/sea.webp'), roughness: 0.55, metalness: 0.05 }),
   );
   frameTop.position.y = FRAME_TOP;
   frameTop.receiveShadow = true;
   const frameSide = new THREE.Mesh(
     new THREE.CylinderGeometry(FRAME_R, FRAME_R, 0.16, 6, 1, true),
-    lit({ color: '#155f7c' }),
+    new THREE.MeshStandardMaterial({ color: '#155f7c', roughness: 0.7 }),
   );
   frameSide.rotation.y = Math.PI / 6;
   frameSide.position.y = -0.08;
@@ -346,8 +306,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
 
   const tileGeo = fanGeometry(hexPoints(TILE_R), Math.sqrt(3) * TILE_R, 2 * TILE_R);
   const tileSideGeo = new THREE.CylinderGeometry(TILE_R, TILE_R, TILE_H, 6, 1, true);
-  const tileSideMat = lit({ color: '#6e5232' });
-  const tileMats = new Map<number, THREE.MeshLambertMaterial>();
+  const tileSideMat = new THREE.MeshStandardMaterial({ color: '#6e5232', roughness: 0.9 });
+  const tileMats = new Map<number, THREE.MeshStandardMaterial>();
   const tileTops: THREE.Mesh[] = [];
   const texCache = new Map<string, THREE.Texture>();
   const cachedTex = (url: string) => {
@@ -359,123 +319,36 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   const cityGeo = cityGeometry();
   const roadGeo = new THREE.BoxGeometry(0.6, 0.085, 0.1);
   roadGeo.translate(0, 0.0425, 0);
-  const pieceMats = new Map<string, THREE.MeshLambertMaterial>();
+  const pieceMats = new Map<string, THREE.MeshStandardMaterial>();
   const pieceMat = (color: string) => {
-    if (!pieceMats.has(color)) pieceMats.set(color, lit({ color }));
+    if (!pieceMats.has(color)) pieceMats.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.55 }));
     return pieceMats.get(color)!;
   };
 
-  const robber = new THREE.Mesh(pawnGeometry(), lit({ color: '#9aa0a6' }));
+  const robber = new THREE.Mesh(pawnGeometry(), new THREE.MeshStandardMaterial({ color: '#9aa0a6', roughness: 0.45, metalness: 0.1 }));
   robber.castShadow = true;
   robber.scale.setScalar(1.3);
   scene.add(robber);
 
   // --- Render loop (on demand) --------------------------------------------------
-  // Frames are drawn when something changed, for a short burst afterwards
-  // (mobile compositors can drop a single frame), and once a second as a
-  // safety net. Idle cost stays tiny.
-  let renderUntil = 0;
-  /** Frames left in which the shadow map must be re-rendered (pieces moved). */
-  let shadowsDirty = 2;
-  const dirtyShadows = (frames = 2) => {
-    shadowsDirty = Math.max(shadowsDirty, frames);
-  };
-  let lastRender = 0;
-  let lost = false;
-  let lostAt = 0;
-  let rebuilding = false;
-  let lastLostCheck = 0;
-  const gl = renderer.getContext();
-  try {
-    const info = gl.getExtension('WEBGL_debug_renderer_info');
-    diag('3d-start', `${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'gpu?'} dpr=${window.devicePixelRatio} mobile=${IS_MOBILE} light-v2`);
-  } catch {
-    /* ignore */
-  }
+  let needsRender = true;
   const tweens = new Set<Tween>();
   const invalidate = () => {
-    renderUntil = Math.max(renderUntil, performance.now() + 400);
+    needsRender = true;
   };
   controls.addEventListener('change', invalidate);
   let raf = 0;
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop);
-    if (lost) {
-      // The browser took the GPU context away. If it has not come back within
-      // a moment, build a brand-new canvas instead of showing a blank board.
-      if (now - lostAt > 50 && !rebuilding) {
-        rebuilding = true;
-        diag('3d-rebuild', 'context not restored');
-        onContextRestored();
-      }
-      return;
-    }
-    // Belt and braces: some phones report loss only through isContextLost().
-    if (now - lastLostCheck > 1000) {
-      lastLostCheck = now;
-      if (gl.isContextLost()) {
-        lost = true;
-        lostAt = now;
-        diag('3d-lost', 'detected by poll');
-        return;
-      }
-    }
     if (tweens.size) {
-      for (const tw of tweens) if (!tw.ambient) dirtyShadows(1);
-      for (const tw of [...tweens]) {
-        try {
-          if (!tw.update(now)) tweens.delete(tw);
-        } catch (err) {
-          console.error('3D animation failed', err);
-          tweens.delete(tw);
-        }
-      }
-      invalidate();
+      for (const tw of [...tweens]) if (!tw.update(now)) tweens.delete(tw);
+      needsRender = true;
     }
-    if (now > renderUntil && now - lastRender < 1000) return;
-    // Pulsing markers and glows don't need 60 fps: cap phones at ~30 fps.
-    if (IS_MOBILE && now - lastRender < 32) return;
-    lastRender = now;
-    if (shadowsDirty > 0) {
-      renderer.shadowMap.needsUpdate = true;
-      shadowsDirty--;
-    }
-    try {
-      renderer.render(scene, camera);
-    } catch (err) {
-      console.error('3D render failed', err);
-      diag('3d-render-error', String((err as Error)?.message ?? err));
-    }
+    if (!needsRender) return;
+    needsRender = false;
+    renderer.render(scene, camera);
   };
   raf = requestAnimationFrame(loop);
-
-  // Redraw (with a fresh surface) when the page comes back: app switch,
-  // screen unlock, back/forward cache, system overlays such as the volume panel.
-  const wake = () => invalidate();
-  document.addEventListener('visibilitychange', wake);
-  window.addEventListener('pageshow', wake);
-  window.addEventListener('focus', wake);
-  window.addEventListener('orientationchange', wake);
-  window.addEventListener('blur', wake);
-  window.visualViewport?.addEventListener('resize', wake);
-
-  // The phone may drop the GPU context under memory pressure: let the browser
-  // restore it and rebuild the scene instead of leaving a blank board.
-  const onLost = (e: Event) => {
-    e.preventDefault();
-    lost = true;
-    lostAt = performance.now();
-    diag('3d-lost', 'event');
-  };
-  const onRestored = () => {
-    diag('3d-restored');
-    if (!rebuilding) {
-      rebuilding = true;
-      onContextRestored();
-    }
-  };
-  renderer.domElement.addEventListener('webglcontextlost', onLost);
-  renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
   const tween = (duration: number, step: (k: number) => void, delay = 0) => {
     const start = performance.now() + delay;
@@ -565,17 +438,16 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   }
 
   function setBoard(view: PlayerView) {
-    dirtyShadows(3);
     clear(tilesGroup);
     clear(discsGroup);
     clear(harborsGroup);
     tileTops.length = 0;
     tileMats.clear();
-    const discSide = lit({ color: '#d9c08a' });
-    const discTop = new Map<number, THREE.MeshLambertMaterial>();
+    const discSide = new THREE.MeshStandardMaterial({ color: '#d9c08a', roughness: 0.6 });
+    const discTop = new Map<number, THREE.MeshStandardMaterial>();
     for (const tile of view.board.hexes) {
       const g = GRAPH.hexes[tile.id];
-      const mat = lit({ map: cachedTex(`/art/hex-${tile.terrain}-${tile.id % 2}.webp`) });
+      const mat = new THREE.MeshStandardMaterial({ map: cachedTex(`/art/hex-${tile.terrain}-${tile.id % 2}.webp`), roughness: 0.85 });
       tileMats.set(tile.id, mat);
       const top = new THREE.Mesh(tileGeo, mat);
       top.position.set(g.x, FRAME_TOP + TILE_H, g.y);
@@ -590,7 +462,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
 
       if (tile.number !== null) {
         if (!discTop.has(tile.number)) {
-          discTop.set(tile.number, lit({ map: discTexture(tile.number) }));
+          discTop.set(tile.number, new THREE.MeshStandardMaterial({ map: discTexture(tile.number), roughness: 0.6 }));
         }
         const r = 0.37;
         const dTop = new THREE.Mesh(fanGeometry(circlePoints(r), 2 * r, 2 * r), discTop.get(tile.number)!);
@@ -604,8 +476,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
     }
 
     // Harbors: two wooden piers and a flag on a pole.
-    const plankMat = lit({ color: '#9b6a38' });
-    const poleMat = lit({ color: '#4a2c12' });
+    const plankMat = new THREE.MeshStandardMaterial({ color: '#9b6a38', roughness: 0.85 });
+    const poleMat = new THREE.MeshStandardMaterial({ color: '#4a2c12', roughness: 0.8 });
     for (const h of view.board.harbors) {
       const e = GRAPH.edges[h.edge];
       const hex = GRAPH.hexes[e.hexes[0]];
@@ -637,7 +509,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
 
   const pieceMeshes = new Map<string, THREE.Mesh>();
   function setPieces(view: PlayerView) {
-    dirtyShadows(3);
     const wanted = new Map<string, { make: () => THREE.Mesh }>();
     const colors = view.players.map((p) => p.color);
     for (const [vertex, b] of Object.entries(view.buildings)) {
@@ -694,7 +565,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
 
   let robberHex = -1;
   function setRobber(hex: number) {
-    dirtyShadows(3);
     const g = GRAPH.hexes[hex];
     const to = new THREE.Vector3(g.x + 0.42, TILE_H, g.y - 0.2);
     if (robberHex < 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -719,7 +589,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
   const vertexOutlineGeo = new THREE.TorusGeometry(0.15, 0.09, 10, 28);
   const hexRingGeo = new THREE.TorusGeometry(0.82, 0.035, 6, 6);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
-
   let pulse: Tween | null = null;
 
   function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string) {
@@ -780,7 +649,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
     if (marks.length && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const start = performance.now();
       pulse = {
-        ambient: true,
         update(t) {
           const k = 0.5 + 0.5 * Math.sin((t - start) / 220);
           markMat.opacity = 0.7 + 0.3 * k;
@@ -803,7 +671,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
     }
     const start = performance.now();
     glow = {
-      ambient: true,
       update(t) {
         const k = 0.5 + 0.5 * Math.sin((t - start) / 140);
         for (const h of hexes) {
@@ -818,14 +685,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, 
 
   function dispose() {
     cancelAnimationFrame(raf);
-    document.removeEventListener('visibilitychange', wake);
-    window.removeEventListener('pageshow', wake);
-    window.removeEventListener('focus', wake);
-    window.removeEventListener('orientationchange', wake);
-    window.removeEventListener('blur', wake);
-    window.visualViewport?.removeEventListener('resize', wake);
-    renderer.domElement.removeEventListener('webglcontextlost', onLost);
-    renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
     dice.dispose();
     ro.disconnect();
     controls.dispose();
