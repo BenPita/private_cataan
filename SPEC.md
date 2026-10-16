@@ -48,10 +48,15 @@ Read this file instead of the originals; consult them only for fine detail.
 - Mobile robustness (2026-10-16): 3D renderer uses preserveDrawingBuffer, a short redraw burst
   after every change plus a 1 s heartbeat, redraws on visibility/focus/orientation, and rebuilds
   the scene after a lost GPU context (fix for the board turning white on Android).
+- Root cause of the white board (diagnostics from the owner's Android, Mali-G715, DPR 3): the
+  GPU dropped the WebGL context every few seconds (16 times in 4 minutes). Fix: phones get a light
+  renderer — no MSAA, pixel ratio ≤1.5, Lambert/Phong instead of PBR materials, 512 PCF shadow
+  map re-rendered only when pieces/robber/dice move, no fog, anisotropy 1, ~30 fps cap for
+  ambient pulses, no preserveDrawingBuffer. If the context is still lost twice within 2 minutes,
+  the game switches to the 2D board for the session with a message (3D can be re-enabled).
 - 3D self-recovery (2026-10-16): the render loop polls gl.isContextLost() every second and
-  rebuilds a brand-new canvas if the context is not restored within 600 ms; every 5 s and on
-  page wake / window blur / visual-viewport resize the drawing surface is re-created at the
-  same size and drawn immediately (what a manual double tap used to fix).
+  rebuilds a brand-new canvas if the context is not restored within 600 ms; on page wake / window
+  blur / visual-viewport resize it redraws.
 - Diagnostics: clients report technical events (`client/src/diag.ts`: GPU type, context lost /
   rebuilt, render errors, JS errors, visibility, volume changes) via socket `client:diag`;
   read the last 300 at GET /diag (no personal data; in-memory, cleared on restart).

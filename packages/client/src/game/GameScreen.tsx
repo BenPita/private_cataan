@@ -314,7 +314,13 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       <div className="board-wrap">
         {boardMode === '3d' ? (
           <Suspense fallback={<Board {...boardProps} />}>
-            <Board3D {...boardProps} />
+            <Board3D
+              {...boardProps}
+              onGiveUp={() => {
+                setBoardMode('2d');
+                showToast(t('fell2d'));
+              }}
+            />
           </Suspense>
         ) : (
           <Board {...boardProps} />
