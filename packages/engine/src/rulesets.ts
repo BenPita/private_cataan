@@ -1,4 +1,9 @@
-import type { DevCardType, GameState, ResMap, Resource, Terrain } from './types';
+import type { DevCard, DevCardType, GameConfig, GameState, ResMap, Resource, Terrain } from './types';
+
+/** Whether a development card may be played now (bought on an earlier turn, or the house rule allows it). */
+export function devCardReady(s: { config: GameConfig; turn: number }, card: DevCard): boolean {
+  return card.boughtTurn !== s.turn || s.config.devCardsSameTurn === true;
+}
 
 /**
  * Classic base-game constants. Anything that differs between player counts

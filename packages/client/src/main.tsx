@@ -5,6 +5,7 @@ import { installErrorReporting } from './diag';
 import { unlockAudio } from './sound';
 import { Home } from './screens/Home';
 import { Room } from './screens/Room';
+import { Recover } from './Recover';
 import './styles.css';
 
 applyDocumentLang();
@@ -35,7 +36,9 @@ function App() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Recover>
+      <App />
+    </Recover>
   </StrictMode>,
 );
 

@@ -24,6 +24,8 @@ export interface RoomConfig {
   boardType: 'random' | 'beginner';
   /** House rule: starting resources for both settlements. */
   startResBoth?: boolean;
+  /** House rule: development cards playable on the turn they were bought. */
+  devSameTurn?: boolean;
 }
 
 export interface Seat {
@@ -107,7 +109,9 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   const botDifficulties = Array.from({ length: c.bots }, (_, i) => given[i] ?? c.difficulty);
   if (![10, 12].includes(c.victoryTarget)) return { ok: false, error: 'Target must be 10 or 12' };
   if (!['random', 'beginner'].includes(c.boardType)) return { ok: false, error: 'Invalid board type' };
-  if (c.startResBoth !== undefined && typeof c.startResBoth !== 'boolean') return { ok: false, error: 'Invalid settings' };
+  for (const flag of [c.startResBoth, c.devSameTurn]) {
+    if (flag !== undefined && typeof flag !== 'boolean') return { ok: false, error: 'Invalid settings' };
+  }
   return {
     ok: true,
     config: {
@@ -118,6 +122,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
       victoryTarget: c.victoryTarget,
       boardType: c.boardType,
       startResBoth: c.startResBoth === true,
+      devSameTurn: c.devSameTurn === true,
     },
   };
 }
@@ -355,7 +360,9 @@ export class RoomManager {
     room.game = createGame(
       room.seats.map((s) => ({ name: s.name ?? 'Player', kind: s.kind, difficulty: s.difficulty })),
       this.seedSource(),
-      { victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true },
+      { victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true,
+        devCardsSameTurn: room.config.devSameTurn === true,
+      },
     );
     room.status = 'playing';
     room.revision++;

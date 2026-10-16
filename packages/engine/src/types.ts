@@ -111,6 +111,8 @@ export interface GameConfig {
   boardType: 'random' | 'beginner';
   /** House rule: the first settlement also gives starting resources (official: only the second). */
   startResBothSettlements?: boolean;
+  /** House rule: development cards may be played on the turn they were bought (official: next turn). */
+  devCardsSameTurn?: boolean;
 }
 
 export interface GameState {

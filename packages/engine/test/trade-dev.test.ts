@@ -109,6 +109,19 @@ describe('development cards', () => {
     expect(expectFail(s, 0, { type: 'playMonopoly', resource: 'ore' })).toMatch(/bought/);
   });
 
+  it('house rule: a card bought this turn can be played right away (still one per turn)', () => {
+    let s = mainPhaseGame();
+    s.config.devCardsSameTurn = true;
+    setResources(s, 0, { wool: 2, grain: 2, ore: 2 });
+    s.devDeck[0] = 'monopoly';
+    s.devDeck[1] = 'monopoly';
+    s = act(s, 0, { type: 'buyDevCard' });
+    s = act(s, 0, { type: 'playMonopoly', resource: 'ore' });
+    expect(s.players[0].devCards).toHaveLength(0);
+    s = act(s, 0, { type: 'buyDevCard' });
+    expect(expectFail(s, 0, { type: 'playMonopoly', resource: 'ore' })).toMatch(/already played/);
+  });
+
   it('fails to buy from an empty deck', () => {
     const s = mainPhaseGame();
     setResources(s, 0, { wool: 1, grain: 1, ore: 1 });

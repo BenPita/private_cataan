@@ -87,6 +87,13 @@ Read this file instead of the originals; consult them only for fine detail.
 - House rule (owner, 2026-10-16): optional "resources for both settlements" toggle on the create
   screen, off by default (room config `startResBoth` → engine `GameConfig.startResBothSettlements`),
   shown as a tag in the lobby, with a short explanation of what a house rule is.
+- House rule 2 (owner, 2026-10-16): "play development cards right away" (`devSameTurn` →
+  `GameConfig.devCardsSameTurn`, shared check `devCardReady` in rulesets.ts used by engine, bot and
+  UI); still one development card per turn.
+- Blue-screen freeze (2026-10-16): the 2D pinch zoom read `gesture.current` inside a deferred state
+  updater; when the fingers lifted first it was null → React crashed and unmounted the app (blue
+  background). Fixed, and `Recover.tsx` now wraps the app: a crash is reported (`crash` in /diag)
+  and the screen is redrawn automatically; only repeated crashes ask for a reload.
 - Owner decision (2026-10-16): NO probability percentages anywhere (board, inspect label, tips).
 - Mobile robustness (2026-10-16): 3D renderer uses preserveDrawingBuffer, a short redraw burst
   after every change plus a 1 s heartbeat, redraws on visibility/focus/orientation, and rebuilds

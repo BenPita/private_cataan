@@ -3,6 +3,7 @@ import {
   COSTS,
   PIECE_LIMITS,
   RESOURCES,
+  devCardReady,
   emptyRes,
   hasRes,
   legalCities,
@@ -487,7 +488,7 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
   for (const c of cards) {
     const g = groups.get(c.type) ?? { total: 0, playable: 0 };
     g.total++;
-    if (c.boughtTurn !== view.turn) g.playable++;
+    if (devCardReady(view, c)) g.playable++;
     groups.set(c.type, g);
   }
 

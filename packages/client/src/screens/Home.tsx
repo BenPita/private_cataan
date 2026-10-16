@@ -106,6 +106,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
     victoryTarget: 10,
     boardType: 'random',
     startResBoth: false,
+    devSameTurn: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -176,6 +177,13 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
           <span>
             <b>{t('houseStartRes')}</b>
             <small>{t('houseStartResInfo')}</small>
+          </span>
+        </label>
+        <label className="check house-rule">
+          <input type="checkbox" checked={!!config.devSameTurn} onChange={(e) => update({ devSameTurn: e.target.checked })} />
+          <span>
+            <b>{t('houseDevNow')}</b>
+            <small>{t('houseDevNowInfo')}</small>
           </span>
         </label>
         {error && <p className="error">{error}</p>}

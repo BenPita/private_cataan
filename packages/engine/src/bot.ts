@@ -10,7 +10,7 @@
  *  - hard:   medium plus scarcity/harbor-aware placement, road planning
  *            several steps ahead, dev-card army race, leader-aware trading
  */
-import { COSTS, PIECE_LIMITS, TERRAIN_RESOURCE } from './rulesets';
+import { COSTS, PIECE_LIMITS, TERRAIN_RESOURCE, devCardReady } from './rulesets';
 import { GRAPH } from './geometry';
 import {
   legalCities,
@@ -296,7 +296,7 @@ function robberOnMe(c: Ctx): boolean {
 
 function playableDev(c: Ctx, type: string): boolean {
   const p = c.v.players[c.me];
-  return !p.playedDevThisTurn && (p.devCards ?? []).some((d) => d.type === type && d.boughtTurn !== c.v.turn);
+  return !p.playedDevThisTurn && (p.devCards ?? []).some((d) => d.type === type && devCardReady(c.v, d));
 }
 
 function shouldPlayKnight(c: Ctx): boolean {

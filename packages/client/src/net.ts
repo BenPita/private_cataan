@@ -10,6 +10,7 @@ export interface RoomConfig {
   victoryTarget: number;
   boardType: 'random' | 'beginner';
   startResBoth?: boolean;
+  devSameTurn?: boolean;
 }
 
 export interface PublicSeat {

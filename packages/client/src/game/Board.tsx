@@ -148,7 +148,9 @@ function PanZoom({ children, svgRef }: { children: ReactNode; svgRef?: React.Mut
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      if (gesture.current.dist > 0) setT((cur) => ({ ...cur, k: clampK((gesture.current!.k * dist) / gesture.current!.dist) }));
+      // Read the gesture now: the state update runs later, when the fingers may already be up.
+      const { k, dist: startDist } = gesture.current;
+      if (startDist > 0) setT((cur) => ({ ...cur, k: clampK((k * dist) / startDist) }));
     } else if (dragged.current) {
       setT((cur) => ({ ...cur, x: cur.x + dx * scale, y: cur.y + dy * scale }));
     }

@@ -23,6 +23,7 @@ import {
   PLAYER_COLORS,
   TERRAIN_RESOURCE,
   rulesetFor,
+  devCardReady,
 } from './rulesets';
 import {
   RESOURCES,
@@ -329,7 +330,7 @@ function startTurn(state: GameState, player: number): void {
 function playableCard(state: GameState, player: number, type: DevCardType): number {
   const p = state.players[player];
   if (p.playedDevThisTurn) fail('You already played a development card this turn');
-  const idx = p.devCards.findIndex((c) => c.type === type && c.boughtTurn !== state.turn);
+  const idx = p.devCards.findIndex((c) => c.type === type && devCardReady(state, c));
   if (idx < 0) {
     fail(p.devCards.some((c) => c.type === type) ? 'Cards cannot be played on the turn they were bought' : 'You do not have that card');
   }
