@@ -416,7 +416,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       me.settlementsBuilt++;
       setup.lastSettlement = action.vertex;
       const isSecond = setup.step >= state.players.length;
-      if (isSecond) {
+      if (isSecond || state.config.startResBothSettlements) {
         const gained = emptyRes();
         for (const h of GRAPH.vertices[action.vertex].hexes) {
           const r = TERRAIN_RESOURCE[state.board.hexes[h].terrain];

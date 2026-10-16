@@ -9,6 +9,7 @@ export interface RoomConfig {
   botDifficulties: BotDifficulty[];
   victoryTarget: number;
   boardType: 'random' | 'beginner';
+  startResBoth?: boolean;
 }
 
 export interface PublicSeat {

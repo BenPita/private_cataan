@@ -109,6 +109,8 @@ export interface LastRoll {
 export interface GameConfig {
   victoryTarget: number;
   boardType: 'random' | 'beginner';
+  /** House rule: the first settlement also gives starting resources (official: only the second). */
+  startResBothSettlements?: boolean;
 }
 
 export interface GameState {

@@ -105,6 +105,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
     botDifficulties: ['medium', 'medium'],
     victoryTarget: 10,
     boardType: 'random',
+    startResBoth: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -170,6 +171,13 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
             </button>
           </div>
         </div>
+        <label className="check house-rule">
+          <input type="checkbox" checked={!!config.startResBoth} onChange={(e) => update({ startResBoth: e.target.checked })} />
+          <span>
+            <b>{t('houseStartRes')}</b>
+            <small>{t('houseStartResInfo')}</small>
+          </span>
+        </label>
         {error && <p className="error">{error}</p>}
         <button className="btn primary wide big" disabled={!name.trim() || busy || !connected} onClick={create}>
           {connected ? t('createGame') : t('offline')}

@@ -60,6 +60,16 @@ describe('initial placement', () => {
     expect(totalRes(s.players[1].resources) - before).toBe(producing);
   });
 
+  it('house rule: gives starting resources for both settlements', () => {
+    let s = newGame(2);
+    s.config.startResBothSettlements = true;
+    const v = legalSetupSettlements(s)[0];
+    s = act(s, 0, { type: 'placeSetupSettlement', vertex: v });
+    const producing = GRAPH.vertices[v].hexes.filter((h) => s.board.hexes[h].terrain !== 'desert').length;
+    expect(producing).toBeGreaterThan(0);
+    expect(totalRes(s.players[0].resources)).toBe(producing);
+  });
+
   it('rejects building before rolling', () => {
     const s = completeSetup(newGame(2));
     setResources(s, 0, { lumber: 5, brick: 5 });

@@ -81,6 +81,12 @@ Read this file instead of the originals; consult them only for fine detail.
   both dice lie flat), records it, then paints the die faces so the server's values land on
   top (opposite faces still sum to 7) and replays the motion with impact sounds from real
   collisions. 2D board / reduced motion keep the flat dice overlay. Test: client/test/dice.test.ts.
+- Rules check vs the official rulebook (2026-10-16): starting resources only for the 2nd settlement,
+  dev cards not playable on the turn bought (VP cards excepted), one dev card per turn, playable
+  before rolling, discard half (rounded down) above 7, bank shortage rule — all match the engine.
+- House rule (owner, 2026-10-16): optional "resources for both settlements" toggle on the create
+  screen, off by default (room config `startResBoth` → engine `GameConfig.startResBothSettlements`),
+  shown as a tag in the lobby, with a short explanation of what a house rule is.
 - Owner decision (2026-10-16): NO probability percentages anywhere (board, inspect label, tips).
 - Mobile robustness (2026-10-16): 3D renderer uses preserveDrawingBuffer, a short redraw burst
   after every change plus a 1 s heartbeat, redraws on visibility/focus/orientation, and rebuilds

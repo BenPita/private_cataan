@@ -1830,3 +1830,26 @@ h3,
   accent-color: #e8a317;
   height: 28px;
 }
+
+/* ---------- House rules ---------- */
+.check.house-rule {
+  align-items: flex-start;
+  gap: 10px;
+}
+.check.house-rule span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.check.house-rule small {
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.8;
+}
+.house-rule-tag {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7a4a12;
+}

@@ -30,6 +30,9 @@ const en = {
   board: 'Board',
   randomBoard: 'Random',
   beginnerBoard: 'Beginner',
+  houseStartRes: 'House rule: resources for both settlements',
+  houseStartResInfo: 'A house rule is a change friends agree on, not part of the official rules. Officially you get starting resources only for your second settlement; with this on you also get them for the first, for a faster start.',
+  houseStartResOn: 'House rule: resources for both starting settlements',
   invite: 'Invite link',
   copied: 'Copied!',
   share: 'Share',
@@ -217,6 +220,9 @@ const he: Dict = {
   board: 'לוח',
   randomBoard: 'אקראי',
   beginnerBoard: 'למתחילים',
+  houseStartRes: 'חוק בית: משאבים על שני היישובים',
+  houseStartResInfo: 'חוק בית הוא שינוי שחברים מסכימים עליו, ולא חלק מהחוקים הרשמיים. בחוקים הרשמיים מקבלים משאבים בהתחלה רק על היישוב השני. כשזה דלוק, מקבלים גם על הראשון — התחלה מהירה יותר.',
+  houseStartResOn: 'חוק בית: משאבים על שני יישובי ההתחלה',
   invite: 'קישור הזמנה',
   copied: 'הועתק!',
   share: 'שיתוף',
@@ -587,6 +593,7 @@ const ERRORS_HE: Record<string, string> = {
   'Invalid difficulty': 'רמה לא תקינה',
   'Target must be 10 or 12': 'היעד חייב להיות 10 או 12',
   'Invalid board type': 'סוג לוח לא תקין',
+  'Invalid settings': 'הגדרות לא תקינות',
 };
 
 export function errorText(msg: string): string {

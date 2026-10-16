@@ -178,6 +178,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
 
       <div className="card parchment">
         <p className="label">{t('playersTitle', { n: snapshot.config.victoryTarget })}</p>
+        {snapshot.config.startResBoth && <p className="house-rule-tag">🏠 {t('houseStartResOn')}</p>}
         <ul className="seats">
           {snapshot.seats.map((s, i) => (
             <li key={i}>
