@@ -26,6 +26,7 @@ const U = 1 / S; // board units -> world units (hex radius = 1)
 const TILE_R = 0.965;
 const TILE_H = 0.12;
 const FRAME_TOP = 0;
+const HIT_LAYER = 1;
 const PIPS: Record<number, number> = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
 
 const w = (x: number, y: number, h = 0) => new THREE.Vector3(x * U, h, y * U);
@@ -182,6 +183,8 @@ function flagTexture(type: string, onUpdate: () => void): THREE.CanvasTexture {
 
 interface Tween {
   update(t: number): boolean; // returns false when finished
+  /** Slow glow/pulse that moves nothing: drawn at a lower frame rate, without redrawing shadows. */
+  ambient?: boolean;
 }
 
 export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
@@ -224,6 +227,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Shadows are redrawn only when something moves (see the render loop), not on
+  // every frame of a glow — half the GPU work while a turn is on screen.
+  renderer.shadowMap.autoUpdate = false;
   mount.appendChild(renderer.domElement);
   // Diagnostics only: report the GPU and any context loss; behaviour is unchanged.
   try {
@@ -239,7 +245,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   });
   renderer.domElement.addEventListener('webglcontextrestored', () => {
     diag('3d-restored');
-    invalidate(); // three.js re-uploads everything on the next frame
+    invalidate(true); // three.js re-uploads everything on the next frame
   });
   // Coming back to the page (screen unlock, app switch): draw a fresh frame.
   const onVisible = () => document.visibilityState === 'visible' && invalidate();
@@ -348,21 +354,36 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   scene.add(robber);
 
   // --- Render loop (on demand) --------------------------------------------------
+  // Phones heat up and slow down when the GPU draws 60 full frames a second for
+  // a whole game, so: idle = no frames, glow/pulse only = ~30 fps without a
+  // shadow pass, real motion (pieces, robber, dice) = full rate with shadows.
   let needsRender = true;
+  let shadowsDirty = true;
+  let lastFrame = 0;
   const tweens = new Set<Tween>();
-  const invalidate = () => {
+  const invalidate = (shadows = false) => {
     needsRender = true;
+    if (shadows) shadowsDirty = true;
   };
-  controls.addEventListener('change', invalidate);
+  controls.addEventListener('change', () => invalidate());
   let raf = 0;
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop);
+    let moving = false;
     if (tweens.size) {
-      for (const tw of [...tweens]) if (!tw.update(now)) tweens.delete(tw);
+      const ambientOnly = [...tweens].every((tw) => tw.ambient);
+      if (ambientOnly && !needsRender && now - lastFrame < 33) return;
+      for (const tw of [...tweens]) {
+        if (!tw.ambient) moving = true;
+        if (!tw.update(now)) tweens.delete(tw);
+      }
       needsRender = true;
     }
     if (!needsRender) return;
     needsRender = false;
+    lastFrame = now;
+    if (moving || shadowsDirty) renderer.shadowMap.needsUpdate = true;
+    shadowsDirty = false;
     renderer.render(scene, camera);
   };
   raf = requestAnimationFrame(loop);
@@ -409,6 +430,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   // --- Picking ----------------------------------------------------------------
   const raycaster = new THREE.Raycaster();
+  raycaster.layers.enable(HIT_LAYER); // invisible tap areas live on a layer the camera never draws
   let down: { x: number; y: number } | null = null;
   const el = renderer.domElement;
   const onDown = (e: PointerEvent) => {
@@ -527,7 +549,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       flag.position.set(px, 0.8, py);
       harborsGroup.add(pole, flag);
     }
-    invalidate();
+    invalidate(true);
   }
 
   const pieceMeshes = new Map<string, THREE.Mesh>();
@@ -583,7 +605,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         });
       }
     }
-    invalidate();
+    invalidate(true);
   }
 
   let robberHex = -1;
@@ -601,7 +623,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       });
     }
     robberHex = hex;
-    invalidate();
+    invalidate(true);
   }
 
   const vertexHitGeo = new THREE.SphereGeometry(0.2, 12, 8);
@@ -630,6 +652,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       const hit = new THREE.Mesh(vertexHitGeo, hitMat);
       hit.position.set(v.x, TILE_H + 0.05, v.y);
       hit.userData.pick = { kind: 'vertex', id: vid };
+      hit.layers.set(HIT_LAYER);
       const selected = selection?.kind === 'vertex' && selection.id === vid;
       const mark = new THREE.Mesh(vertexMarkGeo, selected ? selMat : markMat);
       mark.rotation.x = -Math.PI / 2;
@@ -651,6 +674,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       hit.position.set(e.x, TILE_H + 0.05, e.y);
       hit.rotation.y = angle;
       hit.userData.pick = { kind: 'edge', id: eid };
+      hit.layers.set(HIT_LAYER);
       const selected = selection?.kind === 'edge' && selection.id === eid;
       const mark = new THREE.Mesh(edgeMarkGeo, selected ? selMat : markMat);
       mark.position.set(e.x, TILE_H + 0.06, e.y);
@@ -676,6 +700,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     if (marks.length && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const start = performance.now();
       pulse = {
+        ambient: true,
         update(t) {
           const k = 0.5 + 0.5 * Math.sin((t - start) / 220);
           markMat.opacity = 0.7 + 0.3 * k;
@@ -698,6 +723,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     }
     const start = performance.now();
     glow = {
+      ambient: true,
       update(t) {
         const k = 0.5 + 0.5 * Math.sin((t - start) / 140);
         for (const h of hexes) {

@@ -30,6 +30,12 @@ takes ~3 ms and is not the cause. Fixes:
 Re-applied on owner request: the name "האי של עדן" / "Eden's Island" and the effects volume slider.
 Still NOT re-applied: build tray, tips, light mobile renderer, 2D fallback.
 
+Slowdown over a long game (2026-10-16): no leaks (heap, DOM, payload ~13 KB and bot time stay flat),
+but the 3D board drew 60 full frames/s (~215 draw calls + shadow pass) whenever lands glowed or
+spots pulsed, heating the phone until it throttled. Now: glow/pulse tweens are `ambient` (~30 fps,
+no shadow pass; shadows redraw only on real motion via `shadowMap.autoUpdate = false`), and the
+invisible tap areas sit on a raycast-only layer (not drawn). Idle = 0 frames.
+
 
 Game name changed from "Hex Islands" to "האי של עדן" / "Eden's Island" (owner, 2026-10-16).
 
