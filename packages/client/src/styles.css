@@ -1816,3 +1816,17 @@ h3,
   font-size: 30px;
   margin: 0;
 }
+
+/* ---------- Volume slider (settings) ---------- */
+.volume {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 17px;
+}
+.volume input[type='range'] {
+  width: 100%;
+  accent-color: #e8a317;
+  height: 28px;
+}

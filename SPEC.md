@@ -10,6 +10,26 @@ four versions (build tray, tips, volume slider, chance %, the rename to "האי 
 removal, renderer changes, 2D fallback, early server ack) is currently NOT in the code; the
 sections are kept as history so they can be re-applied selectively after the owner's test.
 
+## Real root cause of the white board (2026-10-16, after the rollback test)
+The owner's game on the rollback still lost the 3D context ~8 times in 13 minutes (one loss froze
+the page for 22 s, which dropped the socket → "Reconnecting…" / "game was out of date").
+Cause: `useState(getBoardMode())` in GameScreen and `webglAvailable()` in the settings menu ran on
+EVERY render, and each call created a new WebGL context. Phones allow only a few live contexts, so
+Chrome killed the oldest one — the board's. Renders spike on rolls (dice overlay, highlights, card
+flights), turns, and the volume slider, matching what the owner saw. The 3D dice physics itself
+takes ~3 ms and is not the cause. Fixes:
+- `boardMode.ts` probes WebGL once per page load and releases the probe context; lazy useState.
+- Board3D: redraw on `webglcontextrestored` and on returning to the page; shared marker materials;
+  `clear()` disposes old materials/canvas textures; `dispose()` calls `forceContextLoss()`.
+- Dice: face textures assigned at creation (no shader rebuild on a roll).
+- Sync: server replies to actions before the DB save (re-applied from d532305, `RoomManager.flush`);
+  client re-requests state (`room:resume`) after "out of date" / no-response; `busy` reset in
+  `finally`; bot request ids include the attempt number (a retry no longer hits the cached rejection).
+- Deploys: index.html is served `no-cache`, missing `/assets/*` return 404 (not index.html), and a
+  failed 3D chunk load reloads the page once instead of leaving a blank screen.
+Re-applied on owner request: the name "האי של עדן" / "Eden's Island" and the effects volume slider.
+Still NOT re-applied: build tray, tips, light mobile renderer, 2D fallback.
+
 
 Game name changed from "Hex Islands" to "האי של עדן" / "Eden's Island" (owner, 2026-10-16).
 

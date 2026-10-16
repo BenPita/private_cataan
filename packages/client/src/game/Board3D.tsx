@@ -15,6 +15,13 @@ import { S, type BoardProps } from './Board';
 import { createDice } from './dice3d';
 import { diag } from '../diag';
 
+// Loaded fine: allow one automatic reload again after a future update.
+try {
+  sessionStorage.removeItem('hex-reloaded');
+} catch {
+  /* ignore */
+}
+
 const U = 1 / S; // board units -> world units (hex radius = 1)
 const TILE_R = 0.965;
 const TILE_H = 0.12;
@@ -222,12 +229,21 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   try {
     const gl = renderer.getContext();
     const info = gl.getExtension('WEBGL_debug_renderer_info');
-    diag('3d-start', `${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'gpu?'} dpr=${window.devicePixelRatio} rollback-997e1db`);
+    diag('3d-start', `${info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'gpu?'} dpr=${window.devicePixelRatio} ctxfix`);
   } catch {
     /* ignore */
   }
-  renderer.domElement.addEventListener('webglcontextlost', () => diag('3d-lost', 'event'));
-  renderer.domElement.addEventListener('webglcontextrestored', () => diag('3d-restored'));
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault(); // lets the browser give the context back
+    diag('3d-lost', 'event');
+  });
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    diag('3d-restored');
+    invalidate(); // three.js re-uploads everything on the next frame
+  });
+  // Coming back to the page (screen unlock, app switch): draw a fresh frame.
+  const onVisible = () => document.visibilityState === 'visible' && invalidate();
+  document.addEventListener('visibilitychange', onVisible);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2b1a0d');
@@ -269,10 +285,16 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     return t;
   };
 
+  const texCache = new Map<string, THREE.Texture>();
+  const cachedTex = (url: string, repeat?: number) => {
+    if (!texCache.has(url)) texCache.set(url, tex(url, repeat));
+    return texCache.get(url)!;
+  };
+
   // Table
   const table = new THREE.Mesh(
     new THREE.PlaneGeometry(60, 60),
-    new THREE.MeshStandardMaterial({ map: tex('/art/wood.webp', 14), roughness: 0.8 }),
+    new THREE.MeshStandardMaterial({ map: cachedTex('/art/wood.webp', 14), roughness: 0.8 }),
   );
   table.rotation.x = -Math.PI / 2;
   table.position.y = -0.16;
@@ -284,7 +306,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const VIEW = 10.6;
   const frameTop = new THREE.Mesh(
     fanGeometry(hexPoints(FRAME_R, 0), VIEW, VIEW),
-    new THREE.MeshStandardMaterial({ map: tex('/art/sea.webp'), roughness: 0.55, metalness: 0.05 }),
+    new THREE.MeshStandardMaterial({ map: cachedTex('/art/sea.webp'), roughness: 0.55, metalness: 0.05 }),
   );
   frameTop.position.y = FRAME_TOP;
   frameTop.receiveShadow = true;
@@ -309,11 +331,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const tileSideMat = new THREE.MeshStandardMaterial({ color: '#6e5232', roughness: 0.9 });
   const tileMats = new Map<number, THREE.MeshStandardMaterial>();
   const tileTops: THREE.Mesh[] = [];
-  const texCache = new Map<string, THREE.Texture>();
-  const cachedTex = (url: string) => {
-    if (!texCache.has(url)) texCache.set(url, tex(url));
-    return texCache.get(url)!;
-  };
 
   const houseGeo = houseGeometry();
   const cityGeo = cityGeometry();
@@ -432,6 +449,12 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         const m = o as THREE.Mesh;
         if (m.geometry && m.geometry !== tileGeo && m.geometry !== tileSideGeo && m.geometry !== houseGeo && m.geometry !== cityGeo && m.geometry !== roadGeo) {
           m.geometry.dispose();
+        }
+        for (const mat of ([] as THREE.Material[]).concat((m.material as THREE.Material | THREE.Material[] | undefined) ?? [])) {
+          if (mat === tileSideMat) continue;
+          const map = (mat as THREE.MeshStandardMaterial).map;
+          if (map && ![...texCache.values()].includes(map)) map.dispose(); // number discs, harbor flags
+          mat.dispose();
         }
       });
     }
@@ -590,14 +613,18 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const hexRingGeo = new THREE.TorusGeometry(0.82, 0.035, 6, 6);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
   let pulse: Tween | null = null;
+  // Shared marker materials (created once, so updates never pile up materials).
+  const markMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.95, depthTest: false });
+  const outlineMat = new THREE.MeshBasicMaterial({ color: '#2a1606', transparent: true, opacity: 0.6, depthTest: false });
+  const selMat = new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false });
 
   function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string) {
     clear(targetsGroup, false);
     if (pulse) tweens.delete(pulse);
+    pulse = null;
+    markMat.opacity = 0.95;
+    selMat.color.set(myColor);
     const marks: THREE.Mesh[] = [];
-    const markMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.95, depthTest: false });
-    const outlineMat = new THREE.MeshBasicMaterial({ color: '#2a1606', transparent: true, opacity: 0.6, depthTest: false });
-    const selMat = new THREE.MeshBasicMaterial({ color: myColor, depthTest: false });
     for (const vid of targets.vertices ?? []) {
       const v = GRAPH.vertices[vid];
       const hit = new THREE.Mesh(vertexHitGeo, hitMat);
@@ -685,13 +712,20 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   function dispose() {
     cancelAnimationFrame(raf);
+    document.removeEventListener('visibilitychange', onVisible);
     dice.dispose();
     ro.disconnect();
     controls.dispose();
     el.removeEventListener('pointerdown', onDown);
     el.removeEventListener('pointerup', onUp);
+    clear(tilesGroup);
+    clear(discsGroup);
+    clear(harborsGroup);
     renderer.dispose();
     texCache.forEach((t) => t.dispose());
+    // Give the GPU context back now instead of at garbage collection, so a
+    // remount (language change, 2D/3D toggle) never stacks up live contexts.
+    renderer.forceContextLoss();
     mount.removeChild(el);
   }
 

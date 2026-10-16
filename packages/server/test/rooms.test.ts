@@ -77,6 +77,7 @@ describe('authoritative actions', () => {
     const res = await m.act(room, first, { requestId: 'r1', expectedRevision: rev, action: { type: 'placeSetupSettlement', vertex: v } });
     expect(res).toEqual({ ok: true });
     expect(room.revision).toBe(rev + 1);
+    await m.flush(room.id);
     const saved = await store.load(room.id);
     expect(saved!.game!.buildings[v]).toEqual({ owner: first, type: 'settlement' });
   });
@@ -114,6 +115,7 @@ describe('authoritative actions', () => {
     const other = 1 - first;
     const v = legalSetupSettlements(room.game!)[0];
     await m.act(room, first, { requestId: 'x', expectedRevision: room.revision, action: { type: 'placeSetupSettlement', vertex: v } });
+    await m.flush(room.id);
     const restarted = new RoomManager(store);
     const restored = (await restarted.get(room.id))!;
     expect(restored.game).toEqual(room.game);

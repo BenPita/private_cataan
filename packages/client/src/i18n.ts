@@ -12,7 +12,7 @@ import {
 export type Lang = 'he' | 'en';
 
 const en = {
-  appName: 'Hex Islands',
+  appName: "Eden's Island",
   tagline: 'Build, trade and settle the islands with your friends.',
   nickname: 'Your nickname',
   nicknamePlaceholder: 'e.g. Roy',
@@ -34,7 +34,7 @@ const en = {
   copied: 'Copied!',
   share: 'Share',
   sendWhatsapp: 'Send via WhatsApp',
-  whatsappText: 'Join my Hex Islands game! {link}',
+  whatsappText: "Join my Eden's Island game! {link}",
   lobby: 'Lobby',
   playersTitle: 'Players · first to {n} points',
   ready: 'Ready',
@@ -61,6 +61,7 @@ const en = {
   rules: 'How to play',
   settings: 'Settings',
   sound: 'Sound effects',
+  volume: 'Sound volume',
   language: 'Language',
   rejoin: 'Rejoin link — use it to continue on another phone. Keep it private.',
   copyRejoin: 'Copy rejoin link',
@@ -68,7 +69,7 @@ const en = {
   disconnected: 'offline',
   loading: 'Loading…',
   gameLog: 'Game log',
-  invitedBy: '{name} invited you to Hex Islands',
+  invitedBy: "{name} invited you to Eden's Island",
   gameClosed: 'This game is {state}. If you were playing on another phone, open your rejoin link from that phone’s settings.',
   stateFull: 'full',
   stateRunning: 'already running',
@@ -198,7 +199,7 @@ const en = {
 type Dict = typeof en;
 
 const he: Dict = {
-  appName: 'איי המשושים',
+  appName: 'האי של עדן',
   tagline: 'בנו, סחרו והתיישבו באיים — עם החברים.',
   nickname: 'הכינוי שלך',
   nicknamePlaceholder: 'למשל: רועי',
@@ -220,7 +221,7 @@ const he: Dict = {
   copied: 'הועתק!',
   share: 'שיתוף',
   sendWhatsapp: 'שליחה בוואטסאפ',
-  whatsappText: 'בואו לשחק איתי באיי המשושים! {link}',
+  whatsappText: 'בואו לשחק איתי בהאי של עדן! {link}',
   lobby: 'חדר המתנה',
   playersTitle: 'שחקנים · הראשון ל-{n} נקודות',
   ready: 'מוכן/ה',
@@ -247,6 +248,7 @@ const he: Dict = {
   rules: 'איך משחקים',
   settings: 'הגדרות',
   sound: 'צלילים',
+  volume: 'עוצמת קול',
   language: 'שפה',
   rejoin: 'קישור חזרה — להמשך המשחק מטלפון אחר. לא לשתף.',
   copyRejoin: 'העתקת קישור חזרה',
@@ -254,7 +256,7 @@ const he: Dict = {
   disconnected: 'מנותק',
   loading: 'טוען…',
   gameLog: 'יומן המשחק',
-  invitedBy: '{name} מזמין/ה אותך לאיי המשושים',
+  invitedBy: '{name} מזמין/ה אותך לשחק בהאי של עדן',
   gameClosed: 'המשחק הזה {state}. אם שיחקת מטלפון אחר, פתח/י את קישור החזרה מתפריט ההגדרות שם.',
   stateFull: 'מלא',
   stateRunning: 'כבר התחיל',

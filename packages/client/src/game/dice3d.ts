@@ -171,7 +171,9 @@ export function createDice(scene: THREE.Scene, floorY: number, requestFrames: (m
     yellow: [1, 2, 3, 4, 5, 6].map((v) => faceTexture(v, '#f2c230', '#b3261a')),
   };
   const meshes = (['red', 'yellow'] as const).map((tone) => {
-    const mats = Array.from({ length: 6 }, () => new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.05 }));
+    // Each face starts with a texture, so the shader is built once here; a roll
+    // only swaps textures (no shader rebuild on the GPU in the middle of a turn).
+    const mats = Array.from({ length: 6 }, (_, slot) => new THREE.MeshStandardMaterial({ map: textures[tone][slot], roughness: 0.35, metalness: 0.05 }));
     const m = new THREE.Mesh(geometry, mats);
     m.castShadow = true;
     m.visible = false;
@@ -191,7 +193,6 @@ export function createDice(scene: THREE.Scene, floorY: number, requestFrames: (m
       const vals = faceValues(topSlot(last[i].q), values[i]);
       d.mats.forEach((mat, slot) => {
         mat.map = textures[d.tone][vals[slot] - 1];
-        mat.needsUpdate = true;
       });
       d.mesh.visible = true;
       d.mesh.scale.setScalar(1);
@@ -236,6 +237,7 @@ export function createDice(scene: THREE.Scene, floorY: number, requestFrames: (m
     if (playing !== null) cancelAnimationFrame(playing);
     if (hideTimer) clearTimeout(hideTimer);
     geometry.dispose();
+    meshes.forEach((d) => d.mats.forEach((m) => m.dispose()));
     Object.values(textures).flat().forEach((t) => t.dispose());
   }
 

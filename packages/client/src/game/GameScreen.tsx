@@ -13,14 +13,29 @@ import {
   type Resource,
 } from '@hex/engine';
 import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../net';
-import { canVibrate, setSoundEnabled, setVibrationEnabled, sfx, soundEnabled, vibrationEnabled } from '../sound';
+import { canVibrate, getVolume, setVibrationEnabled, setVolume, sfx, vibrationEnabled } from '../sound';
 import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
 import { getBoardMode, saveBoardMode, webglAvailable, type BoardMode } from './boardMode';
 
-const Board3D = lazy(() => import('./Board3D'));
+// If the game was updated while this page was open, the old 3D file is gone:
+// reload once to get the new version instead of leaving a blank screen.
+const Board3D = lazy(() =>
+  import('./Board3D').catch((err) => {
+    try {
+      if (!sessionStorage.getItem('hex-reloaded')) {
+        sessionStorage.setItem('hex-reloaded', '1');
+        location.reload();
+        return new Promise<never>(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }),
+);
 import {
   BuildSheet,
   DevSheet,
@@ -84,7 +99,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [flash, setFlash] = useState<Partial<ResMap>>({});
   const [inspect, setInspect] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
+  const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode);
 
   // Cards that fly from producing lands to each player's hand.
   const boardApi = useRef<BoardApi | null>(null);
@@ -135,8 +150,12 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const dispatch = async (action: Action): Promise<boolean> => {
     if (busy) return false;
     setBusy(true);
-    const res = await sendAction(snapshot, action);
-    setBusy(false);
+    let res;
+    try {
+      res = await sendAction(snapshot, action);
+    } finally {
+      setBusy(false);
+    }
     if (!res.ok) {
       sfx.error();
       showToast(errorText(res.error));
@@ -549,7 +568,7 @@ function MenuSheet({
   boardMode: BoardMode;
   onBoardMode: (m: BoardMode) => void;
 }) {
-  const [sound, setSound] = useState(soundEnabled());
+  const [vol, setVol] = useState(() => Math.round(getVolume() * 100));
   const [vibrate, setVibrate] = useState(vibrationEnabled());
   const [copied, setCopied] = useState(false);
   const link = rejoinLink(roomId);
@@ -568,16 +587,23 @@ function MenuSheet({
           </div>
         </div>
       )}
-      <label className="check big">
+      <label className="volume">
+        <span>
+          {vol === 0 ? '🔇' : vol < 50 ? '🔉' : '🔊'} {t('volume')}
+        </span>
         <input
-          type="checkbox"
-          checked={sound}
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={vol}
           onChange={(e) => {
-            setSound(e.target.checked);
-            setSoundEnabled(e.target.checked);
+            const v = Number(e.target.value);
+            setVol(v);
+            setVolume(v / 100);
           }}
+          onPointerUp={() => sfx.card()}
         />
-        {t('sound')}
       </label>
       {canVibrate() && (
         <label className="check big">
@@ -623,7 +649,6 @@ function MenuSheet({
 /** Asks before leaving: leaving closes and deletes the game for everyone. */
 export function ExitConfirm({ roomId, onCancel }: { roomId: string; onCancel: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode());
   return (
     <Sheet title={t('exitTitle')} onClose={onCancel}>
       <p className="hint-text">{t('exitText')}</p>

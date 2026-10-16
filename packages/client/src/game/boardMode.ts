@@ -1,13 +1,24 @@
 export type BoardMode = '3d' | '2d';
 
-/** True when this device can run the 3D board. */
+let webgl: boolean | null = null;
+
+/**
+ * True when this device can run the 3D board. Probed once per page load: every
+ * probe creates a WebGL context, and phones allow only a few at a time — when
+ * the limit is exceeded the browser kills the oldest one, which is the board's
+ * (the board then turns white). The probe context is released right away.
+ */
 export function webglAvailable(): boolean {
+  if (webgl !== null) return webgl;
   try {
     const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGLRenderingContext | null;
+    webgl = !!gl;
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
   } catch {
-    return false;
+    webgl = false;
   }
+  return webgl;
 }
 
 export function getBoardMode(): BoardMode {

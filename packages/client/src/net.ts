@@ -171,10 +171,19 @@ export function useRoom(roomId: string) {
   return { snapshot, status, error, closed, setStatus };
 }
 
+export const OUT_OF_DATE = 'Your game was out of date — please try again';
+
 export async function sendAction(snapshot: RoomSnapshot, action: Action): Promise<Reply> {
-  return emit('game:action', {
+  const res = await emit('game:action', {
     requestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     expectedRevision: snapshot.revision,
     action,
   });
+  // This screen missed an update (e.g. after a short disconnect): fetch the
+  // latest state right away so the next tap works.
+  if (!res.ok && (res.error === OUT_OF_DATE || res.error === 'No response from server')) {
+    const token = loadToken(snapshot.id);
+    if (token) void emit('room:resume', { roomId: snapshot.id, token });
+  }
+  return res;
 }

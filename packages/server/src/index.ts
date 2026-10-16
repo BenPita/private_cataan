@@ -22,8 +22,15 @@ app.get('/diag', (_req, res) => {
   res.json(diagLog.slice(-300));
 });
 if (existsSync(clientDist)) {
+  // Built files have content hashes in their names, so they can be cached forever.
+  app.use('/assets', express.static(path.join(clientDist, 'assets'), { maxAge: '1y', immutable: true, fallthrough: false }));
   app.use(express.static(clientDist, { index: false, maxAge: '1h' }));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  // The page itself is never cached: after a deploy every phone loads the new
+  // version instead of an old page that asks for files that no longer exist.
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
 }
 
 const httpServer = createServer(app);

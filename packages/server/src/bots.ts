@@ -92,8 +92,10 @@ export class BotRunner {
     }
     if (!step) return;
     const mem = this.mem(room)[step.seat];
+    // The attempt number keeps a retry from hitting the cached rejection of the previous try.
+    const attempt = this.failures.get(room.id) ?? 0;
     const res = await this.manager.act(room, step.seat, {
-      requestId: `bot-${room.revision}-${step.seat}`,
+      requestId: `bot-${room.revision}-${step.seat}-${attempt}`,
       expectedRevision: room.revision,
       action: step.action,
     });
@@ -119,7 +121,7 @@ export class BotRunner {
               : null;
     if (fallback) {
       const r = await this.manager.act(room, step.seat, {
-        requestId: `bot-fallback-${room.revision}-${step.seat}`,
+        requestId: `bot-fallback-${room.revision}-${step.seat}-${attempt}`,
         expectedRevision: room.revision,
         action: fallback,
       });
