@@ -1,4 +1,6 @@
-# Hex Islands — Consolidated Spec (single source of truth)
+# Eden's Island (האי של עדן) — Consolidated Spec (single source of truth)
+
+Game name changed from "Hex Islands" to "האי של עדן" / "Eden's Island" (owner, 2026-10-16).
 
 Merges `prd-catan.md` (original) + `update.md` (binding override wherever the
 original limits the game to 2 players) + decisions agreed with the owner.
@@ -42,11 +44,16 @@ Read this file instead of the originals; consult them only for fine detail.
   both dice lie flat), records it, then paints the die faces so the server's values land on
   top (opposite faces still sum to 7) and replays the motion with impact sounds from real
   collisions. 2D board / reduced motion keep the flat dice overlay. Test: client/test/dice.test.ts.
+- Owner decision (2026-10-16): NO probability percentages anywhere (board, inspect label, tips).
+- Mobile robustness (2026-10-16): 3D renderer uses preserveDrawingBuffer, a short redraw burst
+  after every change plus a 1 s heartbeat, redraws on visibility/focus/orientation, and rebuilds
+  the scene after a lost GPU context (fix for the board turning white on Android).
+- Latency: the server acknowledges actions before the database save completes (saves stay
+  ordered per room; `RoomManager.flush` for tests). Measure with `scripts/latency.ts <url>`.
 - Phase 3 UX (2026-10-16): build tray (`BuildTray` in Panels.tsx) replaces the Build button —
   affordable items glow gold, tapping a blocked item explains why, dev card buys via the confirm
-  bar; chance hints (`game/odds.ts`): % per roll next to settlement spots (2D badges / 3D
-  sprites) and on tapped lands; first-time contextual tips (`game/tips.tsx`, once per device,
-  resettable); effects volume slider; settings toggles for tips and chance hints (`prefs.ts`).
+  bar; first-time contextual tips (`game/tips.tsx`, once per device,
+  resettable); effects volume slider; settings toggle for tips (`prefs.ts`).
 - Design roadmap (remaining): (tilted camera, extruded tiles with
   normal maps, 3D pieces, physics dice, 2D fallback); phase 3 = UX (tutorial, build tray,
   probability hints, landscape layout, volume settings); phase 4 = ambience (waves,

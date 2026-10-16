@@ -1,4 +1,4 @@
-/** Small per-device preferences (tips, probability hints). */
+/** Small per-device preferences (tips). */
 function read(key: string, fallback: string): string {
   try {
     return localStorage.getItem(key) ?? fallback;
@@ -17,9 +17,6 @@ function write(key: string, value: string) {
 
 export const tipsEnabled = () => read('hex-tips', 'on') === 'on';
 export const setTipsEnabled = (on: boolean) => write('hex-tips', on ? 'on' : 'off');
-
-export const oddsEnabled = () => read('hex-odds', 'on') === 'on';
-export const setOddsEnabled = (on: boolean) => write('hex-odds', on ? 'on' : 'off');
 
 export function seenTips(): Set<string> {
   try {

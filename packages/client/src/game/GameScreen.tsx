@@ -19,8 +19,7 @@ import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
 import { TipBubble } from './tips';
-import { numberOdds, oddsFor } from './odds';
-import { oddsEnabled, resetTips, setOddsEnabled, setTipsEnabled, tipsEnabled } from '../prefs';
+import { resetTips, setTipsEnabled, tipsEnabled } from '../prefs';
 import { getBoardMode, saveBoardMode, webglAvailable, type BoardMode } from './boardMode';
 
 const Board3D = lazy(() => import('./Board3D'));
@@ -265,12 +264,9 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const confirm = buyingDev
     ? { label: <>{t('buyDevConfirm')} <ResList res={COSTS.devCard} />?</>, action: { type: 'buyDevCard' } as Action }
     : confirmFor(selection);
-  const showOdds = oddsEnabled() && !!targets.vertices?.length && (view.phase === 'INITIAL_PLACEMENT' || mode === 'settlement');
-  const odds = useMemo(() => (showOdds ? oddsFor(view, targets.vertices!) : undefined), [showOdds, targets, view.board.robberHex]);
   const boardProps = {
     view,
     targets,
-    odds,
     selection,
     onSelect: setSelection,
     highlightHexes: highlight,
@@ -333,9 +329,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         {inspect !== null && (
           <div className="inspect" onClick={() => setInspect(null)}>
             {terrainName(view.board.hexes[inspect].terrain)}
-            {view.board.hexes[inspect].number
-              ? ` · ${view.board.hexes[inspect].number} · ${t('oddsPerRoll', { n: numberOdds(view.board.hexes[inspect].number!) })}`
-              : ''}
+            {view.board.hexes[inspect].number ? ` · ${view.board.hexes[inspect].number}` : ''}
             {view.board.robberHex === inspect ? ` · ${t('robberHere')}` : ''}
           </div>
         )}
@@ -583,7 +577,6 @@ function MenuSheet({
 }) {
   const [vol, setVol] = useState(Math.round(getVolume() * 100));
   const [vibrate, setVibrate] = useState(vibrationEnabled());
-  const [odds, setOdds] = useState(oddsEnabled());
   const [tips, setTips] = useState(tipsEnabled());
   const [tipsReset, setTipsReset] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -634,17 +627,6 @@ function MenuSheet({
           {t('vibration')}
         </label>
       )}
-      <label className="check big">
-        <input
-          type="checkbox"
-          checked={odds}
-          onChange={(e) => {
-            setOdds(e.target.checked);
-            setOddsEnabled(e.target.checked);
-          }}
-        />
-        {t('oddsHints')}
-      </label>
       <label className="check big">
         <input
           type="checkbox"

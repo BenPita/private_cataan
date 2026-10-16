@@ -1817,14 +1817,6 @@ h3,
   margin: 0;
 }
 
-.odds-badge {
-  fill: rgba(42, 30, 20, 0.88);
-}
-.odds-text {
-  fill: #ffe9a8;
-  font: 800 10px Rubik, Arial, sans-serif;
-  text-anchor: middle;
-}
 
 .volume {
   display: flex;

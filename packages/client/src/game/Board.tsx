@@ -37,8 +37,6 @@ export interface BoardProps {
   onInspectHex?: (hex: number) => void;
   /** Filled in by the board so effects can map board points to the screen. */
   apiRef?: React.MutableRefObject<BoardApi | null>;
-  /** Production chance (percent) to show next to target spots. */
-  odds?: Record<string, number>;
 }
 
 function hexPoints(cx: number, cy: number, r: number) {
@@ -194,7 +192,7 @@ function PanZoom({ children, svgRef }: { children: ReactNode; svgRef?: React.Mut
   );
 }
 
-export function Board({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef, odds }: BoardProps) {
+export function Board({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   useEffect(() => {
     if (!apiRef) return;
@@ -395,14 +393,6 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
               className={`vertex-target ${selected ? 'selected' : ''}`}
               fill={selected ? myColor : undefined}
             />
-            {odds?.[vertex] !== undefined && (
-              <g pointerEvents="none" transform={`translate(${v.x * S + 13},${v.y * S - 13})`}>
-                <rect x={-14} y={-8} width={28} height={16} rx={8} className="odds-badge" />
-                <text y={4} className="odds-text">
-                  {odds[vertex]}%
-                </text>
-              </g>
-            )}
           </g>
         );
       })}

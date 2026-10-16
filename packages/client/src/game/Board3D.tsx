@@ -6,7 +6,7 @@
  * Rendering is on demand: a frame is drawn only when something changed, the
  * camera moved, or an animation is running — important for phone batteries.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -176,43 +176,57 @@ interface Tween {
   update(t: number): boolean; // returns false when finished
 }
 
-export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef, odds }: BoardProps) {
+export default function Board3D({ view, targets, selection, onSelect, highlightHexes, onInspectHex, apiRef }: BoardProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const engine = useRef<ReturnType<typeof createEngine> | null>(null);
   const propsRef = useRef({ onSelect, onInspectHex, targets });
   propsRef.current = { onSelect, onInspectHex, targets };
 
+  // Bumped when the phone drops the GPU context, so the whole 3D scene is rebuilt.
+  const [epoch, setEpoch] = useState(0);
+
   useEffect(() => {
-    const e = createEngine(mountRef.current!, (hit) => {
-      const { onSelect: select, onInspectHex: inspect, targets: tg } = propsRef.current;
-      if (!hit) return;
-      if (hit.kind === 'hex' && !(tg.hexes ?? []).includes(hit.id as number)) inspect?.(hit.id as number);
-      else select(hit as never);
-    });
+    const e = createEngine(
+      mountRef.current!,
+      (hit) => {
+        const { onSelect: select, onInspectHex: inspect, targets: tg } = propsRef.current;
+        if (!hit) return;
+        if (hit.kind === 'hex' && !(tg.hexes ?? []).includes(hit.id as number)) inspect?.(hit.id as number);
+        else select(hit as never);
+      },
+      () => setEpoch((n) => n + 1),
+    );
     engine.current = e;
     if (apiRef) apiRef.current = { project: e.project, rollDice: e.rollDice };
     return () => {
       e.dispose();
       engine.current = null;
     };
-  }, []);
+  }, [epoch]);
 
-  useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
-  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.players.length]);
-  useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
+  useEffect(() => engine.current?.setBoard(view), [epoch, JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
+  useEffect(() => engine.current?.setPieces(view), [epoch, view.buildings, view.roads, view.players.length]);
+  useEffect(() => engine.current?.setRobber(view.board.robberHex), [epoch, view.board.robberHex]);
   useEffect(
-    () => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff', odds),
-    [targets, selection, odds],
+    () => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'),
+    [epoch, targets, selection],
   );
-  useEffect(() => engine.current?.setHighlight(highlightHexes), [highlightHexes]);
+  useEffect(() => engine.current?.setHighlight(highlightHexes), [epoch, highlightHexes]);
 
   return <div ref={mountRef} className="board-3d" />;
 }
 
 type Hit = { kind: 'vertex' | 'edge' | 'hex'; id: string | number };
 
-function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void, onContextRestored: () => void) {
+  // preserveDrawingBuffer keeps the last frame on screen even when a mobile
+  // browser discards the canvas surface (seen as a white board on Android).
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: true,
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -323,24 +337,58 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   scene.add(robber);
 
   // --- Render loop (on demand) --------------------------------------------------
-  let needsRender = true;
+  // Frames are drawn when something changed, for a short burst afterwards
+  // (mobile compositors can drop a single frame), and once a second as a
+  // safety net. Idle cost stays tiny.
+  let renderUntil = 0;
+  let lastRender = 0;
+  let lost = false;
   const tweens = new Set<Tween>();
   const invalidate = () => {
-    needsRender = true;
+    renderUntil = Math.max(renderUntil, performance.now() + 400);
   };
   controls.addEventListener('change', invalidate);
   let raf = 0;
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop);
+    if (lost) return;
     if (tweens.size) {
-      for (const tw of [...tweens]) if (!tw.update(now)) tweens.delete(tw);
-      needsRender = true;
+      for (const tw of [...tweens]) {
+        try {
+          if (!tw.update(now)) tweens.delete(tw);
+        } catch (err) {
+          console.error('3D animation failed', err);
+          tweens.delete(tw);
+        }
+      }
+      invalidate();
     }
-    if (!needsRender) return;
-    needsRender = false;
-    renderer.render(scene, camera);
+    if (now > renderUntil && now - lastRender < 1000) return;
+    lastRender = now;
+    try {
+      renderer.render(scene, camera);
+    } catch (err) {
+      console.error('3D render failed', err);
+    }
   };
   raf = requestAnimationFrame(loop);
+
+  // Redraw when the page comes back (app switch, screen unlock, back/forward cache).
+  const wake = () => invalidate();
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
+  window.addEventListener('focus', wake);
+  window.addEventListener('orientationchange', wake);
+
+  // The phone may drop the GPU context under memory pressure: let the browser
+  // restore it and rebuild the scene instead of leaving a blank board.
+  const onLost = (e: Event) => {
+    e.preventDefault();
+    lost = true;
+  };
+  const onRestored = () => onContextRestored();
+  renderer.domElement.addEventListener('webglcontextlost', onLost);
+  renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
   const tween = (duration: number, step: (k: number) => void, delay = 0) => {
     const start = performance.now() + delay;
@@ -581,31 +629,10 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const vertexOutlineGeo = new THREE.TorusGeometry(0.15, 0.09, 10, 28);
   const hexRingGeo = new THREE.TorusGeometry(0.82, 0.035, 6, 6);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
-  const oddsMats = new Map<number, THREE.SpriteMaterial>();
-  const oddsMaterial = (pct: number) => {
-    if (!oddsMats.has(pct)) {
-      const c = document.createElement('canvas');
-      c.width = 128;
-      c.height = 64;
-      const g = c.getContext('2d')!;
-      g.fillStyle = 'rgba(42,30,20,0.88)';
-      g.beginPath();
-      g.roundRect(4, 6, 120, 52, 26);
-      g.fill();
-      g.fillStyle = pct >= 30 ? '#ffd25a' : '#fff3cf';
-      g.font = '800 36px Rubik, Arial, sans-serif';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(`${pct}%`, 64, 34);
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      oddsMats.set(pct, new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
-    }
-    return oddsMats.get(pct)!;
-  };
+
   let pulse: Tween | null = null;
 
-  function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string, odds?: Record<string, number>) {
+  function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string) {
     clear(targetsGroup, false);
     if (pulse) tweens.delete(pulse);
     const marks: THREE.Mesh[] = [];
@@ -622,13 +649,6 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       mark.rotation.x = -Math.PI / 2;
       mark.position.set(v.x, TILE_H + 0.07, v.y);
       if (selected) mark.scale.setScalar(1.5);
-      if (odds?.[vid] !== undefined) {
-        const label = new THREE.Sprite(oddsMaterial(odds[vid]));
-        label.scale.set(0.42, 0.21, 1);
-        label.position.set(v.x + 0.18, TILE_H + 0.42, v.y - 0.1);
-        label.renderOrder = 3;
-        targetsGroup.add(label);
-      }
       const outline = new THREE.Mesh(vertexOutlineGeo, outlineMat);
       outline.rotation.x = -Math.PI / 2;
       outline.position.set(v.x, TILE_H + 0.065, v.y);
@@ -706,6 +726,12 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   function dispose() {
     cancelAnimationFrame(raf);
+    document.removeEventListener('visibilitychange', wake);
+    window.removeEventListener('pageshow', wake);
+    window.removeEventListener('focus', wake);
+    window.removeEventListener('orientationchange', wake);
+    renderer.domElement.removeEventListener('webglcontextlost', onLost);
+    renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
     dice.dispose();
     ro.disconnect();
     controls.dispose();
