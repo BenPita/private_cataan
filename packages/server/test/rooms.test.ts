@@ -157,3 +157,32 @@ describe('migration', () => {
     expect(restored.game!.turnOrder).toEqual([0, 1]);
   });
 });
+
+describe('secret victory points', () => {
+  it('other players never see a hidden victory point card or its point, until the game ends', async () => {
+    const { m, room } = await twoPlayerRoom();
+    await m.setReady(room, 1, true);
+    await m.start(room, 0);
+    const g = room.game!;
+    g.phase = 'MAIN_ACTIONS';
+    g.buildings = { v20: { owner: 1, type: 'settlement' } };
+    g.players[1].settlementsBuilt = 1;
+    g.players[1].devCards = [{ type: 'victoryPoint', boughtTurn: 0 }, { type: 'knight', boughtTurn: 0 }];
+
+    const connected = () => true;
+    const owner = m.snapshot(room, 1, connected);
+    const other = m.snapshot(room, 0, connected);
+    // The owner sees their real score and their cards.
+    expect(owner.game!.players[1].victoryPoints).toBe(2);
+    expect(owner.game!.players[1].devCards).toHaveLength(2);
+    // Everyone else sees only the public score and how many cards they hold — nothing about which cards.
+    expect(other.game!.players[1].victoryPoints).toBe(1);
+    expect(other.game!.players[1].devCards).toBeNull();
+    expect(other.game!.players[1].devCardCount).toBe(2);
+    expect(JSON.stringify(other)).not.toMatch(/victoryPoint"|knight"/);
+
+    // When the game is over the cards are revealed to everyone.
+    g.phase = 'GAME_OVER';
+    expect(m.snapshot(room, 0, connected).game!.players[1].victoryPoints).toBe(2);
+  });
+});
