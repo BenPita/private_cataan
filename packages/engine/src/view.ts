@@ -19,6 +19,10 @@ export interface PublicPlayer {
   resources: ResMap | null;
   devCards: DevCard[] | null;
   playedDevThisTurn: boolean;
+  /** Seafarers (0 / [] otherwise): ships on the board, VP tokens, regions already settled for a bonus. */
+  shipsBuilt: number;
+  vpTokens: number;
+  bonusRegions: string[];
 }
 
 /**
@@ -65,6 +69,9 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
         resources: visible ? p.resources : null,
         devCards: visible ? p.devCards : null,
         playedDevThisTurn: p.playedDevThisTurn,
+        shipsBuilt: p.shipsBuilt ?? 0,
+        vpTokens: p.vpTokens ?? 0,
+        bonusRegions: p.bonusRegions ?? [],
       };
     }),
     log: log.map((entry: LogEntry): LogItem => {

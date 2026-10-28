@@ -43,6 +43,13 @@ export const LOG_EN = {
   longestRoadLost: 'Longest Road is no longer held by anyone.',
   largestArmy: '{p} takes Largest Army ({n}).',
   pairedTurn: '{p} — Player 2: build & bank trade',
+  builtShip: '{p} built a ship.',
+  movedShip: '{p} moved a ship.',
+  placedFreeShip: '{p} placed a free ship.',
+  pirateMoved: '{p} moved the pirate.',
+  goldOwed: '{p} may take {n} resources of their choice from a gold field.',
+  goldChosen: '{p} took {res} from a gold field.',
+  regionBonus: '{p} settled a new island: +{n} VP.',
   win: '{p} wins with {n} points!',
 } as const;
 

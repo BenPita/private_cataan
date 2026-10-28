@@ -481,8 +481,8 @@ const RESOURCE_NAMES: Record<Lang, Record<Resource, string>> = {
 };
 
 const TERRAIN_NAMES: Record<Lang, Record<Terrain, string>> = {
-  en: { forest: 'Forest', hills: 'Hills', pasture: 'Pasture', fields: 'Fields', mountains: 'Mountains', desert: 'Desert' },
-  he: { forest: 'יער', hills: 'גבעות', pasture: 'מרעה', fields: 'שדות', mountains: 'הרים', desert: 'מדבר' },
+  en: { forest: 'Forest', hills: 'Hills', pasture: 'Pasture', fields: 'Fields', mountains: 'Mountains', desert: 'Desert', sea: 'Sea', gold: 'Gold field' },
+  he: { forest: 'יער', hills: 'גבעות', pasture: 'מרעה', fields: 'שדות', mountains: 'הרים', desert: 'מדבר', sea: 'ים', gold: 'שדה זהב' },
 };
 
 const DEV: Record<Lang, Record<DevCardType, { name: string; text: string }>> = {
@@ -590,6 +590,13 @@ const LOG_HE: Record<keyof typeof LOG_EN, string> = {
   longestRoadLost: 'אף אחד לא מחזיק כרגע בדרך הארוכה.',
   largestArmy: '{p} לוקח/ת את הצבא הגדול ({n}).',
   pairedTurn: '{p} — שחקן 2: בנייה וסחר עם הבנק',
+  builtShip: '{p} בנה/תה ספינה.',
+  movedShip: '{p} הזיז/ה ספינה.',
+  placedFreeShip: '{p} הניח/ה ספינה בחינם.',
+  pirateMoved: '{p} הזיז/ה את הפיראט.',
+  goldOwed: '{p} יכול/ה לקחת {n} משאבים לבחירה משדה זהב.',
+  goldChosen: '{p} לקח/ה {res} משדה זהב.',
+  regionBonus: '{p} התיישב/ה באי חדש: +{n} נקודות.',
   win: '{p} ניצח/ה עם {n} נקודות!',
 };
 

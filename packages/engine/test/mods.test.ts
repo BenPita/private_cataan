@@ -12,7 +12,8 @@ describe('mods registry', () => {
   });
   it('recognises mod ids', () => {
     expect(isModId('base')).toBe(true);
-    expect(isModId('seafarers')).toBe(false);
+    expect(isModId('seafarers')).toBe(true);
+    expect(isModId('citiesAndKnights')).toBe(false);
     expect(isModId(42)).toBe(false);
   });
   it('a game without a mod (old save) is the base game', () => {

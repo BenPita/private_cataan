@@ -1,14 +1,25 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { isModId, modFor, modPlayerRange } from './mods';
+import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor } from './mods';
 import { boardGraph } from './geometry';
 import {
+  canPlaceShip,
+  inStartRegion,
   isRoadConnected,
+  isRoadEdge,
+  isShipConnected,
+  isShipEdge,
   legalRoads,
   legalSetupRoads,
+  legalSetupShips,
+  legalShips,
   longestRoadLength,
+  pirateEdges,
   playersOnHex,
   satisfiesDistanceRule,
+  shipMoveBlock,
+  shipOwnersOnHex,
   tradeRates,
+  vertexRegion,
 } from './queries';
 import { addRes, emptyRes, hasRes, isResource, isValidResMap, resOf, totalRes } from './resources';
 import { LOG_EN, englishFormatter, formatLog, type LogKey, type LogParams } from './log';
@@ -74,9 +85,22 @@ export function createGame(
     throw new GameError(`A game needs ${range.min}-${range.max} participants`);
   }
   const mod = modFor({ config, players });
-  const fullConfig: GameConfig = { victoryTarget: 10, boardType: 'random', ...config, mod: mod.id, modVersion: mod.version };
+  let scenarioId: string | undefined;
+  if (mod.scenarios) {
+    scenarioId = config.scenario ?? mod.defaultScenario;
+    if (!scenarioId || !Object.prototype.hasOwnProperty.call(mod.scenarios, scenarioId)) throw new GameError('Unknown scenario');
+  }
+  const scenario = scenarioId ? mod.scenarios![scenarioId] : null;
+  const fullConfig: GameConfig = scenario
+    ? { boardType: 'beginner', ...config, victoryTarget: scenario.victoryTarget, scenario: scenario.id, mod: mod.id, modVersion: mod.version }
+    : { victoryTarget: 10, boardType: 'random', ...config, mod: mod.id, modVersion: mod.version };
   const rng = new Rng(seed);
-  const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard(mod) : generateRandomBoard(rng, mod);
+  const board = scenario
+    ? scenarioBoard(scenario, players.length)
+    : fullConfig.boardType === 'beginner'
+      ? generateBeginnerBoard(mod)
+      : generateRandomBoard(rng, mod);
+  const ships = hasShips(mod);
 
   const deck: DevCardType[] = [];
   (Object.keys(mod.devDeck) as DevCardType[]).forEach((t) => {
@@ -93,6 +117,7 @@ export function createGame(
     board,
     buildings: {},
     roads: {},
+    ...(ships ? { ships: {} } : {}),
     players: players.map(
       (p, i): PlayerState => ({
         ...p,
@@ -104,6 +129,7 @@ export function createGame(
         settlementsBuilt: 0,
         citiesBuilt: 0,
         playedDevThisTurn: false,
+        ...(ships ? { shipsBuilt: 0, vpTokens: 0, bonusRegions: [] } : {}),
       }),
     ),
     bank,
@@ -119,6 +145,7 @@ export function createGame(
     pendingDiscards: {},
     robberReturnPhase: 'MAIN_ACTIONS',
     stealCandidates: [],
+    ...(ships ? { pendingGold: {}, shipMoved: false, newShips: [] } : {}),
     freeRoads: 0,
     trade: null,
     paired: null,
@@ -139,7 +166,7 @@ export function createGame(
 
 export function publicVictoryPoints(state: GameState, player: number): number {
   const p = state.players[player];
-  let vp = p.settlementsBuilt - p.citiesBuilt + p.citiesBuilt * 2;
+  let vp = p.settlementsBuilt - p.citiesBuilt + p.citiesBuilt * 2 + (p.vpTokens ?? 0);
   if (state.longestRoad.holder === player) vp += 2;
   if (state.largestArmy === player) vp += 2;
   return vp;
@@ -217,10 +244,65 @@ function requireNoFreeRoads(state: GameState): void {
 function placeRoad(state: GameState, player: number, edge: string): void {
   if (!boardGraph(state.board).edges[edge]) fail('Unknown edge');
   if (state.roads[edge] !== undefined) fail('That edge already has a road');
+  if (state.ships?.[edge] !== undefined) fail('That edge already has a ship');
+  if (!isRoadEdge(state, edge)) fail('Roads must be built next to land');
   if (state.players[player].roadsBuilt >= modFor(state).pieceLimits.roads) fail('No roads left');
   if (!isRoadConnected(state, player, edge)) fail('Road must connect to your network');
   state.roads[edge] = player;
   state.players[player].roadsBuilt++;
+}
+
+/** Seafarers: puts a ship on `edge` after checking every placement rule. */
+function placeShip(state: GameState, player: number, edge: string): void {
+  const mod = modFor(state);
+  if (!hasShips(mod)) fail('This game has no ships');
+  if (!boardGraph(state.board).edges[edge]) fail('Unknown edge');
+  if (state.roads[edge] !== undefined) fail('That edge already has a road');
+  if (state.ships?.[edge] !== undefined) fail('That edge already has a ship');
+  if (!isShipEdge(state, edge)) fail('Ships must be placed next to the sea');
+  if (pirateEdges(state).includes(edge)) fail('No ship may be placed next to the pirate');
+  if ((state.players[player].shipsBuilt ?? 0) >= (mod.pieceLimits.ships ?? 0)) fail('No ships left');
+  if (!isShipConnected(state, player, edge)) fail('Ship must connect to your ship or building');
+  state.ships = { ...(state.ships ?? {}), [edge]: player };
+  state.players[player].shipsBuilt = (state.players[player].shipsBuilt ?? 0) + 1;
+}
+
+/** Can the player place any free road or ship (Road Building)? */
+function canPlaceFreePiece(state: GameState, player: number): boolean {
+  const mod = modFor(state);
+  const me = state.players[player];
+  if (me.roadsBuilt < mod.pieceLimits.roads && legalRoads(state, player).length > 0) return true;
+  return hasShips(mod) && (me.shipsBuilt ?? 0) < (mod.pieceLimits.ships ?? 0) && legalShips(state, player).length > 0;
+}
+
+/** Scenario bonus: VP tokens for a player's first settlement in a region other than their home. */
+function awardRegionBonus(state: GameState, player: number, vertex: string): void {
+  const scenario = scenarioFor(state);
+  if (!scenario?.regionBonus) return;
+  const region = vertexRegion(state, vertex);
+  const me = state.players[player];
+  if (!region || (scenario.homeRegions ?? []).includes(region) || (me.bonusRegions ?? []).includes(region)) return;
+  me.bonusRegions = [...(me.bonusRegions ?? []), region];
+  me.vpTokens = (me.vpTokens ?? 0) + scenario.regionBonus;
+  say(state, 'regionBonus', { p: player, n: scenario.regionBonus });
+}
+
+/**
+ * Gold fields: players still owed resources of their choice. Players drop out
+ * when the bank is empty (they may only take what the bank still has).
+ */
+function settleGold(state: GameState): void {
+  const pending = state.pendingGold ?? {};
+  if (totalRes(state.bank) === 0) {
+    for (const p of Object.keys(pending)) delete pending[Number(p)];
+  }
+  state.pendingGold = pending;
+  if (Object.keys(pending).length === 0) {
+    state.phase = state.goldReturnPhase ?? 'MAIN_ACTIONS';
+    delete state.goldReturnPhase;
+  } else {
+    state.phase = 'GOLD_CHOICE';
+  }
 }
 
 function produce(state: GameState, roll: number): { producing: number[]; gains: ResMap[] } {
@@ -251,9 +333,33 @@ function produce(state: GameState, roll: number): { producing: number[]; gains: 
     addRes(state.players[i].resources, g, 1);
     addRes(state.bank, g, -1);
   });
+  // Gold fields: 1 resource of choice per settlement, 2 per city, chosen after normal production.
+  const gold: Record<number, number> = {};
+  for (const hexId of producing) {
+    if (state.board.hexes[hexId].terrain !== 'gold') continue;
+    for (const v of boardGraph(state.board).hexes[hexId].vertices) {
+      const b = state.buildings[v];
+      if (b) gold[b.owner] = (gold[b.owner] ?? 0) + (b.type === 'city' ? 2 : 1);
+    }
+  }
+  if (Object.keys(gold).length > 0) state.pendingGold = gold;
   return { producing, gains };
 }
 
+
+/** Robber or pirate placed: steal automatically from a single candidate, else let the player choose. */
+function afterRobberMove(state: GameState, rng: Rng, player: number, owners: number[]): void {
+  const candidates = owners.filter((p) => p !== player && totalRes(state.players[p].resources) > 0);
+  if (candidates.length === 0) {
+    finishRobber(state);
+  } else if (candidates.length === 1) {
+    stealFrom(state, rng, player, candidates[0]);
+    finishRobber(state);
+  } else {
+    state.stealCandidates = candidates;
+    state.phase = 'ROBBER_STEAL';
+  }
+}
 
 function finishRobber(state: GameState): void {
   state.stealCandidates = [];
@@ -321,7 +427,15 @@ function startTurn(state: GameState, player: number): void {
   state.freeRoads = 0;
   state.trade = null;
   for (const p of state.players) p.playedDevThisTurn = false;
+  resetShipTurn(state);
   checkVictory(state);
+}
+
+/** Seafarers: a new turn may move a ship again, and no ship counts as built this turn. */
+function resetShipTurn(state: GameState): void {
+  if (state.ships === undefined) return;
+  state.shipMoved = false;
+  state.newShips = [];
 }
 
 /**
@@ -339,6 +453,7 @@ function startPairedPhase(state: GameState, first: number): void {
   state.freeRoads = 0;
   state.trade = null;
   state.players[second].playedDevThisTurn = false;
+  resetShipTurn(state);
   say(state, 'pairedTurn', { p: second });
   checkVictory(state);
 }
@@ -435,21 +550,32 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       const setup = state.setup!;
       if (setup.lastSettlement) fail('Place your road first');
       if (!satisfiesDistanceRule(state, action.vertex)) fail('Settlement must be on an empty spot at least two roads from others');
+      if (!inStartRegion(state, action.vertex)) fail('Starting settlements must be placed on the main island');
       state.buildings[action.vertex] = { owner: player, type: 'settlement' };
       me.settlementsBuilt++;
       setup.lastSettlement = action.vertex;
       const isSecond = setup.step >= state.players.length;
+      let gold = 0;
       if (isSecond || state.config.startResBothSettlements) {
         const gained = emptyRes();
         for (const h of G.vertices[action.vertex].hexes) {
           const r = TERRAIN_RESOURCE[state.board.hexes[h].terrain];
           if (r && state.bank[r] > 0) gained[r]++;
+          if (state.board.hexes[h].terrain === 'gold') gold++;
         }
         addRes(me.resources, gained, 1);
         addRes(state.bank, gained, -1);
         say(state, 'setupSettlementRes', { p: player, res: gained });
       } else {
         say(state, 'setupSettlement', { p: player });
+      }
+      awardRegionBonus(state, player, action.vertex);
+      if (gold > 0) {
+        // A gold field next to the settlement: 1 resource of choice each, chosen before the road.
+        state.pendingGold = { [player]: gold };
+        state.goldReturnPhase = 'INITIAL_PLACEMENT';
+        settleGold(state);
+        if (state.phase === 'GOLD_CHOICE') say(state, 'goldOwed', { p: player, n: gold });
       }
       return;
     }
@@ -459,11 +585,20 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       const setup = state.setup!;
       if (!setup.lastSettlement) fail('Place your settlement first');
-      if (!legalSetupRoads(state, setup.lastSettlement).includes(action.edge)) {
-        fail('The road must touch the settlement you just placed');
+      if (action.ship) {
+        if (!hasShips(mod)) fail('This game has no ships');
+        if (!legalSetupShips(state, setup.lastSettlement).includes(action.edge)) {
+          fail('The ship must touch the settlement you just placed, on a sea edge');
+        }
+        state.ships = { ...(state.ships ?? {}), [action.edge]: player };
+        me.shipsBuilt = (me.shipsBuilt ?? 0) + 1;
+      } else {
+        if (!legalSetupRoads(state, setup.lastSettlement).includes(action.edge)) {
+          fail('The road must touch the settlement you just placed');
+        }
+        state.roads[action.edge] = player;
+        me.roadsBuilt++;
       }
-      state.roads[action.edge] = player;
-      me.roadsBuilt++;
       setup.lastSettlement = null;
       setup.step++;
       if (setup.step >= setup.order.length) {
@@ -502,7 +637,30 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
           if (totalRes(g) > 0) say(state, 'received', { p: i, res: g });
         });
         state.phase = 'MAIN_ACTIONS';
+        if (state.pendingGold && Object.keys(state.pendingGold).length > 0) {
+          state.goldReturnPhase = 'MAIN_ACTIONS';
+          settleGold(state);
+          for (const [p, n] of Object.entries(state.pendingGold)) say(state, 'goldOwed', { p: Number(p), n });
+        }
       }
+      return;
+    }
+
+    case 'chooseGold': {
+      requirePhase(state, 'GOLD_CHOICE');
+      const owed = state.pendingGold?.[player];
+      if (owed === undefined) fail('You have no gold to choose');
+      if (!isValidResMap(action.resources)) fail('Invalid choice');
+      // When the bank runs short, a player may only take what is left.
+      const required = Math.min(owed!, totalRes(state.bank));
+      if (totalRes(action.resources) !== required) fail(`Choose exactly ${required} resources`);
+      if (!hasRes(state.bank, action.resources)) fail('The bank does not have those resources');
+      addRes(state.bank, action.resources, -1);
+      addRes(me.resources, action.resources, 1);
+      if (state.goldReturnPhase === 'MAIN_ACTIONS' && state.lastRoll) addRes(state.lastRoll.gains[player], action.resources, 1);
+      delete state.pendingGold![player];
+      say(state, 'goldChosen', { p: player, res: resOf(action.resources) });
+      settleGold(state);
       return;
     }
 
@@ -526,20 +684,23 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (action.hex === state.board.robberHex) fail('The robber must move to a different hex');
+      if (state.board.hexes[action.hex].terrain === 'sea') fail('The robber must stay on land');
       state.board.robberHex = action.hex;
       say(state, 'robberMoved', { p: player });
-      const candidates = playersOnHex(state, action.hex).filter(
-        (p) => p !== player && totalRes(state.players[p].resources) > 0,
-      );
-      if (candidates.length === 0) {
-        finishRobber(state);
-      } else if (candidates.length === 1) {
-        stealFrom(state, rng, player, candidates[0]);
-        finishRobber(state);
-      } else {
-        state.stealCandidates = candidates;
-        state.phase = 'ROBBER_STEAL';
-      }
+      afterRobberMove(state, rng, player, playersOnHex(state, action.hex));
+      return;
+    }
+
+    case 'movePirate': {
+      requirePhase(state, 'ROBBER_MOVE');
+      requireActive(state, player);
+      if (state.board.pirateHex === undefined) fail('There is no pirate in this game');
+      if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
+      if (state.board.hexes[action.hex].terrain !== 'sea') fail('The pirate must move to a sea hex');
+      if (action.hex === state.board.pirateHex) fail('The pirate must move to a different hex');
+      state.board.pirateHex = action.hex;
+      say(state, 'pirateMoved', { p: player });
+      afterRobberMove(state, rng, player, shipOwnersOnHex(state, action.hex));
       return;
     }
 
@@ -566,6 +727,44 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       return;
     }
 
+    case 'buildShip': {
+      requirePhase(state, 'MAIN_ACTIONS');
+      requireActive(state, player);
+      requireNoFreeRoads(state);
+      if (!hasShips(mod)) fail('This game has no ships');
+      if ((me.shipsBuilt ?? 0) >= (mod.pieceLimits.ships ?? 0)) fail('No ships left');
+      if (!hasRes(me.resources, mod.costs.ship!)) fail('Not enough resources for a ship');
+      placeShip(state, player, action.edge);
+      pay(state, player, mod.costs.ship!, 'a ship');
+      state.newShips = [...(state.newShips ?? []), action.edge];
+      say(state, 'builtShip', { p: player });
+      updateLongestRoad(state);
+      checkVictory(state);
+      return;
+    }
+
+    case 'moveShip': {
+      requirePhase(state, 'MAIN_ACTIONS');
+      requireActive(state, player);
+      requireNoFreeRoads(state);
+      if (!hasShips(mod)) fail('This game has no ships');
+      if (state.shipMoved) fail('You already moved a ship this turn');
+      const block = shipMoveBlock(state, player, action.from);
+      if (block) fail(block);
+      if (action.to === action.from) fail('Move the ship to a different edge');
+      // Lift the ship (it returns to the supply), then place it under the normal rules.
+      const lifted = { ...state.ships };
+      delete lifted[action.from];
+      state.ships = lifted;
+      me.shipsBuilt = (me.shipsBuilt ?? 1) - 1;
+      placeShip(state, player, action.to);
+      state.shipMoved = true;
+      say(state, 'movedShip', { p: player });
+      updateLongestRoad(state);
+      checkVictory(state);
+      return;
+    }
+
     case 'buildSettlement': {
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
@@ -573,13 +772,14 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (me.settlementsBuilt - me.citiesBuilt >= mod.pieceLimits.settlements) fail('No settlements left');
       if (!G.vertices[action.vertex]) fail('Unknown spot');
       if (!satisfiesDistanceRule(state, action.vertex)) fail('Settlement must be on an empty spot at least two roads from others');
-      if (!G.vertices[action.vertex].edges.some((e) => state.roads[e] === player)) {
-        fail('Settlement must connect to one of your roads');
+      if (!G.vertices[action.vertex].edges.some((e) => state.roads[e] === player || state.ships?.[e] === player)) {
+        fail(hasShips(mod) ? 'Settlement must connect to one of your roads or ships' : 'Settlement must connect to one of your roads');
       }
       pay(state, player, mod.costs.settlement, 'a settlement');
       state.buildings[action.vertex] = { owner: player, type: 'settlement' };
       me.settlementsBuilt++;
       say(state, 'builtSettlement', { p: player });
+      awardRegionBonus(state, player, action.vertex);
       updateLongestRoad(state); // may break an opponent's road
       checkVictory(state);
       return;
@@ -635,8 +835,14 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireNoFreeRoads(state);
       const idx = playableCard(state, player, 'roadBuilding');
       useCard(state, player, idx);
-      state.freeRoads = Math.min(2, mod.pieceLimits.roads - me.roadsBuilt);
-      if (legalRoads(state, player).length === 0) state.freeRoads = 0;
+      if (hasShips(mod)) {
+        // Seafarers: 2 roads, 2 ships, or 1 of each.
+        const left = mod.pieceLimits.roads - me.roadsBuilt + (mod.pieceLimits.ships ?? 0) - (me.shipsBuilt ?? 0);
+        state.freeRoads = canPlaceFreePiece(state, player) ? Math.min(2, left) : 0;
+      } else {
+        state.freeRoads = Math.min(2, mod.pieceLimits.roads - me.roadsBuilt);
+        if (legalRoads(state, player).length === 0) state.freeRoads = 0;
+      }
       say(state, 'playedRoadBuilding', { p: player });
       return;
     }
@@ -644,10 +850,17 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
     case 'placeFreeRoad': {
       requireActive(state, player);
       if (state.freeRoads <= 0) fail('You have no free roads to place');
-      placeRoad(state, player, action.edge);
+      if (action.ship) {
+        placeShip(state, player, action.edge);
+        state.newShips = [...(state.newShips ?? []), action.edge];
+      } else {
+        placeRoad(state, player, action.edge);
+      }
       state.freeRoads--;
-      if (state.freeRoads > 0 && legalRoads(state, player).length === 0) state.freeRoads = 0;
-      say(state, 'placedFreeRoad', { p: player });
+      if (hasShips(mod)) {
+        if (state.freeRoads > 0 && !canPlaceFreePiece(state, player)) state.freeRoads = 0;
+      } else if (state.freeRoads > 0 && legalRoads(state, player).length === 0) state.freeRoads = 0;
+      say(state, action.ship ? 'placedFreeShip' : 'placedFreeRoad', { p: player });
       updateLongestRoad(state);
       checkVictory(state);
       return;
