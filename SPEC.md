@@ -44,6 +44,10 @@ original limits the game to 2 players) + decisions agreed with the owner.
 Read this file instead of the originals; consult them only for fine detail.
 
 ## Product
+- App icon (owner-approved artwork, 2026-10-28): sunset behind a green hilltop village,
+  painted wheat fields, no text or border. PNG master: `public/eden-island-icon-1024.png`;
+  192/512 PNGs for PWA (including maskable), 180 PNG for Apple home screens, multi-size
+  `favicon.ico` for browser tabs. Replaces the hexagon SVG; service-worker cache v3.
 - Private online board game inspired by base CATAN (no expansions). Original
   name/art/sounds — no official logos/assets.
 - Owner plays with girlfriend/friends on separate phones via an invite link.

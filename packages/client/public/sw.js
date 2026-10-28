@@ -1,9 +1,12 @@
 // Minimal service worker: makes the app installable and caches the shell.
 // Game state always comes live from the server.
-const CACHE = 'hex-islands-v2';
+const CACHE = 'eden-island-v3';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon.svg', '/manifest.webmanifest'])));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll([
+    '/', '/manifest.webmanifest', '/favicon.ico',
+    '/eden-island-icon-192.png', '/eden-island-icon-512.png', '/eden-island-apple-touch-icon.png',
+  ])));
   self.skipWaiting();
 });
 
