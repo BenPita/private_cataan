@@ -1,4 +1,5 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
+import { BASE_MOD } from './mods';
 import { GRAPH } from './geometry';
 import {
   isRoadConnected,
@@ -80,7 +81,7 @@ export function createGame(
   }
   const fullConfig: GameConfig = { victoryTarget: 10, boardType: 'random', ...config };
   const rng = new Rng(seed);
-  const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard() : generateRandomBoard(rng);
+  const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard(BASE_MOD) : generateRandomBoard(rng, BASE_MOD);
 
   const deck: DevCardType[] = [];
   (Object.keys(DEV_DECK) as DevCardType[]).forEach((t) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRAPH, Rng, boardGraph, graphFor, generateBeginnerBoard, generateRandomBoard, hasAdjacentRedNumbers, validateBoard } from '../src';
+import { BASE_MOD, GRAPH, Rng, boardGraph, graphFor, generateBeginnerBoard, generateRandomBoard, hasAdjacentRedNumbers, validateBoard } from '../src';
 
 describe('board graph', () => {
   it('has the classic island dimensions', () => {
@@ -32,9 +32,9 @@ describe('board graph', () => {
 describe('board generation', () => {
   it('generates valid balanced boards for many seeds', () => {
     for (let seed = 1; seed <= 200; seed++) {
-      const board = generateRandomBoard(new Rng(seed));
-      expect(() => validateBoard(board)).not.toThrow();
-      expect(hasAdjacentRedNumbers(board.hexes)).toBe(false);
+      const board = generateRandomBoard(new Rng(seed), BASE_MOD);
+      expect(() => validateBoard(board, BASE_MOD)).not.toThrow();
+      expect(hasAdjacentRedNumbers(board.hexes, GRAPH)).toBe(false);
       expect(board.hexes[board.robberHex].terrain).toBe('desert');
       const types = board.harbors.map((h) => h.type);
       expect(types.filter((t) => t === 'generic')).toHaveLength(4);
@@ -43,11 +43,11 @@ describe('board generation', () => {
   });
 
   it('is deterministic for the same seed', () => {
-    expect(generateRandomBoard(new Rng(7))).toEqual(generateRandomBoard(new Rng(7)));
+    expect(generateRandomBoard(new Rng(7), BASE_MOD)).toEqual(generateRandomBoard(new Rng(7), BASE_MOD));
   });
 
   it('offers a valid fixed beginner board', () => {
-    expect(() => validateBoard(generateBeginnerBoard())).not.toThrow();
+    expect(() => validateBoard(generateBeginnerBoard(BASE_MOD), BASE_MOD)).not.toThrow();
   });
 });
 
@@ -57,10 +57,10 @@ describe('board graphs per layout', () => {
     expect(graphFor('classic')).toBe(graphFor('classic'));
   });
   it('a board without a layout (old save) uses the classic graph', () => {
-    const board = generateBeginnerBoard();
+    const board = generateBeginnerBoard(BASE_MOD);
     expect(boardGraph({ ...board, layout: undefined })).toBe(GRAPH);
   });
   it('new boards name their layout', () => {
-    expect(generateBeginnerBoard().layout).toBe('classic');
+    expect(generateBeginnerBoard(BASE_MOD).layout).toBe('classic');
   });
 });

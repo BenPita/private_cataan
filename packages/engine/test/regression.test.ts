@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Rng, createGame, generateBeginnerBoard, generateRandomBoard } from '../src';
+import { BASE_MOD, Rng, createGame, generateBeginnerBoard, generateRandomBoard } from '../src';
 import { fingerprint, playBotGame } from './helpers';
 
 /**
@@ -10,14 +10,14 @@ import { fingerprint, playBotGame } from './helpers';
 describe('base game regression', () => {
   it('random boards are unchanged', () => {
     const boards = [1, 2, 3, 99].map((seed) => {
-      const b = generateRandomBoard(new Rng(seed));
+      const b = generateRandomBoard(new Rng(seed), BASE_MOD);
       return { hexes: b.hexes, harbors: b.harbors, robberHex: b.robberHex };
     });
     expect(boards).toMatchSnapshot();
   });
 
   it('beginner board is unchanged', () => {
-    const b = generateBeginnerBoard();
+    const b = generateBeginnerBoard(BASE_MOD);
     expect({ hexes: b.hexes, harbors: b.harbors, robberHex: b.robberHex }).toMatchSnapshot();
   });
 
