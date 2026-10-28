@@ -1,64 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  Rng,
-  applyAction,
-  chooseBotAction,
-  createGame,
-  getPlayerView,
-  type Action,
-  type BotDifficulty,
-  type BotMemory,
-  type GameState,
-} from '../src';
-
-interface Result {
-  state: GameState;
-  steps: number;
-  rejected: number;
-}
-
-/** Runs a game where every seat is a bot. Bots only ever see their own view. */
-export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 8000): Result {
-  let s = createGame(
-    levels.map((difficulty, i) => ({ name: `Bot${i}`, kind: 'bot' as const, difficulty })),
-    seed,
-  );
-  const rng = new Rng(seed * 7 + 1);
-  const memory: BotMemory[] = levels.map(() => ({}));
-  let rejected = 0;
-  let steps = 0;
-  for (; steps < maxSteps && s.phase !== 'GAME_OVER'; steps++) {
-    let acted = false;
-    // Any seat may need to act (discards, trade answers); otherwise the active player.
-    const order = [...levels.keys()].sort((a, b) => Number(b !== s.currentPlayer) - Number(a !== s.currentPlayer));
-    for (const seat of order) {
-      const view = getPlayerView(s, seat);
-      const m = memory[seat];
-      const action: Action | null = chooseBotAction(view, levels[seat], () => rng.next(), m);
-      if (!action) continue;
-      const res = applyAction(s, seat, action);
-      if (res.ok) {
-        if (m.actionsOnTurn?.turn === s.turn) m.actionsOnTurn.count++;
-        else m.actionsOnTurn = { turn: s.turn, count: 1 };
-        s = res.state;
-      } else {
-        rejected++;
-        // Fallback the server also uses: end the turn when allowed.
-        const fallback = applyAction(s, seat, s.trade?.from === seat ? { type: 'cancelTrade' } : { type: 'endTurn' });
-        if (fallback.ok) s = fallback.state;
-      }
-      acted = true;
-      break;
-    }
-    if (!acted) {
-      // Only a pending bot trade offer can leave everyone idle: withdraw it.
-      const res = applyAction(s, s.currentPlayer, { type: 'cancelTrade' });
-      if (!res.ok) throw new Error(`Stuck in ${s.phase}`);
-      s = res.state;
-    }
-  }
-  return { state: s, steps, rejected };
-}
+import { applyAction, chooseBotAction, createGame, getPlayerView, type BotDifficulty } from '../src';
+import { playBotGame } from './helpers';
 
 describe('bots', () => {
   for (const level of ['easy', 'medium', 'hard'] as const) {

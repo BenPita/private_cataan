@@ -1,12 +1,17 @@
 import {
   GRAPH,
+  Rng,
   applyAction,
+  chooseBotAction,
   createGame,
   emptyRes,
+  getPlayerView,
   legalSetupRoads,
   legalSetupSettlements,
   orderRollGroup,
   type Action,
+  type BotDifficulty,
+  type BotMemory,
   type GameState,
   type ResMap,
 } from '../src';
@@ -121,4 +126,85 @@ export function pathFrom(start: string, length: number): { vertices: string[]; e
   };
   if (!dfs()) throw new Error('no path');
   return { vertices, edges };
+}
+
+interface Result {
+  state: GameState;
+  steps: number;
+  rejected: number;
+}
+
+/** Runs a game where every seat is a bot. Bots only ever see their own view. */
+export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 8000): Result {
+  let s = createGame(
+    levels.map((difficulty, i) => ({ name: `Bot${i}`, kind: 'bot' as const, difficulty })),
+    seed,
+  );
+  const rng = new Rng(seed * 7 + 1);
+  const memory: BotMemory[] = levels.map(() => ({}));
+  let rejected = 0;
+  let steps = 0;
+  for (; steps < maxSteps && s.phase !== 'GAME_OVER'; steps++) {
+    let acted = false;
+    // Any seat may need to act (discards, trade answers); otherwise the active player.
+    const order = [...levels.keys()].sort((a, b) => Number(b !== s.currentPlayer) - Number(a !== s.currentPlayer));
+    for (const seat of order) {
+      const view = getPlayerView(s, seat);
+      const m = memory[seat];
+      const action: Action | null = chooseBotAction(view, levels[seat], () => rng.next(), m);
+      if (!action) continue;
+      const res = applyAction(s, seat, action);
+      if (res.ok) {
+        if (m.actionsOnTurn?.turn === s.turn) m.actionsOnTurn.count++;
+        else m.actionsOnTurn = { turn: s.turn, count: 1 };
+        s = res.state;
+      } else {
+        rejected++;
+        // Fallback the server also uses: end the turn when allowed.
+        const fallback = applyAction(s, seat, s.trade?.from === seat ? { type: 'cancelTrade' } : { type: 'endTurn' });
+        if (fallback.ok) s = fallback.state;
+      }
+      acted = true;
+      break;
+    }
+    if (!acted) {
+      // Only a pending bot trade offer can leave everyone idle: withdraw it.
+      const res = applyAction(s, s.currentPlayer, { type: 'cancelTrade' });
+      if (!res.ok) throw new Error(`Stuck in ${s.phase}`);
+      s = res.state;
+    }
+  }
+  return { state: s, steps, rejected };
+}
+
+/**
+ * Everything that decides how a game played out, without fields that later
+ * refactors add (board.layout, config.mod). Used by the regression snapshot.
+ */
+export function fingerprint(s: GameState) {
+  return {
+    winner: s.winner,
+    turn: s.turn,
+    phase: s.phase,
+    logSeq: s.logSeq,
+    rng: s.rng,
+    turnOrder: s.turnOrder,
+    hexes: s.board.hexes,
+    harbors: s.board.harbors,
+    robberHex: s.board.robberHex,
+    buildings: s.buildings,
+    roads: s.roads,
+    bank: s.bank,
+    devDeck: s.devDeck,
+    players: s.players.map((p) => ({
+      color: p.color,
+      resources: p.resources,
+      devCards: p.devCards,
+      knightsPlayed: p.knightsPlayed,
+      roadsBuilt: p.roadsBuilt,
+      settlementsBuilt: p.settlementsBuilt,
+      citiesBuilt: p.citiesBuilt,
+    })),
+    lastLog: s.log.slice(-5).map((e) => e.msg),
+  };
 }

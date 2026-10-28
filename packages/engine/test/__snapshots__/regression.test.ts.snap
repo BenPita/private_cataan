@@ -1,0 +1,1856 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`base game regression > a fresh game is unchanged 1`] = `
+{
+  "bank": {
+    "brick": 19,
+    "grain": 19,
+    "lumber": 19,
+    "ore": 19,
+    "wool": 19,
+  },
+  "buildings": {},
+  "devDeck": [
+    "monopoly",
+    "knight",
+    "monopoly",
+    "knight",
+    "knight",
+    "knight",
+    "victoryPoint",
+    "roadBuilding",
+    "victoryPoint",
+    "knight",
+    "yearOfPlenty",
+    "victoryPoint",
+    "knight",
+    "knight",
+    "roadBuilding",
+    "knight",
+    "knight",
+    "victoryPoint",
+    "yearOfPlenty",
+    "knight",
+    "knight",
+    "victoryPoint",
+    "knight",
+    "knight",
+    "knight",
+  ],
+  "harbors": [
+    {
+      "edge": "e67",
+      "type": "generic",
+    },
+    {
+      "edge": "e54",
+      "type": "generic",
+    },
+    {
+      "edge": "e33",
+      "type": "lumber",
+    },
+    {
+      "edge": "e6",
+      "type": "generic",
+    },
+    {
+      "edge": "e2",
+      "type": "generic",
+    },
+    {
+      "edge": "e5",
+      "type": "wool",
+    },
+    {
+      "edge": "e32",
+      "type": "grain",
+    },
+    {
+      "edge": "e53",
+      "type": "ore",
+    },
+    {
+      "edge": "e71",
+      "type": "brick",
+    },
+  ],
+  "hexes": [
+    {
+      "id": 0,
+      "number": 4,
+      "terrain": "forest",
+    },
+    {
+      "id": 1,
+      "number": 8,
+      "terrain": "mountains",
+    },
+    {
+      "id": 2,
+      "number": 11,
+      "terrain": "fields",
+    },
+    {
+      "id": 3,
+      "number": 3,
+      "terrain": "forest",
+    },
+    {
+      "id": 4,
+      "number": 5,
+      "terrain": "hills",
+    },
+    {
+      "id": 5,
+      "number": 2,
+      "terrain": "forest",
+    },
+    {
+      "id": 6,
+      "number": 8,
+      "terrain": "pasture",
+    },
+    {
+      "id": 7,
+      "number": 9,
+      "terrain": "fields",
+    },
+    {
+      "id": 8,
+      "number": 3,
+      "terrain": "pasture",
+    },
+    {
+      "id": 9,
+      "number": 6,
+      "terrain": "mountains",
+    },
+    {
+      "id": 10,
+      "number": null,
+      "terrain": "desert",
+    },
+    {
+      "id": 11,
+      "number": 12,
+      "terrain": "pasture",
+    },
+    {
+      "id": 12,
+      "number": 6,
+      "terrain": "fields",
+    },
+    {
+      "id": 13,
+      "number": 11,
+      "terrain": "hills",
+    },
+    {
+      "id": 14,
+      "number": 10,
+      "terrain": "mountains",
+    },
+    {
+      "id": 15,
+      "number": 4,
+      "terrain": "pasture",
+    },
+    {
+      "id": 16,
+      "number": 10,
+      "terrain": "hills",
+    },
+    {
+      "id": 17,
+      "number": 9,
+      "terrain": "fields",
+    },
+    {
+      "id": 18,
+      "number": 5,
+      "terrain": "forest",
+    },
+  ],
+  "lastLog": [
+    "Everyone rolls the dice — the highest roll goes first.",
+  ],
+  "logSeq": 1,
+  "phase": "ORDER_ROLL",
+  "players": [
+    {
+      "citiesBuilt": 0,
+      "color": "#d8392b",
+      "devCards": [],
+      "knightsPlayed": 0,
+      "resources": {
+        "brick": 0,
+        "grain": 0,
+        "lumber": 0,
+        "ore": 0,
+        "wool": 0,
+      },
+      "roadsBuilt": 0,
+      "settlementsBuilt": 0,
+    },
+    {
+      "citiesBuilt": 0,
+      "color": "#2f6fd6",
+      "devCards": [],
+      "knightsPlayed": 0,
+      "resources": {
+        "brick": 0,
+        "grain": 0,
+        "lumber": 0,
+        "ore": 0,
+        "wool": 0,
+      },
+      "roadsBuilt": 0,
+      "settlementsBuilt": 0,
+    },
+    {
+      "citiesBuilt": 0,
+      "color": "#f4f1e8",
+      "devCards": [],
+      "knightsPlayed": 0,
+      "resources": {
+        "brick": 0,
+        "grain": 0,
+        "lumber": 0,
+        "ore": 0,
+        "wool": 0,
+      },
+      "roadsBuilt": 0,
+      "settlementsBuilt": 0,
+    },
+  ],
+  "rng": -327281508,
+  "roads": {},
+  "robberHex": 10,
+  "turn": 0,
+  "turnOrder": [
+    0,
+    1,
+    2,
+  ],
+  "winner": null,
+}
+`;
+
+exports[`base game regression > beginner board is unchanged 1`] = `
+{
+  "harbors": [
+    {
+      "edge": "e33",
+      "type": "generic",
+    },
+    {
+      "edge": "e10",
+      "type": "wool",
+    },
+    {
+      "edge": "e1",
+      "type": "generic",
+    },
+    {
+      "edge": "e5",
+      "type": "ore",
+    },
+    {
+      "edge": "e22",
+      "type": "generic",
+    },
+    {
+      "edge": "e48",
+      "type": "grain",
+    },
+    {
+      "edge": "e71",
+      "type": "brick",
+    },
+    {
+      "edge": "e68",
+      "type": "generic",
+    },
+    {
+      "edge": "e62",
+      "type": "lumber",
+    },
+  ],
+  "hexes": [
+    {
+      "id": 0,
+      "number": 10,
+      "terrain": "mountains",
+    },
+    {
+      "id": 1,
+      "number": 2,
+      "terrain": "pasture",
+    },
+    {
+      "id": 2,
+      "number": 9,
+      "terrain": "forest",
+    },
+    {
+      "id": 3,
+      "number": 12,
+      "terrain": "fields",
+    },
+    {
+      "id": 4,
+      "number": 6,
+      "terrain": "hills",
+    },
+    {
+      "id": 5,
+      "number": 4,
+      "terrain": "pasture",
+    },
+    {
+      "id": 6,
+      "number": 10,
+      "terrain": "hills",
+    },
+    {
+      "id": 7,
+      "number": 9,
+      "terrain": "fields",
+    },
+    {
+      "id": 8,
+      "number": 11,
+      "terrain": "forest",
+    },
+    {
+      "id": 9,
+      "number": null,
+      "terrain": "desert",
+    },
+    {
+      "id": 10,
+      "number": 3,
+      "terrain": "forest",
+    },
+    {
+      "id": 11,
+      "number": 8,
+      "terrain": "mountains",
+    },
+    {
+      "id": 12,
+      "number": 8,
+      "terrain": "forest",
+    },
+    {
+      "id": 13,
+      "number": 3,
+      "terrain": "mountains",
+    },
+    {
+      "id": 14,
+      "number": 4,
+      "terrain": "fields",
+    },
+    {
+      "id": 15,
+      "number": 5,
+      "terrain": "pasture",
+    },
+    {
+      "id": 16,
+      "number": 5,
+      "terrain": "hills",
+    },
+    {
+      "id": 17,
+      "number": 6,
+      "terrain": "fields",
+    },
+    {
+      "id": 18,
+      "number": 11,
+      "terrain": "pasture",
+    },
+  ],
+  "robberHex": 9,
+}
+`;
+
+exports[`base game regression > bot game easy/medium seed 11 plays out identically 1`] = `
+{
+  "game": {
+    "bank": {
+      "brick": 18,
+      "grain": 19,
+      "lumber": 15,
+      "ore": 17,
+      "wool": 18,
+    },
+    "buildings": {
+      "v16": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v17": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v19": {
+        "owner": 0,
+        "type": "settlement",
+      },
+      "v28": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v45": {
+        "owner": 0,
+        "type": "settlement",
+      },
+      "v8": {
+        "owner": 1,
+        "type": "city",
+      },
+    },
+    "devDeck": [
+      "victoryPoint",
+      "knight",
+      "knight",
+      "victoryPoint",
+      "monopoly",
+      "victoryPoint",
+      "knight",
+      "yearOfPlenty",
+      "monopoly",
+      "knight",
+      "knight",
+      "knight",
+      "roadBuilding",
+      "knight",
+      "roadBuilding",
+      "knight",
+      "victoryPoint",
+      "knight",
+      "yearOfPlenty",
+      "knight",
+      "victoryPoint",
+      "knight",
+      "knight",
+    ],
+    "harbors": [
+      {
+        "edge": "e71",
+        "type": "wool",
+      },
+      {
+        "edge": "e68",
+        "type": "generic",
+      },
+      {
+        "edge": "e62",
+        "type": "brick",
+      },
+      {
+        "edge": "e33",
+        "type": "generic",
+      },
+      {
+        "edge": "e10",
+        "type": "ore",
+      },
+      {
+        "edge": "e1",
+        "type": "generic",
+      },
+      {
+        "edge": "e5",
+        "type": "generic",
+      },
+      {
+        "edge": "e22",
+        "type": "lumber",
+      },
+      {
+        "edge": "e48",
+        "type": "grain",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 11,
+        "terrain": "mountains",
+      },
+      {
+        "id": 1,
+        "number": 10,
+        "terrain": "pasture",
+      },
+      {
+        "id": 2,
+        "number": 6,
+        "terrain": "forest",
+      },
+      {
+        "id": 3,
+        "number": 5,
+        "terrain": "fields",
+      },
+      {
+        "id": 4,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 5,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 6,
+        "number": 12,
+        "terrain": "fields",
+      },
+      {
+        "id": 7,
+        "number": 8,
+        "terrain": "hills",
+      },
+      {
+        "id": 8,
+        "number": 5,
+        "terrain": "pasture",
+      },
+      {
+        "id": 9,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 10,
+        "number": 9,
+        "terrain": "hills",
+      },
+      {
+        "id": 11,
+        "number": 8,
+        "terrain": "fields",
+      },
+      {
+        "id": 12,
+        "number": 2,
+        "terrain": "fields",
+      },
+      {
+        "id": 13,
+        "number": 3,
+        "terrain": "pasture",
+      },
+      {
+        "id": 14,
+        "number": 10,
+        "terrain": "pasture",
+      },
+      {
+        "id": 15,
+        "number": 3,
+        "terrain": "hills",
+      },
+      {
+        "id": 16,
+        "number": 9,
+        "terrain": "mountains",
+      },
+      {
+        "id": 17,
+        "number": 11,
+        "terrain": "forest",
+      },
+      {
+        "id": 18,
+        "number": 6,
+        "terrain": "mountains",
+      },
+    ],
+    "lastLog": [
+      "Bot1 offers 1 lumber for 1 brick.",
+      "Bot1 traded 1 lumber to Bot0 for 1 brick.",
+      "Bot1 built a road.",
+      "Bot1 takes Longest Road (5).",
+      "Bot1 wins with 10 points!",
+    ],
+    "logSeq": 217,
+    "phase": "GAME_OVER",
+    "players": [
+      {
+        "citiesBuilt": 0,
+        "color": "#d8392b",
+        "devCards": [
+          {
+            "boughtTurn": 44,
+            "type": "knight",
+          },
+        ],
+        "knightsPlayed": 1,
+        "resources": {
+          "brick": 1,
+          "grain": 0,
+          "lumber": 3,
+          "ore": 2,
+          "wool": 1,
+        },
+        "roadsBuilt": 2,
+        "settlementsBuilt": 2,
+      },
+      {
+        "citiesBuilt": 4,
+        "color": "#2f6fd6",
+        "devCards": [],
+        "knightsPlayed": 0,
+        "resources": {
+          "brick": 0,
+          "grain": 0,
+          "lumber": 1,
+          "ore": 0,
+          "wool": 0,
+        },
+        "roadsBuilt": 6,
+        "settlementsBuilt": 4,
+      },
+    ],
+    "rng": -1188823035,
+    "roads": {
+      "e12": 1,
+      "e13": 1,
+      "e19": 1,
+      "e24": 1,
+      "e25": 1,
+      "e30": 0,
+      "e34": 1,
+      "e59": 0,
+    },
+    "robberHex": 16,
+    "turn": 53,
+    "turnOrder": [
+      1,
+      0,
+    ],
+    "winner": 1,
+  },
+  "rejected": 0,
+  "steps": 216,
+}
+`;
+
+exports[`base game regression > bot game hard/hard/medium/easy seed 33 plays out identically 1`] = `
+{
+  "game": {
+    "bank": {
+      "brick": 15,
+      "grain": 18,
+      "lumber": 7,
+      "ore": 11,
+      "wool": 0,
+    },
+    "buildings": {
+      "v10": {
+        "owner": 0,
+        "type": "settlement",
+      },
+      "v12": {
+        "owner": 2,
+        "type": "city",
+      },
+      "v22": {
+        "owner": 3,
+        "type": "city",
+      },
+      "v23": {
+        "owner": 2,
+        "type": "city",
+      },
+      "v24": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v31": {
+        "owner": 2,
+        "type": "city",
+      },
+      "v33": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v34": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v35": {
+        "owner": 0,
+        "type": "settlement",
+      },
+      "v41": {
+        "owner": 2,
+        "type": "city",
+      },
+      "v42": {
+        "owner": 2,
+        "type": "settlement",
+      },
+      "v43": {
+        "owner": 3,
+        "type": "settlement",
+      },
+      "v44": {
+        "owner": 0,
+        "type": "city",
+      },
+      "v9": {
+        "owner": 0,
+        "type": "city",
+      },
+    },
+    "devDeck": [
+      "knight",
+      "knight",
+      "roadBuilding",
+      "victoryPoint",
+      "knight",
+      "knight",
+      "knight",
+      "yearOfPlenty",
+      "victoryPoint",
+      "knight",
+      "knight",
+      "roadBuilding",
+      "knight",
+      "victoryPoint",
+      "knight",
+      "knight",
+      "monopoly",
+    ],
+    "harbors": [
+      {
+        "edge": "e38",
+        "type": "generic",
+      },
+      {
+        "edge": "e61",
+        "type": "brick",
+      },
+      {
+        "edge": "e70",
+        "type": "ore",
+      },
+      {
+        "edge": "e66",
+        "type": "wool",
+      },
+      {
+        "edge": "e49",
+        "type": "grain",
+      },
+      {
+        "edge": "e23",
+        "type": "generic",
+      },
+      {
+        "edge": "e0",
+        "type": "generic",
+      },
+      {
+        "edge": "e3",
+        "type": "lumber",
+      },
+      {
+        "edge": "e9",
+        "type": "generic",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 1,
+        "number": 4,
+        "terrain": "hills",
+      },
+      {
+        "id": 2,
+        "number": 6,
+        "terrain": "pasture",
+      },
+      {
+        "id": 3,
+        "number": 9,
+        "terrain": "hills",
+      },
+      {
+        "id": 4,
+        "number": 5,
+        "terrain": "pasture",
+      },
+      {
+        "id": 5,
+        "number": 10,
+        "terrain": "fields",
+      },
+      {
+        "id": 6,
+        "number": 2,
+        "terrain": "fields",
+      },
+      {
+        "id": 7,
+        "number": 3,
+        "terrain": "hills",
+      },
+      {
+        "id": 8,
+        "number": 9,
+        "terrain": "mountains",
+      },
+      {
+        "id": 9,
+        "number": 6,
+        "terrain": "pasture",
+      },
+      {
+        "id": 10,
+        "number": 11,
+        "terrain": "mountains",
+      },
+      {
+        "id": 11,
+        "number": 3,
+        "terrain": "fields",
+      },
+      {
+        "id": 12,
+        "number": 4,
+        "terrain": "fields",
+      },
+      {
+        "id": 13,
+        "number": 10,
+        "terrain": "forest",
+      },
+      {
+        "id": 14,
+        "number": 11,
+        "terrain": "forest",
+      },
+      {
+        "id": 15,
+        "number": 8,
+        "terrain": "pasture",
+      },
+      {
+        "id": 16,
+        "number": 8,
+        "terrain": "forest",
+      },
+      {
+        "id": 17,
+        "number": 5,
+        "terrain": "forest",
+      },
+      {
+        "id": 18,
+        "number": 12,
+        "terrain": "mountains",
+      },
+    ],
+    "lastLog": [
+      "Bot2 received 2 wool.",
+      "Bot3 received 1 lumber.",
+      "Bot2 built a road.",
+      "Bot2 takes Longest Road (5).",
+      "Bot2 wins with 11 points!",
+    ],
+    "logSeq": 541,
+    "phase": "GAME_OVER",
+    "players": [
+      {
+        "citiesBuilt": 2,
+        "color": "#d8392b",
+        "devCards": [],
+        "knightsPlayed": 0,
+        "resources": {
+          "brick": 0,
+          "grain": 1,
+          "lumber": 9,
+          "ore": 0,
+          "wool": 2,
+        },
+        "roadsBuilt": 4,
+        "settlementsBuilt": 4,
+      },
+      {
+        "citiesBuilt": 3,
+        "color": "#2f6fd6",
+        "devCards": [
+          {
+            "boughtTurn": 34,
+            "type": "victoryPoint",
+          },
+          {
+            "boughtTurn": 38,
+            "type": "victoryPoint",
+          },
+        ],
+        "knightsPlayed": 1,
+        "resources": {
+          "brick": 0,
+          "grain": 0,
+          "lumber": 1,
+          "ore": 2,
+          "wool": 3,
+        },
+        "roadsBuilt": 5,
+        "settlementsBuilt": 3,
+      },
+      {
+        "citiesBuilt": 4,
+        "color": "#f4f1e8",
+        "devCards": [
+          {
+            "boughtTurn": 65,
+            "type": "knight",
+          },
+        ],
+        "knightsPlayed": 1,
+        "resources": {
+          "brick": 1,
+          "grain": 0,
+          "lumber": 0,
+          "ore": 3,
+          "wool": 13,
+        },
+        "roadsBuilt": 10,
+        "settlementsBuilt": 5,
+      },
+      {
+        "citiesBuilt": 1,
+        "color": "#f08a1c",
+        "devCards": [
+          {
+            "boughtTurn": 19,
+            "type": "monopoly",
+          },
+          {
+            "boughtTurn": 67,
+            "type": "knight",
+          },
+        ],
+        "knightsPlayed": 0,
+        "resources": {
+          "brick": 3,
+          "grain": 0,
+          "lumber": 2,
+          "ore": 3,
+          "wool": 1,
+        },
+        "roadsBuilt": 2,
+        "settlementsBuilt": 2,
+      },
+    ],
+    "rng": 530013006,
+    "roads": {
+      "e15": 0,
+      "e16": 0,
+      "e19": 2,
+      "e24": 3,
+      "e26": 2,
+      "e27": 2,
+      "e35": 2,
+      "e36": 1,
+      "e39": 1,
+      "e40": 1,
+      "e41": 1,
+      "e43": 2,
+      "e44": 1,
+      "e46": 2,
+      "e47": 2,
+      "e51": 0,
+      "e52": 2,
+      "e53": 2,
+      "e57": 0,
+      "e59": 2,
+      "e62": 3,
+    },
+    "robberHex": 1,
+    "turn": 73,
+    "turnOrder": [
+      2,
+      1,
+      3,
+      0,
+    ],
+    "winner": 2,
+  },
+  "rejected": 0,
+  "steps": 462,
+}
+`;
+
+exports[`base game regression > bot game medium/hard/easy seed 22 plays out identically 1`] = `
+{
+  "game": {
+    "bank": {
+      "brick": 16,
+      "grain": 18,
+      "lumber": 18,
+      "ore": 13,
+      "wool": 14,
+    },
+    "buildings": {
+      "v16": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v23": {
+        "owner": 2,
+        "type": "settlement",
+      },
+      "v28": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v35": {
+        "owner": 0,
+        "type": "city",
+      },
+      "v43": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v44": {
+        "owner": 1,
+        "type": "city",
+      },
+      "v45": {
+        "owner": 2,
+        "type": "city",
+      },
+      "v7": {
+        "owner": 0,
+        "type": "city",
+      },
+      "v8": {
+        "owner": 0,
+        "type": "city",
+      },
+    },
+    "devDeck": [
+      "knight",
+      "knight",
+      "victoryPoint",
+      "knight",
+      "knight",
+      "roadBuilding",
+      "yearOfPlenty",
+      "victoryPoint",
+      "knight",
+      "roadBuilding",
+      "monopoly",
+      "knight",
+      "victoryPoint",
+      "knight",
+      "victoryPoint",
+      "monopoly",
+      "knight",
+      "yearOfPlenty",
+      "knight",
+    ],
+    "harbors": [
+      {
+        "edge": "e61",
+        "type": "generic",
+      },
+      {
+        "edge": "e70",
+        "type": "generic",
+      },
+      {
+        "edge": "e67",
+        "type": "generic",
+      },
+      {
+        "edge": "e49",
+        "type": "generic",
+      },
+      {
+        "edge": "e23",
+        "type": "grain",
+      },
+      {
+        "edge": "e6",
+        "type": "ore",
+      },
+      {
+        "edge": "e3",
+        "type": "brick",
+      },
+      {
+        "edge": "e9",
+        "type": "wool",
+      },
+      {
+        "edge": "e32",
+        "type": "lumber",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 6,
+        "terrain": "fields",
+      },
+      {
+        "id": 1,
+        "number": 12,
+        "terrain": "mountains",
+      },
+      {
+        "id": 2,
+        "number": 2,
+        "terrain": "forest",
+      },
+      {
+        "id": 3,
+        "number": 11,
+        "terrain": "fields",
+      },
+      {
+        "id": 4,
+        "number": 4,
+        "terrain": "pasture",
+      },
+      {
+        "id": 5,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 6,
+        "number": 5,
+        "terrain": "hills",
+      },
+      {
+        "id": 7,
+        "number": 8,
+        "terrain": "mountains",
+      },
+      {
+        "id": 8,
+        "number": 3,
+        "terrain": "mountains",
+      },
+      {
+        "id": 9,
+        "number": 9,
+        "terrain": "fields",
+      },
+      {
+        "id": 10,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 11,
+        "number": 9,
+        "terrain": "hills",
+      },
+      {
+        "id": 12,
+        "number": 10,
+        "terrain": "forest",
+      },
+      {
+        "id": 13,
+        "number": 10,
+        "terrain": "forest",
+      },
+      {
+        "id": 14,
+        "number": 8,
+        "terrain": "hills",
+      },
+      {
+        "id": 15,
+        "number": 11,
+        "terrain": "pasture",
+      },
+      {
+        "id": 16,
+        "number": 6,
+        "terrain": "fields",
+      },
+      {
+        "id": 17,
+        "number": 5,
+        "terrain": "pasture",
+      },
+      {
+        "id": 18,
+        "number": 3,
+        "terrain": "pasture",
+      },
+    ],
+    "lastLog": [
+      "Bot1 rolled 5.",
+      "Bot1 received 2 wool.",
+      "Bot2 received 2 wool.",
+      "Bot1 upgraded a settlement to a city.",
+      "Bot1 wins with 10 points!",
+    ],
+    "logSeq": 396,
+    "phase": "GAME_OVER",
+    "players": [
+      {
+        "citiesBuilt": 3,
+        "color": "#d8392b",
+        "devCards": [],
+        "knightsPlayed": 0,
+        "resources": {
+          "brick": 3,
+          "grain": 0,
+          "lumber": 1,
+          "ore": 0,
+          "wool": 1,
+        },
+        "roadsBuilt": 5,
+        "settlementsBuilt": 3,
+      },
+      {
+        "citiesBuilt": 4,
+        "color": "#2f6fd6",
+        "devCards": [
+          {
+            "boughtTurn": 41,
+            "type": "knight",
+          },
+        ],
+        "knightsPlayed": 3,
+        "resources": {
+          "brick": 0,
+          "grain": 1,
+          "lumber": 0,
+          "ore": 6,
+          "wool": 2,
+        },
+        "roadsBuilt": 5,
+        "settlementsBuilt": 4,
+      },
+      {
+        "citiesBuilt": 1,
+        "color": "#f4f1e8",
+        "devCards": [
+          {
+            "boughtTurn": 1,
+            "type": "victoryPoint",
+          },
+        ],
+        "knightsPlayed": 1,
+        "resources": {
+          "brick": 0,
+          "grain": 0,
+          "lumber": 0,
+          "ore": 0,
+          "wool": 2,
+        },
+        "roadsBuilt": 2,
+        "settlementsBuilt": 2,
+      },
+    ],
+    "rng": 1985507926,
+    "roads": {
+      "e11": 0,
+      "e12": 0,
+      "e24": 1,
+      "e34": 1,
+      "e35": 2,
+      "e43": 0,
+      "e44": 0,
+      "e45": 0,
+      "e55": 1,
+      "e56": 1,
+      "e57": 1,
+      "e58": 2,
+    },
+    "robberHex": 0,
+    "turn": 65,
+    "turnOrder": [
+      2,
+      1,
+      0,
+    ],
+    "winner": 1,
+  },
+  "rejected": 0,
+  "steps": 357,
+}
+`;
+
+exports[`base game regression > random boards are unchanged 1`] = `
+[
+  {
+    "harbors": [
+      {
+        "edge": "e17",
+        "type": "generic",
+      },
+      {
+        "edge": "e38",
+        "type": "generic",
+      },
+      {
+        "edge": "e61",
+        "type": "ore",
+      },
+      {
+        "edge": "e69",
+        "type": "grain",
+      },
+      {
+        "edge": "e66",
+        "type": "lumber",
+      },
+      {
+        "edge": "e49",
+        "type": "generic",
+      },
+      {
+        "edge": "e18",
+        "type": "wool",
+      },
+      {
+        "edge": "e0",
+        "type": "brick",
+      },
+      {
+        "edge": "e3",
+        "type": "generic",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 12,
+        "terrain": "pasture",
+      },
+      {
+        "id": 1,
+        "number": 11,
+        "terrain": "pasture",
+      },
+      {
+        "id": 2,
+        "number": 4,
+        "terrain": "pasture",
+      },
+      {
+        "id": 3,
+        "number": 3,
+        "terrain": "hills",
+      },
+      {
+        "id": 4,
+        "number": 4,
+        "terrain": "fields",
+      },
+      {
+        "id": 5,
+        "number": 6,
+        "terrain": "mountains",
+      },
+      {
+        "id": 6,
+        "number": 5,
+        "terrain": "forest",
+      },
+      {
+        "id": 7,
+        "number": 2,
+        "terrain": "mountains",
+      },
+      {
+        "id": 8,
+        "number": 3,
+        "terrain": "fields",
+      },
+      {
+        "id": 9,
+        "number": 11,
+        "terrain": "fields",
+      },
+      {
+        "id": 10,
+        "number": 10,
+        "terrain": "pasture",
+      },
+      {
+        "id": 11,
+        "number": 9,
+        "terrain": "forest",
+      },
+      {
+        "id": 12,
+        "number": 8,
+        "terrain": "forest",
+      },
+      {
+        "id": 13,
+        "number": 9,
+        "terrain": "hills",
+      },
+      {
+        "id": 14,
+        "number": 10,
+        "terrain": "mountains",
+      },
+      {
+        "id": 15,
+        "number": 8,
+        "terrain": "forest",
+      },
+      {
+        "id": 16,
+        "number": 5,
+        "terrain": "fields",
+      },
+      {
+        "id": 17,
+        "number": 6,
+        "terrain": "hills",
+      },
+      {
+        "id": 18,
+        "number": null,
+        "terrain": "desert",
+      },
+    ],
+    "robberHex": 18,
+  },
+  {
+    "harbors": [
+      {
+        "edge": "e0",
+        "type": "generic",
+      },
+      {
+        "edge": "e3",
+        "type": "generic",
+      },
+      {
+        "edge": "e9",
+        "type": "generic",
+      },
+      {
+        "edge": "e38",
+        "type": "wool",
+      },
+      {
+        "edge": "e61",
+        "type": "lumber",
+      },
+      {
+        "edge": "e70",
+        "type": "ore",
+      },
+      {
+        "edge": "e66",
+        "type": "brick",
+      },
+      {
+        "edge": "e49",
+        "type": "grain",
+      },
+      {
+        "edge": "e23",
+        "type": "generic",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 6,
+        "terrain": "pasture",
+      },
+      {
+        "id": 1,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 2,
+        "number": 8,
+        "terrain": "fields",
+      },
+      {
+        "id": 3,
+        "number": 9,
+        "terrain": "forest",
+      },
+      {
+        "id": 4,
+        "number": 5,
+        "terrain": "fields",
+      },
+      {
+        "id": 5,
+        "number": 9,
+        "terrain": "mountains",
+      },
+      {
+        "id": 6,
+        "number": 10,
+        "terrain": "forest",
+      },
+      {
+        "id": 7,
+        "number": 6,
+        "terrain": "pasture",
+      },
+      {
+        "id": 8,
+        "number": 5,
+        "terrain": "pasture",
+      },
+      {
+        "id": 9,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 10,
+        "number": 8,
+        "terrain": "fields",
+      },
+      {
+        "id": 11,
+        "number": 11,
+        "terrain": "mountains",
+      },
+      {
+        "id": 12,
+        "number": 3,
+        "terrain": "hills",
+      },
+      {
+        "id": 13,
+        "number": 3,
+        "terrain": "mountains",
+      },
+      {
+        "id": 14,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 15,
+        "number": 11,
+        "terrain": "pasture",
+      },
+      {
+        "id": 16,
+        "number": 10,
+        "terrain": "hills",
+      },
+      {
+        "id": 17,
+        "number": 2,
+        "terrain": "hills",
+      },
+      {
+        "id": 18,
+        "number": 12,
+        "terrain": "fields",
+      },
+    ],
+    "robberHex": 14,
+  },
+  {
+    "harbors": [
+      {
+        "edge": "e38",
+        "type": "generic",
+      },
+      {
+        "edge": "e61",
+        "type": "generic",
+      },
+      {
+        "edge": "e70",
+        "type": "lumber",
+      },
+      {
+        "edge": "e66",
+        "type": "brick",
+      },
+      {
+        "edge": "e49",
+        "type": "grain",
+      },
+      {
+        "edge": "e23",
+        "type": "ore",
+      },
+      {
+        "edge": "e0",
+        "type": "wool",
+      },
+      {
+        "edge": "e3",
+        "type": "generic",
+      },
+      {
+        "edge": "e9",
+        "type": "generic",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 3,
+        "terrain": "pasture",
+      },
+      {
+        "id": 1,
+        "number": 5,
+        "terrain": "mountains",
+      },
+      {
+        "id": 2,
+        "number": 2,
+        "terrain": "hills",
+      },
+      {
+        "id": 3,
+        "number": 6,
+        "terrain": "fields",
+      },
+      {
+        "id": 4,
+        "number": 10,
+        "terrain": "mountains",
+      },
+      {
+        "id": 5,
+        "number": 11,
+        "terrain": "hills",
+      },
+      {
+        "id": 6,
+        "number": 9,
+        "terrain": "forest",
+      },
+      {
+        "id": 7,
+        "number": 3,
+        "terrain": "forest",
+      },
+      {
+        "id": 8,
+        "number": 5,
+        "terrain": "forest",
+      },
+      {
+        "id": 9,
+        "number": 4,
+        "terrain": "fields",
+      },
+      {
+        "id": 10,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 11,
+        "number": 8,
+        "terrain": "pasture",
+      },
+      {
+        "id": 12,
+        "number": 6,
+        "terrain": "fields",
+      },
+      {
+        "id": 13,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 14,
+        "number": 9,
+        "terrain": "fields",
+      },
+      {
+        "id": 15,
+        "number": 11,
+        "terrain": "hills",
+      },
+      {
+        "id": 16,
+        "number": 10,
+        "terrain": "mountains",
+      },
+      {
+        "id": 17,
+        "number": 8,
+        "terrain": "pasture",
+      },
+      {
+        "id": 18,
+        "number": 12,
+        "terrain": "pasture",
+      },
+    ],
+    "robberHex": 10,
+  },
+  {
+    "harbors": [
+      {
+        "edge": "e32",
+        "type": "brick",
+      },
+      {
+        "edge": "e53",
+        "type": "grain",
+      },
+      {
+        "edge": "e71",
+        "type": "wool",
+      },
+      {
+        "edge": "e67",
+        "type": "lumber",
+      },
+      {
+        "edge": "e54",
+        "type": "generic",
+      },
+      {
+        "edge": "e33",
+        "type": "generic",
+      },
+      {
+        "edge": "e6",
+        "type": "generic",
+      },
+      {
+        "edge": "e2",
+        "type": "generic",
+      },
+      {
+        "edge": "e5",
+        "type": "ore",
+      },
+    ],
+    "hexes": [
+      {
+        "id": 0,
+        "number": 11,
+        "terrain": "fields",
+      },
+      {
+        "id": 1,
+        "number": 5,
+        "terrain": "forest",
+      },
+      {
+        "id": 2,
+        "number": 4,
+        "terrain": "forest",
+      },
+      {
+        "id": 3,
+        "number": 5,
+        "terrain": "hills",
+      },
+      {
+        "id": 4,
+        "number": null,
+        "terrain": "desert",
+      },
+      {
+        "id": 5,
+        "number": 9,
+        "terrain": "hills",
+      },
+      {
+        "id": 6,
+        "number": 10,
+        "terrain": "fields",
+      },
+      {
+        "id": 7,
+        "number": 3,
+        "terrain": "mountains",
+      },
+      {
+        "id": 8,
+        "number": 10,
+        "terrain": "pasture",
+      },
+      {
+        "id": 9,
+        "number": 8,
+        "terrain": "hills",
+      },
+      {
+        "id": 10,
+        "number": 11,
+        "terrain": "forest",
+      },
+      {
+        "id": 11,
+        "number": 8,
+        "terrain": "mountains",
+      },
+      {
+        "id": 12,
+        "number": 6,
+        "terrain": "fields",
+      },
+      {
+        "id": 13,
+        "number": 4,
+        "terrain": "mountains",
+      },
+      {
+        "id": 14,
+        "number": 9,
+        "terrain": "pasture",
+      },
+      {
+        "id": 15,
+        "number": 2,
+        "terrain": "pasture",
+      },
+      {
+        "id": 16,
+        "number": 3,
+        "terrain": "pasture",
+      },
+      {
+        "id": 17,
+        "number": 12,
+        "terrain": "forest",
+      },
+      {
+        "id": 18,
+        "number": 6,
+        "terrain": "fields",
+      },
+    ],
+    "robberHex": 4,
+  },
+]
+`;
