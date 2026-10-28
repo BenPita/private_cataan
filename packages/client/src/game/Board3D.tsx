@@ -10,7 +10,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { boardGraph, type PlayerView } from '@hex/engine';
+import { boardGraph, graphFor, type PlayerView } from '@hex/engine';
 import { S, type BoardProps } from './Board';
 import { createDice } from './dice3d';
 import { diag } from '../diag';
@@ -223,7 +223,7 @@ type Hit = { kind: 'vertex' | 'edge' | 'hex'; id: string | number };
 
 function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) {
   /** Graph of the board on the table; set by setBoard, used by every other method. */
-  let G = boardGraph({ layout: 'classic' } as Parameters<typeof boardGraph>[0]);
+  let G = graphFor('classic');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
