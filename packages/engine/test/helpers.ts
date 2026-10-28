@@ -12,6 +12,7 @@ import {
   type Action,
   type BotDifficulty,
   type BotMemory,
+  type GameConfig,
   type GameState,
   type ResMap,
 } from '../src';
@@ -135,10 +136,11 @@ interface Result {
 }
 
 /** Runs a game where every seat is a bot. Bots only ever see their own view. */
-export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 8000): Result {
+export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 8000, config: Partial<GameConfig> = {}): Result {
   let s = createGame(
     levels.map((difficulty, i) => ({ name: `Bot${i}`, kind: 'bot' as const, difficulty })),
     seed,
+    config,
   );
   const rng = new Rng(seed * 7 + 1);
   const memory: BotMemory[] = levels.map(() => ({}));
