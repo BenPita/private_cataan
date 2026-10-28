@@ -2,11 +2,17 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } 
 import {
   RESOURCES,
   modFor,
+  hasShips,
   legalCities,
   legalRoads,
   legalSettlements,
   legalSetupRoads,
   legalSetupSettlements,
+  legalSetupShips,
+  legalShipMoves,
+  legalShips,
+  movableShips,
+  totalRes,
   TERRAIN_RESOURCE,
   type Action,
   type ResMap,
@@ -40,6 +46,7 @@ import {
   BuildSheet,
   DevSheet,
   DiscardSheet,
+  GoldSheet,
   IncomingTrade,
   OrderRollPanel,
   PlayerStrip,
@@ -53,6 +60,14 @@ import {
 } from './Panels';
 
 type SheetName = 'build' | 'trade' | 'dev' | 'log' | 'menu' | 'help' | 'exit' | null;
+
+/** What the confirm bar offers: one action, or (road or ship on a coastal edge) two. */
+interface Confirm {
+  label: ReactNode;
+  action: Action;
+  okLabel?: string;
+  alt?: { label: string; action: Action };
+}
 
 function Die({ value, rolling, tone }: { value: number; rolling: boolean; tone: 'red' | 'yellow' }) {
   const spots: Record<number, Array<[number, number]>> = {
@@ -106,6 +121,10 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   const [inspect, setInspect] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [boardMode, setBoardMode] = useState<BoardMode>(getBoardMode);
+  /** Seafarers "move ship": the ship picked to sail (null while choosing one). */
+  const [moveFrom, setMoveFrom] = useState<string | null>(null);
+  const mod = modFor(view);
+  const sea = hasShips(mod);
 
   // Cards that fly from producing lands to each player's hand.
   const boardApi = useRef<BoardApi | null>(null);
@@ -174,6 +193,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     setSelection(null);
     if (view.phase !== 'MAIN_ACTIONS' || !myTurn) setMode(null);
   }, [view.phase, view.currentPlayer, view.freeRoads, myTurn]);
+  useEffect(() => setMoveFrom(null), [mode, view.phase, view.currentPlayer]);
 
 
   // Dice animation + production highlight, triggered by a new roll id.
@@ -240,38 +260,110 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     if (view.phase === 'GAME_OVER') sfx.win();
   }, [view.phase]);
 
-  const targets: BoardTargets = useMemo(() => {
-    if (!myTurn) return {};
+  /**
+   * Edges for a setup piece or a free Road Building piece: roads and (Seafarers)
+   * ships. A coastal edge can be both, so the player then picks which.
+   */
+  const pieceEdges = useMemo((): { road: string[]; ship: string[] } | null => {
+    if (!myTurn) return null;
     if (view.phase === 'INITIAL_PLACEMENT') {
       const last = view.setup?.lastSettlement;
-      return last ? { edges: legalSetupRoads(view, last) } : { vertices: legalSetupSettlements(view) };
+      if (!last) return null;
+      return { road: legalSetupRoads(view, last), ship: sea ? legalSetupShips(view, last) : [] };
     }
+    if (view.freeRoads > 0) {
+      const p = view.players[me];
+      const roadsLeft = mod.pieceLimits.roads - p.roadsBuilt;
+      const shipsLeft = (mod.pieceLimits.ships ?? 0) - p.shipsBuilt;
+      return {
+        road: roadsLeft > 0 ? legalRoads(view, me) : [],
+        ship: sea && shipsLeft > 0 ? legalShips(view, me) : [],
+      };
+    }
+    return null;
+  }, [view, myTurn, me, sea, mod]);
+  const shipChoice = !!pieceEdges && pieceEdges.ship.length > 0;
+
+  const targets: BoardTargets = useMemo(() => {
+    if (!myTurn) return {};
+    if (pieceEdges) return { edges: [...new Set([...pieceEdges.road, ...pieceEdges.ship])] };
+    if (view.phase === 'INITIAL_PLACEMENT') return view.setup?.lastSettlement ? {} : { vertices: legalSetupSettlements(view) };
     if (view.phase === 'ROBBER_MOVE') {
-      return { hexes: view.board.hexes.map((h) => h.id).filter((h) => h !== view.board.robberHex) };
+      // Robber on land; with ships, the pirate on any other sea hex.
+      const hexes = view.board.hexes.filter((h) => h.terrain !== 'sea' && h.id !== view.board.robberHex).map((h) => h.id);
+      if (view.board.pirateHex === undefined) return { hexes };
+      const pirateHexes = view.board.hexes.filter((h) => h.terrain === 'sea' && h.id !== view.board.pirateHex).map((h) => h.id);
+      return { hexes, pirateHexes };
     }
-    if (view.freeRoads > 0) return { edges: legalRoads(view, me) };
     if (view.phase === 'MAIN_ACTIONS') {
       if (mode === 'road') return { edges: legalRoads(view, me) };
+      if (mode === 'ship') return { edges: legalShips(view, me) };
+      if (mode === 'moveShip') return { edges: moveFrom ? legalShipMoves(view, me, moveFrom) : view.shipMoved ? [] : movableShips(view, me) };
       if (mode === 'settlement') return { vertices: legalSettlements(view, me) };
       if (mode === 'city') return { vertices: legalCities(view, me) };
     }
     return {};
-  }, [view, myTurn, mode, me]);
+  }, [view, myTurn, mode, me, pieceEdges, moveFrom]);
 
-  const confirmFor = (sel: Selection): { label: ReactNode; action: Action } | null => {
+  // Moving a ship: the first tap picks the ship, the second where it sails.
+  const onSelect = (sel: Selection) => {
+    if (mode === 'moveShip' && !moveFrom && sel?.kind === 'edge') {
+      setMoveFrom(sel.id);
+      setSelection(null);
+      return;
+    }
+    setSelection(sel);
+  };
+
+  /** Road, ship, or a choice of both for a setup / free piece on `edge`. */
+  const pieceConfirm = (
+    edge: string,
+    road: Action,
+    ship: Action,
+    labels: { road: string; ship: string; both: string },
+  ): Confirm | null => {
+    const canRoad = pieceEdges?.road.includes(edge) ?? false;
+    const canShip = pieceEdges?.ship.includes(edge) ?? false;
+    if (canRoad && canShip) return { label: labels.both, action: road, okLabel: t('road'), alt: { label: `⛵ ${t('ship')}`, action: ship } };
+    if (canShip) return { label: labels.ship, action: ship };
+    return { label: labels.road, action: road };
+  };
+
+  const confirmFor = (sel: Selection): Confirm | null => {
     if (!sel) return null;
-    const costs = modFor(view).costs;
+    const costs = mod.costs;
     if (view.phase === 'INITIAL_PLACEMENT') {
       if (sel.kind === 'vertex') return { label: t('confirmSetupSettlement'), action: { type: 'placeSetupSettlement', vertex: sel.id } };
-      if (sel.kind === 'edge') return { label: t('confirmSetupRoad'), action: { type: 'placeSetupRoad', edge: sel.id } };
+      if (sel.kind === 'edge') {
+        return pieceConfirm(
+          sel.id,
+          { type: 'placeSetupRoad', edge: sel.id },
+          { type: 'placeSetupRoad', edge: sel.id, ship: true },
+          { road: t('confirmSetupRoad'), ship: t('confirmSetupShip'), both: t('roadOrShip') },
+        );
+      }
     }
     if (view.phase === 'ROBBER_MOVE' && sel.kind === 'hex') {
+      if (view.board.hexes[sel.id].terrain === 'sea') return { label: t('confirmPirate'), action: { type: 'movePirate', hex: sel.id } };
       return {
         label: t('confirmRobber', { terrain: terrainName(view.board.hexes[sel.id].terrain) }),
         action: { type: 'moveRobber', hex: sel.id },
       };
     }
-    if (view.freeRoads > 0 && sel.kind === 'edge') return { label: t('confirmFreeRoad'), action: { type: 'placeFreeRoad', edge: sel.id } };
+    if (view.freeRoads > 0 && sel.kind === 'edge') {
+      return pieceConfirm(
+        sel.id,
+        { type: 'placeFreeRoad', edge: sel.id },
+        { type: 'placeFreeRoad', edge: sel.id, ship: true },
+        { road: t('confirmFreeRoad'), ship: t('confirmFreeShip'), both: t('freeRoadOrShip') },
+      );
+    }
+    if (mode === 'ship' && sel.kind === 'edge' && costs.ship) {
+      return { label: <>{t('confirmShip')} <ResList res={costs.ship} />?</>, action: { type: 'buildShip', edge: sel.id } };
+    }
+    if (mode === 'moveShip' && moveFrom && sel.kind === 'edge') {
+      return { label: t('confirmMoveShip'), action: { type: 'moveShip', from: moveFrom, to: sel.id } };
+    }
     if (mode === 'road' && sel.kind === 'edge') {
       return { label: <>{t('confirmRoad')} <ResList res={costs.road} />?</>, action: { type: 'buildRoad', edge: sel.id } };
     }
@@ -288,7 +380,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     view,
     targets,
     selection,
-    onSelect: setSelection,
+    onSelect,
     highlightHexes: highlight,
     onInspectHex: setInspect,
     apiRef: boardApi,
@@ -296,9 +388,16 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
 
   const currentName = names[view.currentPlayer];
   const pendingDiscard = view.pendingDiscards[me];
+  const pendingGold = view.pendingGold?.[me];
+  const goldRequired = pendingGold === undefined ? 0 : Math.min(pendingGold, totalRes(view.bank));
   const hint = (() => {
     if (view.phase === 'GAME_OVER') return t('hintGameOver');
     if (view.phase === 'ORDER_ROLL') return t('hintOrderRoll');
+    if (view.phase === 'GOLD_CHOICE') {
+      if (pendingGold !== undefined) return t('hintGold', { n: goldRequired });
+      const waiting = Object.keys(view.pendingGold ?? {}).map((p) => names[Number(p)]);
+      return t('hintWaitGold', { names: waiting.join(getLang() === 'he' ? ' ו' : ' and ') });
+    }
     if (!myTurn) {
       if (view.phase === 'ROBBER_DISCARD') return pendingDiscard ? t('hintDiscard', { n: pendingDiscard }) : t('hintWaitDiscards');
       if (view.phase === 'INITIAL_PLACEMENT') return t('hintPlacing', { name: currentName });
@@ -307,17 +406,19 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     }
     switch (view.phase) {
       case 'INITIAL_PLACEMENT':
-        return view.setup?.lastSettlement ? t('hintPlaceRoad') : t('hintPlaceSettlement');
+        if (!view.setup?.lastSettlement) return t('hintPlaceSettlement');
+        return shipChoice ? t('hintPlaceRoadOrShip') : t('hintPlaceRoad');
       case 'PRE_ROLL':
         return t('hintRoll');
       case 'ROBBER_DISCARD':
         return pendingDiscard ? t('hintDiscard', { n: pendingDiscard }) : t('hintWaitDiscards');
       case 'ROBBER_MOVE':
-        return t('hintMoveRobber');
+        return view.board.pirateHex !== undefined ? t('hintMoveRobberPirate') : t('hintMoveRobber');
       case 'ROBBER_STEAL':
         return t('hintSteal');
       default:
-        if (view.freeRoads > 0) return t('hintFreeRoads', { n: view.freeRoads });
+        if (view.freeRoads > 0) return sea ? t('hintFreePieces', { n: view.freeRoads }) : t('hintFreeRoads', { n: view.freeRoads });
+        if (mode === 'moveShip') return moveFrom ? t('hintShipTo') : t('hintPickShip');
         if (mode) return t('hintBuildMode');
         return view.paired ? t('pairedBannerMe') : t('hintMain');
     }
@@ -352,6 +453,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
             {terrainName(view.board.hexes[inspect].terrain)}
             {view.board.hexes[inspect].number ? ` · ${view.board.hexes[inspect].number}` : ''}
             {view.board.robberHex === inspect ? ` · ${t('robberHere')}` : ''}
+            {view.board.pirateHex === inspect ? ` · ${t('pirateHere')}` : ''}
           </div>
         )}
         {dice && (
@@ -386,18 +488,21 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
               <button className="btn ghost" onClick={() => setSelection(null)}>
                 {t('cancel')}
               </button>
-              <button
-                className="btn primary"
-                disabled={busy}
-                onClick={async () => {
-                  if (await dispatch(confirm.action)) {
-                    setSelection(null);
-                    if (confirm.action.type.startsWith('build')) setMode(null);
-                  }
-                }}
-              >
-                {t('confirm')}
-              </button>
+              {[...(confirm.alt ? [confirm.alt] : []), { label: confirm.okLabel ?? t('confirm'), action: confirm.action }].map((choice, i) => (
+                <button
+                  key={i}
+                  className="btn primary"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (await dispatch(choice.action)) {
+                      setSelection(null);
+                      if (choice.action.type.startsWith('build') || choice.action.type === 'moveShip') setMode(null);
+                    }
+                  }}
+                >
+                  {choice.label}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -483,6 +588,10 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       )}
       {pendingDiscard !== undefined && view.phase === 'ROBBER_DISCARD' && <DiscardSheet view={view} required={pendingDiscard} dispatch={dispatch} />}
       {myTurn && view.phase === 'ROBBER_STEAL' && <StealSheet view={view} dispatch={dispatch} />}
+      {pendingGold !== undefined && view.phase === 'GOLD_CHOICE' && goldRequired > 0 && (
+        <GoldSheet key={`${view.lastRoll?.id ?? 0}-${pendingGold}`} view={view} required={goldRequired} dispatch={dispatch} />
+      )}
+
       {incoming && <IncomingTrade view={view} dispatch={dispatch} />}
 
       {view.winner !== null && (

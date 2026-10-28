@@ -5,7 +5,7 @@
  * stolen card is shown face-up only to the thief and the victim.
  */
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { boardGraph, RESOURCES, type DevCardType, type LogItem, type PlayerView, type ResMap, type Resource } from '@hex/engine';
+import { boardGraph, hasShips, modFor, RESOURCES, type DevCardType, type LogItem, type PlayerView, type ResMap, type Resource } from '@hex/engine';
 import { DevCardFace } from '../art';
 import { devInfo, logText, t } from '../i18n';
 import { sfx } from '../sound';
@@ -28,6 +28,7 @@ interface Flight {
 type Banner =
   | { id: number; kind: 'card'; card: DevCardType; caption: string }
   | { id: number; kind: 'award'; img: string; title: string; caption: string }
+  | { id: number; kind: 'bonus'; title: string; caption: string }
   | { id: number; kind: 'turn' };
 
 type BannerInput = Banner extends infer B ? (B extends Banner ? Omit<B, 'id'> : never) : never;
@@ -62,12 +63,14 @@ function expand(res: Partial<ResMap> | undefined, max = 4): Resource[] {
 
 export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRefObject<BoardApi | null>) {
   const me = view.me!;
+  const sea = hasShips(modFor(view));
+
   const [flights, setFlights] = useState<Flight[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [puffs, setPuffs] = useState<Puff[]>([]);
   const nextId = useRef(0);
   const lastSeq = useRef<number>(Math.max(0, ...view.log.map((l) => l.seq ?? 0)));
-  const prevBoard = useRef({ buildings: view.buildings, roads: view.roads });
+  const prevBoard = useRef({ buildings: view.buildings, roads: view.roads, ships: view.ships ?? {} });
   const prevTurnKey = useRef(`${view.turn}-${view.currentPlayer}`);
 
   // --- Screen positions -----------------------------------------------------
@@ -168,7 +171,19 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
         setTimeout(() => sfx.award(), delay);
         break;
       case 'robberMoved':
+      case 'pirateMoved':
         setTimeout(() => sfx.robber(), delay + 250);
+        break;
+      case 'goldChosen': {
+        // Gold field: the chosen cards fly from the bank, like production.
+        expand(p.res).forEach((r, k) => fly(`/art/card-${r}.webp`, bank(), playerAt(p.p!, r), delay + k * 110));
+        if (p.p === me) setTimeout(() => sfx.gain(expand(p.res).length), delay);
+        else setTimeout(() => sfx.card(), delay);
+        break;
+      }
+      case 'regionBonus':
+        banner({ kind: 'bonus', title: t('bonusTitle', { n: p.n ?? 2 }), caption });
+        setTimeout(() => sfx.award(), delay);
         break;
       default:
         break;
@@ -178,7 +193,8 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
   // --- New pieces: dust puff and the right "clack" ------------------------------
   useEffect(() => {
     const before = prevBoard.current;
-    prevBoard.current = { buildings: view.buildings, roads: view.roads };
+    const ships = view.ships ?? {};
+    prevBoard.current = { buildings: view.buildings, roads: view.roads, ships };
     let sound: 'build' | 'city' | 'road' | null = null;
     const G = boardGraph(view.board);
     for (const [vertex, b] of Object.entries(view.buildings)) {
@@ -194,9 +210,16 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
       setTimeout(() => puff(boardPoint(e.x * S, e.y * S), false), 300);
       sound ??= 'road';
     }
+    // Ships (built, free or moved): the same wooden clack and dust as a road.
+    for (const [edge, owner] of Object.entries(ships)) {
+      if (before.ships[edge] === owner) continue;
+      const e = G.edges[edge];
+      setTimeout(() => puff(boardPoint(e.x * S, e.y * S), false), 300);
+      sound ??= 'road';
+    }
     if (sound) setTimeout(() => sfx[sound!](), 280);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view.buildings, view.roads]);
+  }, [view.buildings, view.roads, view.ships]);
 
   // --- "Your turn" --------------------------------------------------------------
   useEffect(() => {
@@ -249,8 +272,15 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
           {current.kind === 'card' && (
             <div className="fx-card-show">
               <div className="fx-card-face">
-                <DevCardFace type={current.card} title={devInfo(current.card).name} text={devInfo(current.card).text} />
+                <DevCardFace type={current.card} title={devInfo(current.card, sea).name} text={devInfo(current.card, sea).text} />
               </div>
+              <p>{current.caption}</p>
+            </div>
+          )}
+          {current.kind === 'bonus' && (
+            <div className="fx-award fx-bonus">
+              <span className="fx-bonus-coin">★</span>
+              <h3>{current.title}</h3>
               <p>{current.caption}</p>
             </div>
           )}

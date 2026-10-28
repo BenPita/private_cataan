@@ -5,9 +5,12 @@ import {
   devCardReady,
   emptyRes,
   hasRes,
+  hasShips,
   legalCities,
   legalRoads,
   legalSettlements,
+  legalShips,
+  movableShips,
   totalRes,
   tradeRates,
   type Action,
@@ -110,6 +113,7 @@ export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap
 }
 
 export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSeat[] }) {
+  const sea = hasShips(modFor(view));
   return (
     <div className={`player-strip${view.players.length > 4 ? ' many' : ''}`}>
       {view.turnOrder.map((i) => {
@@ -142,6 +146,7 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
                 {p.devCardCount}
               </span>
               <span title={t('knights')}>⚔ {p.knightsPlayed}</span>
+              {sea && <span title={t('ships')}>⛵ {p.shipsBuilt}</span>}
             </div>
             {(view.longestRoad.holder === i || view.largestArmy === i) && (
               <div className="chip-badges">
@@ -166,7 +171,8 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
 
 // --- Build ------------------------------------------------------------------
 
-export type BuildMode = 'road' | 'settlement' | 'city';
+/** Board modes of the build tray; `moveShip` picks one of your ships, then where it sails. */
+export type BuildMode = 'road' | 'settlement' | 'city' | 'ship' | 'moveShip';
 
 export function BuildSheet({
   view,
@@ -184,10 +190,16 @@ export function BuildSheet({
   const res = p.resources!;
   const canAct = view.currentPlayer === me && view.phase === 'MAIN_ACTIONS' && view.freeRoads === 0;
   const [confirmDev, setConfirmDev] = useState(false);
-  const { costs, pieceLimits } = modFor(view);
+  const mod = modFor(view);
+  const { costs, pieceLimits } = mod;
+  const sea = hasShips(mod);
+  const costOf = (key: BuildMode | 'devCard') => (key === 'moveShip' ? {} : key === 'ship' ? costs.ship ?? {} : costs[key]);
 
   const items: Array<{ key: BuildMode | 'devCard'; left: string; leftN: number; spots: number; reason: string | null }> = [
     { key: 'road', leftN: pieceLimits.roads - p.roadsBuilt, left: '', spots: legalRoads(view, me).length, reason: null },
+    ...(sea
+      ? [{ key: 'ship' as const, leftN: (pieceLimits.ships ?? 0) - p.shipsBuilt, left: '', spots: legalShips(view, me).length, reason: null }]
+      : []),
     {
       key: 'settlement',
       leftN: pieceLimits.settlements - (p.settlementsBuilt - p.citiesBuilt),
@@ -197,11 +209,13 @@ export function BuildSheet({
     },
     { key: 'city', leftN: pieceLimits.cities - p.citiesBuilt, left: '', spots: legalCities(view, me).length, reason: null },
     { key: 'devCard', leftN: view.devDeckCount, left: '', spots: view.devDeckCount, reason: null },
+    ...(sea ? [{ key: 'moveShip' as const, leftN: 1, left: '', spots: movableShips(view, me).length, reason: null }] : []),
   ];
   for (const it of items) {
-    it.left = it.key === 'devCard' ? t('inDeck', { n: it.leftN }) : t('left', { n: it.leftN });
-    const cost = costs[it.key];
+    it.left = it.key === 'devCard' ? t('inDeck', { n: it.leftN }) : it.key === 'moveShip' ? t('moveShipInfo') : t('left', { n: it.leftN });
+    const cost = costOf(it.key);
     if (!canAct) it.reason = view.currentPlayer !== me ? t('reasonNotTurn') : view.phase === 'PRE_ROLL' ? t('reasonRollFirst') : t('reasonNotNow');
+    else if (it.key === 'moveShip') it.reason = view.shipMoved ? t('reasonShipMoved') : it.spots === 0 ? t('reasonNoMovable') : null;
     else if (it.leftN <= 0) it.reason = it.key === 'devCard' ? t('reasonDeckEmpty') : t('reasonNoPieces');
     else if (it.spots === 0) it.reason = t('reasonNoSpot');
     else if (!hasRes(res, cost)) it.reason = t('reasonNoRes');
@@ -227,7 +241,7 @@ export function BuildSheet({
               <b>{t(it.key)}</b>
               <span className="muted">{it.left}</span>
             </div>
-            <ResList res={costs[it.key]} />
+            {it.key !== 'moveShip' && <ResList res={costOf(it.key)} />}
             {it.reason && <span className="reason">{it.reason}</span>}
           </button>
         ))}
@@ -546,7 +560,7 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
       <div className="dev-hand">
         {[...groups.entries()].map(([type, g]) => {
           const why = reason(type, g);
-          const info = devInfo(type);
+          const info = devInfo(type, hasShips(modFor(view)));
           return (
             <div key={type} className="dev-slot">
               <div className={`dev-stack ${g.total > 1 ? 'many' : ''}`}>
@@ -567,7 +581,33 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
   );
 }
 
+// --- Gold fields (Seafarers) ----------------------------------------------
+
+/** Like the discard dialog: pick `required` resources from the bank, limited by what it holds. */
+export function GoldSheet({ view, required, dispatch }: { view: PlayerView; required: number; dispatch: Dispatch }) {
+  const [pick, setPick] = useState<ResMap>(emptyRes());
+  const n = totalRes(pick);
+  const max = { ...view.bank };
+  for (const r of RESOURCES) max[r] = Math.min(view.bank[r], pick[r] + (required - n));
+  return (
+    <Sheet title={t('goldTitle', { n: required })}>
+      <p className="hint-text">{t('goldText', { n: required })}</p>
+      <ResCounter value={pick} onChange={setPick} max={max} owned={view.bank} />
+      <button
+        className="btn primary wide"
+        disabled={n !== required}
+        onClick={async () => {
+          if (await dispatch({ type: 'chooseGold', resources: pick })) setPick(emptyRes());
+        }}
+      >
+        {t('goldBtn', { k: n, n: required })}
+      </button>
+    </Sheet>
+  );
+}
+
 // --- Robber ---------------------------------------------------------------
+
 
 export function DiscardSheet({ view, required, dispatch }: { view: PlayerView; required: number; dispatch: Dispatch }) {
   const res = view.players[view.me!].resources!;
