@@ -466,9 +466,31 @@ export function resourcesText(res: Partial<ResMap>): string {
   return parts.length ? parts.join(', ') : t('nothing');
 }
 
+/** Bot names, same order in both languages: 25 men, then 25 women. */
+const BOT_NAMES: Record<Lang, string[]> = {
+  he: [
+    'יונתן', 'איתי', 'עומר', 'נועם', 'דניאל', 'אורי', 'אריאל', 'עידו', 'גיא', 'אלון',
+    'שחר', 'תומר', 'אביב', 'יואב', 'עמית', 'בן', 'אסף', 'ניר', 'שגיא', 'אדם',
+    'מתן', 'אלעד', 'טל', 'יהונתן', 'אייל',
+    'נועה', 'מאיה', 'תמר', 'שירה', 'יעל', 'מיכל', 'רוני', 'הילה', 'ליאור', 'עדי',
+    'שני', 'אביגיל', 'גלי', 'דנה', 'קרן', 'ענבל', 'מור', 'רותם', 'ליה', 'אלה',
+    'הדר', 'נטע', 'סהר', 'אורית', 'טליה',
+  ],
+  en: [
+    'Jonathan', 'Itai', 'Omer', 'Noam', 'Daniel', 'Uri', 'Ariel', 'Ido', 'Guy', 'Alon',
+    'Shahar', 'Tomer', 'Aviv', 'Yoav', 'Amit', 'Ben', 'Asaf', 'Nir', 'Sagi', 'Adam',
+    'Matan', 'Elad', 'Tal', 'Yehonatan', 'Eyal',
+    'Noa', 'Maya', 'Tamar', 'Shira', 'Yael', 'Michal', 'Roni', 'Hila', 'Lior', 'Adi',
+    'Shani', 'Avigail', 'Gali', 'Dana', 'Keren', 'Inbal', 'Mor', 'Rotem', 'Leah', 'Ella',
+    'Hadar', 'Neta', 'Sahar', 'Orit', 'Talia',
+  ],
+};
+
 /** Display name for a seat: bots get a translated, numbered name. */
 export function displayName(name: string | null | undefined, kind?: 'human' | 'bot'): string {
   if (kind === 'bot' && name) {
+    const pooled = name.match(/^Bot#(\d+)$/);
+    if (pooled) return BOT_NAMES[lang][Number(pooled[1]) % BOT_NAMES[lang].length];
     const m = name.match(/^Bot (\d+)$/);
     if (m) return t('botName', { n: m[1] });
   }

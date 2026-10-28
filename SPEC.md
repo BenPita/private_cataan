@@ -138,6 +138,16 @@ Read this file instead of the originals; consult them only for fine detail.
   ruleset (same rules, A→B→B→A setup, no neutral players), modular in
   `engine/src/rulesets.ts`.
 
+## Game screen look (2026-10-28)
+
+- Bots get random names from a pool of 25 men + 25 women (server stores `Bot#<index>`,
+  client shows the Hebrew/English name; old `Bot N` rooms still display). Names stay
+  put when the lobby config changes.
+- Whose turn: the active chip steps forward, a light sweeps across it, then it glows
+  slowly in the player's colour; other chips dim. Reduced motion keeps a static glow.
+- 3D: the wooden table is replaced by a procedural open-sea plane (drawn once, no
+  per-frame cost) with sea-haze fog. Hand panel is a deep lagoon blue instead of wood.
+
 ## Rules (classic base game)
 - 19 hexes (4 forest/lumber, 3 hills/brick, 4 pasture/wool, 4 fields/grain,
   3 mountains/ore, 1 desert), 3-4-5-4-3 layout; 18 number tokens; no adjacent 6/8;

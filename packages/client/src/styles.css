@@ -2058,3 +2058,94 @@ h3,
 .panel .help h3 {
   color: var(--gold-1);
 }
+
+/* ---------- Turn spotlight ---------- */
+/* Whose turn it is: the chip steps forward, catches a sweep of light, then
+   keeps a slow glow in the player's colour; everyone else steps back. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+.player-chip {
+  position: relative;
+  transition: transform 260ms var(--ease-out), opacity 260ms ease, filter 260ms ease;
+}
+.player-strip:has(.player-chip.active) .player-chip:not(.active) {
+  opacity: 0.68;
+  filter: saturate(0.6);
+}
+.player-chip.active {
+  transform: translateY(3px) scale(1.05);
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--pc), 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+.player-chip.active .pname {
+  text-shadow: 0 0 10px rgba(255, 214, 120, 0.95);
+}
+.player-chip.active::before,
+.player-chip.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.player-chip.active::before {
+  box-shadow: 0 0 16px 3px var(--pc), 0 0 4px 1px #fff6d8;
+  opacity: 0;
+  animation: turn-glow 2.4s ease-in-out 0.5s infinite alternate;
+}
+.player-chip.active::after {
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 252, 235, 0.85) 50%, transparent 62%) no-repeat;
+  background-size: 260% 100%;
+  animation: turn-sweep 900ms var(--ease-out) 120ms both;
+}
+@keyframes turn-glow {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes turn-sweep {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-chip.active {
+    transform: none;
+  }
+  .player-chip.active::before {
+    animation: none;
+    opacity: 0.8;
+  }
+  .player-chip.active::after {
+    animation: none;
+    background: none;
+  }
+}
+
+/* ---------- Hand panel: deep lagoon ---------- */
+.bottom {
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(120, 200, 220, 0.28), transparent 60%),
+    linear-gradient(180deg, #11486a 0%, #0b3150 55%, #072238 100%);
+  border-top: 1px solid rgba(240, 205, 130, 0.65);
+  box-shadow:
+    0 -10px 24px rgba(4, 20, 34, 0.45),
+    inset 0 1px 0 rgba(255, 240, 200, 0.25),
+    inset 0 2px 14px rgba(140, 220, 240, 0.12);
+}
+.hint {
+  color: #d9ecf2;
+}
+.hint.mine {
+  color: #fff4d6;
+}
+.hint .muted {
+  color: #9fc3d1;
+}

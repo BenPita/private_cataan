@@ -215,6 +215,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
             {snapshot.config.bots > 0 && (
               <BotLevels
                 levels={fitConfig(snapshot.config).botDifficulties}
+                names={snapshot.seats.filter((s) => s.kind === 'bot').map((s) => displayName(s.name, 'bot'))}
                 onChange={(botDifficulties) => setConfig({ botDifficulties })}
               />
             )}

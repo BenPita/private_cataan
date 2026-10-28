@@ -127,12 +127,27 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   };
 }
 
+/** Size of the bot name pool (the client maps each index to a real name). */
+const BOT_NAME_POOL = 50;
+
+/** Bot names for n seats: keeps the names bots already have, draws the rest at random. */
+function pickBotNames(n: number, existing: Seat[]): string[] {
+  const kept = existing.filter((s) => s.kind === 'bot' && s.name).map((s) => s.name!).slice(0, n);
+  const all = Array.from({ length: BOT_NAME_POOL }, (_, i) => `Bot#${i}`).filter((name) => !kept.includes(name));
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return [...kept, ...all.slice(0, n - kept.length)];
+}
+
 function buildSeats(config: RoomConfig, existing: Seat[] = []): Seat[] {
   const humans: Seat[] = existing.filter((s) => s.kind === 'human').slice(0, config.humans);
   while (humans.length < config.humans) humans.push({ kind: 'human', name: null, tokenHash: null, ready: false });
+  const names = pickBotNames(config.bots, existing);
   const bots: Seat[] = Array.from({ length: config.bots }, (_, i) => ({
     kind: 'bot',
-    name: `Bot ${i + 1}`,
+    name: names[i],
     tokenHash: null,
     ready: true,
     difficulty: config.botDifficulties?.[i] ?? config.difficulty,

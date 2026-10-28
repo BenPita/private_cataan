@@ -1,6 +1,6 @@
 /**
  * 3D board (three.js): the painted tiles become thick cardboard hexes inside a
- * sea frame resting on a wooden table, with wooden pieces, real shadows and a
+ * sea frame floating on an open sea, with wooden pieces, real shadows and a
  * tilted camera. Same props as the 2D board, so the game screen can swap them.
  *
  * Rendering is on demand: a frame is drawn only when something changed, the
@@ -137,6 +137,47 @@ function discTexture(n: number): THREE.CanvasTexture {
   return t;
 }
 
+/**
+ * Open-sea texture drawn once at start: deep water with tileable swell bands
+ * and soft wave crests. Doubles as a bump map so the sun leaves a glint that
+ * travels across the water as the camera turns.
+ */
+function oceanTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(S, S);
+  const TAU = Math.PI * 2;
+  // Integer frequencies keep every wave seamless across the tile edges.
+  const waves = [
+    [3, 1, 0.0, 0.34], [1, 4, 1.7, 0.26], [5, -2, 3.1, 0.18],
+    [-4, 7, 0.6, 0.12], [9, 5, 2.2, 0.07], [-11, 13, 4.4, 0.05],
+  ];
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const u = x / S;
+      const v = y / S;
+      let h = 0;
+      for (const [fx, fy, ph, amp] of waves) h += Math.sin(TAU * (fx * u + fy * v) + ph) * amp;
+      // Sharpen into crests: troughs stay broad and dark, peaks turn thin and bright.
+      const crest = Math.pow(Math.max(0, h + 0.55) / 1.6, 3);
+      const k = (y * S + x) * 4;
+      img.data[k] = 8 + crest * 70;
+      img.data[k + 1] = 62 + h * 14 + crest * 85;
+      img.data[k + 2] = 96 + h * 18 + crest * 75;
+      img.data[k + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(9, 9);
+  t.anisotropy = 4;
+  return t;
+}
+
 function flagTexture(type: string, onUpdate: () => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 200;
@@ -252,8 +293,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   document.addEventListener('visibilitychange', onVisible);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#2b1a0d');
-  scene.fog = new THREE.Fog('#2b1a0d', 18, 34);
+  // Open sea fading into a pale sea haze on the horizon.
+  scene.background = new THREE.Color('#6fa9be');
+  scene.fog = new THREE.Fog('#6fa9be', 16, 38);
 
   const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -265,7 +307,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   controls.zoomSpeed = 0.9;
 
   // Light: warm sun with soft shadows, sky/ground fill.
-  scene.add(new THREE.HemisphereLight('#dff1ff', '#8a6a40', 1.05));
+  scene.add(new THREE.HemisphereLight('#dff1ff', '#6a7f6c', 1.05));
   const sun = new THREE.DirectionalLight('#fff1d6', 2.1);
   sun.position.set(-4, 11, 6);
   sun.castShadow = true;
@@ -297,15 +339,17 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     return texCache.get(url)!;
   };
 
-  // Table
-  const table = new THREE.Mesh(
-    new THREE.PlaneGeometry(60, 60),
-    new THREE.MeshStandardMaterial({ map: cachedTex('/art/wood.webp', 14), roughness: 0.8 }),
+  // Open sea around the island board.
+  const oceanTex = oceanTexture();
+  oceanTex.anisotropy = maxAniso;
+  const ocean = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshStandardMaterial({ map: oceanTex, bumpMap: oceanTex, bumpScale: 1, roughness: 0.32, metalness: 0.08 }),
   );
-  table.rotation.x = -Math.PI / 2;
-  table.position.y = -0.16;
-  table.receiveShadow = true;
-  scene.add(table);
+  ocean.rotation.x = -Math.PI / 2;
+  ocean.position.y = -0.16;
+  ocean.receiveShadow = true;
+  scene.add(ocean);
 
   // Sea frame: a flat-topped hexagonal plate with the painted sea and beach on top.
   const FRAME_R = 5.45;
@@ -749,6 +793,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     clear(harborsGroup);
     renderer.dispose();
     texCache.forEach((t) => t.dispose());
+    oceanTex.dispose();
     // Give the GPU context back now instead of at garbage collection, so a
     // remount (language change, 2D/3D toggle) never stacks up live contexts.
     renderer.forceContextLoss();

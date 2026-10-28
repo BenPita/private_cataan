@@ -66,12 +66,21 @@ export function DifficultyPicker({ value, onChange }: { value: BotDifficulty; on
 }
 
 /** One level picker per bot. */
-export function BotLevels({ levels, onChange }: { levels: BotDifficulty[]; onChange: (levels: BotDifficulty[]) => void }) {
+export function BotLevels({
+  levels,
+  names,
+  onChange,
+}: {
+  levels: BotDifficulty[];
+  /** The bots' names once the room has drawn them. */
+  names?: string[];
+  onChange: (levels: BotDifficulty[]) => void;
+}) {
   return (
     <div className="bot-levels">
       {levels.map((level, i) => (
         <div key={i} className="seg">
-          <span>🤖 {t('botName', { n: i + 1 })}</span>
+          <span>🤖 {names?.[i] ?? t('botName', { n: i + 1 })}</span>
           <div className="seg-buttons">
             {(['easy', 'medium', 'hard'] as const).map((d) => (
               <button key={d} className={level === d ? 'on' : ''} onClick={() => onChange(levels.map((l, k) => (k === i ? d : l)))}>
