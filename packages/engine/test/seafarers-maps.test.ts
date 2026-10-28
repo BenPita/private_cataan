@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { NEW_SHORES_3P, NEW_SHORES_4P } from '../src/mods/seafarers/maps';
+import {
+  FOUR_ISLANDS_3P,
+  FOUR_ISLANDS_4P,
+  NEW_SHORES_3P,
+  NEW_SHORES_4P,
+  THROUGH_DESERT_3P,
+  THROUGH_DESERT_4P,
+} from '../src/mods/seafarers/maps';
 import { MAP_DIRS, type MapHex, type ScenarioMap } from '../src/mods/seafarers/mapTypes';
 
-/** Component tables printed next to each map (rulebook pp. 4-5). */
+/** Component tables printed next to each map (rulebook pp. 4-7, 10-11). */
 interface Table {
   terrain: Record<string, number>;
   discs: Record<number, number>;
@@ -23,6 +30,47 @@ const TABLE_4P: Table = {
   ports2to1: 5,
   ports3to1: 4,
 };
+
+const TABLE_FOUR_ISLANDS_3P: Table = {
+  terrain: { sea: 15, gold: 0, hills: 4, forest: 4, pasture: 4, fields: 4, mountains: 4, desert: 0 },
+  discs: { 2: 1, 3: 2, 4: 2, 5: 3, 6: 2, 8: 2, 9: 3, 10: 2, 11: 2, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 4,
+};
+
+const TABLE_FOUR_ISLANDS_4P: Table = {
+  terrain: { sea: 12, gold: 0, hills: 4, forest: 5, pasture: 5, fields: 5, mountains: 4, desert: 0 },
+  discs: { 2: 1, 3: 2, 4: 3, 5: 3, 6: 2, 8: 2, 9: 3, 10: 3, 11: 3, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 4,
+};
+
+const TABLE_DESERT_3P: Table = {
+  terrain: { sea: 10, gold: 2, hills: 3, forest: 5, pasture: 4, fields: 4, mountains: 4, desert: 3 },
+  discs: { 2: 1, 3: 2, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 2, 11: 1, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 3,
+};
+
+const TABLE_DESERT_4P: Table = {
+  terrain: { sea: 12, gold: 2, hills: 5, forest: 5, pasture: 5, fields: 5, mountains: 5, desert: 3 },
+  discs: { 2: 1, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 2 },
+  ports2to1: 5,
+  ports3to1: 4,
+};
+
+/** Per-scenario region expectations. */
+interface RegionSpec {
+  /** Non-island regions that must exist (islands 'isle1'.. are counted separately). */
+  named: string[];
+  /** Number of 'isleN' regions. */
+  isles: number;
+  /**
+   * A pair of regions allowed to touch, and only through hexes of this terrain
+   * (Through the Desert: the deserts, counted as 'main', border the 'strip').
+   */
+  touchVia?: { a: string; b: string; terrain: string };
+}
 
 const key = (q: number, r: number) => `${q},${r}`;
 const isLand = (h: MapHex | undefined) => h !== undefined && h.t !== 'sea';
@@ -57,7 +105,7 @@ function sideCorners(q: number, r: number, dir: number): [string, string] {
   return [c[a], c[b]];
 }
 
-function check(name: string, map: ScenarioMap, table: Table) {
+function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
   describe(name, () => {
     const byKey = new Map(map.hexes.map((h) => [key(h.q, h.r), h]));
 
@@ -119,18 +167,22 @@ function check(name: string, map: ScenarioMap, table: Table) {
       }
     });
 
-    it('robber starts on land; pirate starts on sea (here: the frame-printed sea hex)', () => {
+    it('frame-printed sea spaces lie outside the tiles and touch the map', () => {
+      const frame = map.frameSea ?? [];
+      expect(new Set(frame.map(([q, r]) => key(q, r))).size).toBe(frame.length);
+      for (const [q, r] of frame) {
+        expect(byKey.has(key(q, r)), `frame ${q},${r}`).toBe(false);
+        const nbrs = MAP_DIRS.map(([dq, dr]) => byKey.get(key(q + dq, r + dr))).filter((h) => h);
+        expect(nbrs.length, `frame ${q},${r}`).toBeGreaterThan(0);
+      }
+    });
+
+    it('robber starts on land; pirate starts on a sea tile or a frame-printed sea space', () => {
       expect(isLand(byKey.get(key(...map.robber)))).toBe(true);
       const [pq, pr] = map.pirate;
       const at = byKey.get(key(pq, pr));
-      if (at) {
-        expect(at.t).toBe('sea');
-      } else {
-        // On the frame (a sea hex printed on a frame piece): must touch the map.
-        const nbrs = MAP_DIRS.map(([dq, dr]) => byKey.get(key(pq + dq, pr + dr))).filter((h) => h);
-        expect(nbrs.length).toBeGreaterThan(0);
-        expect(nbrs.some((h) => h!.t === 'sea')).toBe(true);
-      }
+      if (at) expect(at.t).toBe('sea');
+      else expect((map.frameSea ?? []).some(([q, r]) => q === pq && r === pr)).toBe(true);
     });
 
     it('every land hex has a region, sea has none, and each region is connected', () => {
@@ -143,7 +195,10 @@ function check(name: string, map: ScenarioMap, table: Table) {
         expect(h.region, `${h.q},${h.r}`).toBeDefined();
         regions.set(h.region!, [...(regions.get(h.region!) ?? []), h]);
       }
-      expect(regions.has('main')).toBe(true);
+      for (const id of spec.named) expect(regions.has(id), id).toBe(true);
+      const isleIds = [...regions.keys()].filter((id) => id.startsWith('isle'));
+      expect(isleIds.length).toBe(spec.isles);
+      expect(regions.size).toBe(spec.named.length + spec.isles);
       for (const [id, hs] of regions) {
         const inRegion = new Set(hs.map((h) => key(h.q, h.r)));
         const seen = new Set([key(hs[0].q, hs[0].r)]);
@@ -159,16 +214,22 @@ function check(name: string, map: ScenarioMap, table: Table) {
           }
         }
         expect(seen.size, `region ${id} connected`).toBe(hs.length);
-        // distinct regions never touch (otherwise they would be one island)
+        // distinct regions never touch (otherwise they would be one island),
+        // except the declared pair, and then only through the declared terrain
+        const tv = spec.touchVia;
         for (const h of hs)
           for (const [dq, dr] of MAP_DIRS) {
             const n = byKey.get(key(h.q + dq, h.r + dr));
-            if (isLand(n)) expect(n!.region).toBe(id);
+            if (!isLand(n) || n!.region === id) continue;
+            const pair = new Set(tv ? [tv.a, tv.b] : []);
+            const allowed =
+              !!tv && pair.has(id) && pair.has(n!.region!) && (h.t === tv.terrain || n!.t === tv.terrain);
+            expect(allowed, `${id} ${h.q},${h.r} touches ${n!.region} ${n!.q},${n!.r}`).toBe(true);
           }
       }
       // small islands are numbered isle1.. top to bottom, then left to right
       const firsts = [...regions.entries()]
-        .filter(([id]) => id !== 'main')
+        .filter(([id]) => id.startsWith('isle'))
         .map(([id, hs]) => ({ id, h: hs[0] }));
       const ordered = [...firsts].sort((a, b) => a.h.r - b.h.r || a.h.q + a.h.r / 2 - (b.h.q + b.h.r / 2));
       expect(ordered.map((o) => o.id)).toEqual(ordered.map((_, i) => `isle${i + 1}`));
@@ -176,5 +237,37 @@ function check(name: string, map: ScenarioMap, table: Table) {
   });
 }
 
-check('Heading for New Shores, 3 players', NEW_SHORES_3P, TABLE_3P);
-check('Heading for New Shores, 4 players', NEW_SHORES_4P, TABLE_4P);
+const NEW_SHORES_REGIONS: RegionSpec = { named: ['main'], isles: 3 };
+const FOUR_ISLANDS_REGIONS: RegionSpec = { named: [], isles: 4 };
+const DESERT_REGIONS: RegionSpec = {
+  named: ['main', 'strip'],
+  isles: 3,
+  touchVia: { a: 'main', b: 'strip', terrain: 'desert' },
+};
+
+check('Heading for New Shores, 3 players', NEW_SHORES_3P, TABLE_3P, NEW_SHORES_REGIONS);
+check('Heading for New Shores, 4 players', NEW_SHORES_4P, TABLE_4P, NEW_SHORES_REGIONS);
+check('The Four Islands, 3 players', FOUR_ISLANDS_3P, TABLE_FOUR_ISLANDS_3P, FOUR_ISLANDS_REGIONS);
+check('The Four Islands, 4 players', FOUR_ISLANDS_4P, TABLE_FOUR_ISLANDS_4P, FOUR_ISLANDS_REGIONS);
+check('Through the Desert, 3 players', THROUGH_DESERT_3P, TABLE_DESERT_3P, DESERT_REGIONS);
+check('Through the Desert, 4 players', THROUGH_DESERT_4P, TABLE_DESERT_4P, DESERT_REGIONS);
+
+describe('Through the Desert: the deserts split the large island', () => {
+  for (const [name, map] of [
+    ['3 players', THROUGH_DESERT_3P],
+    ['4 players', THROUGH_DESERT_4P],
+  ] as const) {
+    it(`${name}: the strip borders only the deserts, which border both sides`, () => {
+      const byKey = new Map(map.hexes.map((h) => [key(h.q, h.r), h]));
+      const landNbrs = (h: MapHex) =>
+        MAP_DIRS.map(([dq, dr]) => byKey.get(key(h.q + dq, h.r + dr))).filter((n): n is MapHex => isLand(n));
+      const deserts = map.hexes.filter((h) => h.t === 'desert');
+      expect(deserts.length).toBe(3);
+      for (const d of deserts) expect(d.region).toBe('main');
+      for (const s of map.hexes.filter((h) => h.region === 'strip'))
+        for (const n of landNbrs(s)) if (n.region !== 'strip') expect(n.t).toBe('desert');
+      expect(deserts.some((d) => landNbrs(d).some((n) => n.region === 'strip'))).toBe(true);
+      expect(deserts.some((d) => landNbrs(d).some((n) => n.region === 'main' && n.t !== 'desert'))).toBe(true);
+    });
+  }
+});
