@@ -10,8 +10,9 @@
  *  - hard:   medium plus scarcity/harbor-aware placement, road planning
  *            several steps ahead, dev-card army race, leader-aware trading
  */
-import { COSTS, PIECE_LIMITS, TERRAIN_RESOURCE, devCardReady } from './rulesets';
-import { GRAPH } from './geometry';
+import { TERRAIN_RESOURCE, devCardReady } from './rulesets';
+import { boardGraph, type BoardGraph } from './geometry';
+import { modFor, type ModDef } from './mods';
 import {
   legalCities,
   legalRoads,
@@ -38,6 +39,9 @@ interface Ctx {
   res: ResMap;
   level: BotDifficulty;
   rand: Random;
+  /** The board's graph and the game's mod. */
+  g: BoardGraph;
+  mod: ModDef;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,10 +50,11 @@ interface Ctx {
 
 /** Total pips per resource the player currently produces. */
 function production(v: PlayerView, player: number): ResMap {
+  const G = boardGraph(v.board);
   const out = emptyRes();
   for (const [vertex, b] of Object.entries(v.buildings)) {
     if (b.owner !== player) continue;
-    for (const h of GRAPH.vertices[vertex].hexes) {
+    for (const h of G.vertices[vertex].hexes) {
       const tile = v.board.hexes[h];
       const r = TERRAIN_RESOURCE[tile.terrain];
       if (r && h !== v.board.robberHex) out[r] += pips(tile.number) * (b.type === 'city' ? 2 : 1);
@@ -71,7 +76,8 @@ function scarcity(v: PlayerView): ResMap {
 }
 
 function harborAt(v: PlayerView, vertex: string) {
-  return v.board.harbors.find((h) => GRAPH.edges[h.edge].vertices.includes(vertex));
+  const G = boardGraph(v.board);
+  return v.board.harbors.find((h) => G.edges[h.edge].vertices.includes(vertex));
 }
 
 /** Value of owning a settlement at `vertex`. */
@@ -80,7 +86,7 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
   const scarce = level === 'hard' ? scarcity(v) : null;
   let value = 0;
   const gained = new Set<Resource>();
-  for (const h of GRAPH.vertices[vertex].hexes) {
+  for (const h of c.g.vertices[vertex].hexes) {
     const tile = v.board.hexes[h];
     const r = TERRAIN_RESOURCE[tile.terrain];
     if (!r) continue;
@@ -106,7 +112,7 @@ function expansionTargets(c: Ctx, maxDepth: number): Array<{ vertex: string; dis
   const owned = production(v, me);
   const start = new Set<string>();
   for (const [vertex, b] of Object.entries(v.buildings)) if (b.owner === me) start.add(vertex);
-  for (const [edge, owner] of Object.entries(v.roads)) if (owner === me) GRAPH.edges[edge].vertices.forEach((x) => start.add(x));
+  for (const [edge, owner] of Object.entries(v.roads)) if (owner === me) c.g.edges[edge].vertices.forEach((x) => start.add(x));
 
   const seen = new Map<string, { dist: number; firstEdge: string }>();
   let frontier: Array<{ vertex: string; firstEdge: string }> = [...start]
@@ -119,9 +125,9 @@ function expansionTargets(c: Ctx, maxDepth: number): Array<{ vertex: string; dis
     for (const { vertex, firstEdge } of frontier) {
       const b = v.buildings[vertex];
       if (b && b.owner !== me) continue;
-      for (const e of GRAPH.vertices[vertex].edges) {
+      for (const e of c.g.vertices[vertex].edges) {
         if (v.roads[e] !== undefined && v.roads[e] !== me) continue;
-        const [a, bb] = GRAPH.edges[e].vertices;
+        const [a, bb] = c.g.edges[e].vertices;
         const other = a === vertex ? bb : a;
         if (seen.has(other)) continue;
         const fe = firstEdge || (v.roads[e] === undefined ? e : '');
@@ -165,9 +171,9 @@ function leader(c: Ctx): number {
 function piecesLeft(c: Ctx) {
   const p = c.v.players[c.me];
   return {
-    roads: PIECE_LIMITS.roads - p.roadsBuilt,
-    settlements: PIECE_LIMITS.settlements - (p.settlementsBuilt - p.citiesBuilt),
-    cities: PIECE_LIMITS.cities - p.citiesBuilt,
+    roads: c.mod.pieceLimits.roads - p.roadsBuilt,
+    settlements: c.mod.pieceLimits.settlements - (p.settlementsBuilt - p.citiesBuilt),
+    cities: c.mod.pieceLimits.cities - p.citiesBuilt,
   };
 }
 
@@ -189,8 +195,8 @@ function chooseGoal(c: Ctx): Goal | null {
   return null;
 }
 
-function goalCost(goal: Goal): Partial<ResMap> {
-  return goal === 'road' ? COSTS.road : COSTS[goal];
+function goalCost(c: Ctx, goal: Goal): Partial<ResMap> {
+  return c.mod.costs[goal];
 }
 
 function missingFor(res: ResMap, cost: Partial<ResMap>): ResMap {
@@ -225,8 +231,8 @@ function setupRoad(c: Ctx, settlement: string): Action {
   let best = edges[0];
   let bestValue = -1;
   for (const e of edges) {
-    const far = GRAPH.edges[e].vertices.find((x) => x !== settlement)!;
-    for (const n of GRAPH.vertices[far].neighbors) {
+    const far = c.g.edges[e].vertices.find((x) => x !== settlement)!;
+    for (const n of c.g.vertices[far].neighbors) {
       if (n === settlement || !satisfiesDistanceRule(c.v, n)) continue;
       const val = vertexValue(c, n);
       if (val > bestValue) {
@@ -240,7 +246,7 @@ function setupRoad(c: Ctx, settlement: string): Action {
 
 function discard(c: Ctx, count: number): Action {
   const goal = chooseGoal(c) ?? 'devCard';
-  const keep = goalCost(goal);
+  const keep = goalCost(c, goal);
   const out = emptyRes();
   const pool = { ...c.res };
   for (let i = 0; i < count; i++) {
@@ -263,7 +269,7 @@ function robberHex(c: Ctx): number {
       const owners = playersOnHex(v, h.id);
       if (owners.includes(me)) return { id: h.id, score: -100 };
       let score = 0;
-      for (const vert of GRAPH.hexes[h.id].vertices) {
+      for (const vert of c.g.hexes[h.id].vertices) {
         const b = v.buildings[vert];
         if (!b || b.owner === me) continue;
         const weight = c.level === 'hard' && b.owner === lead ? 1.8 : 1;
@@ -318,7 +324,7 @@ function mainPhaseDev(c: Ctx, goal: Goal | null): Action | null {
     return { type: 'playRoadBuilding' };
   }
   if (playableDev(c, 'yearOfPlenty') && goal) {
-    const miss = missingFor(c.res, goalCost(goal));
+    const miss = missingFor(c.res, goalCost(c, goal));
     const wanted = RESOURCES.flatMap((r) => Array(miss[r]).fill(r) as Resource[]).filter((r) => c.v.bank[r] > 0);
     if (wanted.length > 0) {
       const a = wanted[0];
@@ -328,7 +334,7 @@ function mainPhaseDev(c: Ctx, goal: Goal | null): Action | null {
   }
   if (playableDev(c, 'monopoly') && goal && c.level !== 'easy') {
     // Pick the resource we lack most; opponents' hands are hidden, so guess from what the board produces for them.
-    const miss = missingFor(c.res, goalCost(goal));
+    const miss = missingFor(c.res, goalCost(c, goal));
     const theirProd = emptyRes();
     for (const o of opponents(c)) {
       const p = production(c.v, o);
@@ -369,7 +375,7 @@ function bestRoad(c: Ctx): string | null {
 
 /** Bank/harbor trade toward the goal. */
 function bankTrade(c: Ctx, goal: Goal): Action | null {
-  const cost = goalCost(goal);
+  const cost = goalCost(c, goal);
   const miss = missingFor(c.res, cost);
   const need = RESOURCES.filter((r) => miss[r] > 0 && c.v.bank[r] > 0).sort((a, b) => miss[b] - miss[a]);
   if (!need.length) return null;
@@ -388,7 +394,7 @@ function bankTrade(c: Ctx, goal: Goal): Action | null {
 
 /** One player-trade proposal per turn: offer spare cards for a missing one. */
 function proposeTrade(c: Ctx, goal: Goal): Action | null {
-  const cost = goalCost(goal);
+  const cost = goalCost(c, goal);
   const miss = missingFor(c.res, cost);
   const need = RESOURCES.find((r) => miss[r] > 0);
   if (!need) return null;
@@ -408,7 +414,7 @@ function proposeTrade(c: Ctx, goal: Goal): Action | null {
 
 /** Value of a set of cards to this bot given its goal. */
 function cardsValue(c: Ctx, cards: ResMap, goal: Goal | null): number {
-  const cost = goal ? goalCost(goal) : {};
+  const cost = goal ? goalCost(c, goal) : {};
   const miss = missingFor(c.res, cost);
   let v = 0;
   for (const r of RESOURCES) {
@@ -428,14 +434,14 @@ function respondToTrade(c: Ctx): Action {
   const gain = cardsValue(c, t.give, goal);
   const after = { ...c.res };
   for (const r of RESOURCES) after[r] -= t.get[r];
-  const loss = cardsValue({ ...c, res: after }, t.get, goal) + (goal && !hasRes(after, goalCost(goal)) && hasRes(c.res, goalCost(goal)) ? 3 : 0);
+  const loss = cardsValue({ ...c, res: after }, t.get, goal) + (goal && !hasRes(after, goalCost(c, goal)) && hasRes(c.res, goalCost(c, goal)) ? 3 : 0);
   if (c.level === 'easy') return c.rand() < 0.5 ? { type: 'respondTrade', tradeId: t.id, response: 'accept' } : reject;
   if (gain > loss + (c.level === 'hard' ? 0.5 : 0)) return { type: 'respondTrade', tradeId: t.id, response: 'accept' };
   // Medium/hard: counter with a 1-for-1 using our spare card for what we need.
   if (goal) {
-    const miss = missingFor(c.res, goalCost(goal));
+    const miss = missingFor(c.res, goalCost(c, goal));
     const need = RESOURCES.find((r) => miss[r] > 0 && t.give[r] > 0);
-    const spare = surplus(c.res, goalCost(goal));
+    const spare = surplus(c.res, goalCost(c, goal));
     const give = RESOURCES.find((r) => r !== need && spare[r] > 0);
     if (need && give && !(c.v.trade!.counters[c.me])) {
       const g = emptyRes();
@@ -464,7 +470,7 @@ export function chooseBotAction(view: PlayerView, level: BotDifficulty, rand: Ra
   if (me === null || view.phase === 'GAME_OVER') return null;
   const res = view.players[me].resources;
   if (!res) return null;
-  const c: Ctx = { v: view, me, res, level, rand };
+  const c: Ctx = { v: view, me, res, level, rand, g: boardGraph(view.board), mod: modFor(view) };
 
   if (view.phase === 'ORDER_ROLL') {
     const group = view.orderRoll?.groups.find((g) => g.length > 1);
@@ -539,19 +545,19 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
 
   // Build whatever we can afford, best first.
   const left = piecesLeft(c);
-  if (left.cities > 0 && hasRes(c.res, COSTS.city)) {
+  if (left.cities > 0 && hasRes(c.res, c.mod.costs.city)) {
     const city = bestCity(c);
-    if (city && (goal === 'city' || goal !== 'settlement' || !hasRes(c.res, COSTS.settlement))) return { type: 'buildCity', vertex: city };
+    if (city && (goal === 'city' || goal !== 'settlement' || !hasRes(c.res, c.mod.costs.settlement))) return { type: 'buildCity', vertex: city };
   }
-  if (left.settlements > 0 && hasRes(c.res, COSTS.settlement)) {
+  if (left.settlements > 0 && hasRes(c.res, c.mod.costs.settlement)) {
     const spot = bestSettlement(c);
     if (spot) return { type: 'buildSettlement', vertex: spot };
   }
-  if (left.cities > 0 && hasRes(c.res, COSTS.city)) {
+  if (left.cities > 0 && hasRes(c.res, c.mod.costs.city)) {
     const city = bestCity(c);
     if (city) return { type: 'buildCity', vertex: city };
   }
-  if (goal === 'road' && left.roads > 0 && hasRes(c.res, COSTS.road)) {
+  if (goal === 'road' && left.roads > 0 && hasRes(c.res, c.mod.costs.road)) {
     const road = bestRoad(c);
     if (road) return { type: 'buildRoad', edge: road };
   }
@@ -560,10 +566,10 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
     const target = expansionTargets(c, 2)[0];
     if (target && legalSettlements(v, me).length < 2) return { type: 'buildRoad', edge: target.firstEdge };
   }
-  if ((goal === 'devCard' || (c.level !== 'easy' && hasRes(c.res, { ...COSTS.devCard, ore: 1 + (goal === 'city' ? 3 : 0) }))) && v.devDeckCount > 0 && hasRes(c.res, COSTS.devCard)) {
+  if ((goal === 'devCard' || (c.level !== 'easy' && hasRes(c.res, { ...c.mod.costs.devCard, ore: 1 + (goal === 'city' ? 3 : 0) }))) && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard)) {
     return { type: 'buyDevCard' };
   }
-  if (c.level === 'easy' && v.devDeckCount > 0 && hasRes(c.res, COSTS.devCard) && c.rand() < 0.5) return { type: 'buyDevCard' };
+  if (c.level === 'easy' && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard) && c.rand() < 0.5) return { type: 'buyDevCard' };
 
   if (goal) {
     const bank = bankTrade(c, goal);
