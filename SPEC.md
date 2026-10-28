@@ -237,6 +237,10 @@ classic coast; Home `fitConfig` clamps to 4 players; 2D `VIEW` size, sea art and
 fit/sea plane are sized for the 19-hex island (compute from graph bounds); Board3D's board effect
 should also depend on `board.layout`.
 
+## Seafarers (owner decisions 2026-10-29)
+Roadmap and rules summary: `docs/superpowers/plans/2026-10-29-seafarers.md` (stages S1–S7).
+2 participants play the official 3-player map; 5–6 use the Seafarers 5–6 maps with paired turns.
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be
