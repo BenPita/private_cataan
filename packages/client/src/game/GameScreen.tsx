@@ -85,6 +85,12 @@ function Die({ value, rolling, tone }: { value: number; rolling: boolean; tone: 
 }
 
 export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLang: (l: Lang) => void }) {
+  // Phone status/navigation bars follow theme-color: sea blue in game, warm sunset elsewhere.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    meta?.setAttribute('content', '#0e3b5c');
+    return () => meta?.setAttribute('content', '#9b3b26');
+  }, []);
   const view = snapshot.game!;
   const me = view.me!;
   const myTurn = view.currentPlayer === me && view.phase !== 'GAME_OVER' && view.phase !== 'ORDER_ROLL';

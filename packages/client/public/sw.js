@@ -1,6 +1,6 @@
 // Minimal service worker: makes the app installable and caches the shell.
 // Game state always comes live from the server.
-const CACHE = 'eden-island-v3';
+const CACHE = 'eden-island-v4';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll([
