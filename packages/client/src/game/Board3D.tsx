@@ -26,8 +26,8 @@ const U = 1 / S; // board units -> world units (hex radius = 1)
 const TILE_R = 0.965;
 const TILE_H = 0.12;
 const FRAME_TOP = 0;
-/** Colour of the painted sea at the frame's edge (sampled from sea.webp). */
-const SEA_COLOR = '#2396b0';
+/** Deep rim colour of the painted sea, where sea.webp fades out (sampled). */
+const SEA_COLOR = '#2394b0';
 const HIT_LAYER = 1;
 const PIPS: Record<number, number> = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
 
@@ -300,8 +300,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     return texCache.get(url)!;
   };
 
-  // Open sea around the board: one flat colour matching the painted sea's edge,
-  // just under the frame so the two read as one surface.
+  // Open sea: the painted sea image fades out in a circle into its own deep
+  // rim colour, and that colour carries on to the horizon, so the board's sea
+  // and the background are one surface with no edge.
   const ocean = new THREE.Mesh(
     new THREE.PlaneGeometry(120, 120),
     new THREE.MeshStandardMaterial({ color: SEA_COLOR, roughness: 0.55, metalness: 0.05 }),
@@ -311,12 +312,17 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   ocean.receiveShadow = true;
   scene.add(ocean);
 
-  // Sea frame: a flat-topped hexagonal plate with the painted sea and beach on top.
-  const FRAME_R = 5.45;
   const VIEW = 10.6;
+  const h = VIEW / 2;
   const frameTop = new THREE.Mesh(
-    fanGeometry(hexPoints(FRAME_R, 0), VIEW, VIEW),
-    new THREE.MeshStandardMaterial({ map: cachedTex('/art/sea.webp'), roughness: 0.55, metalness: 0.05 }),
+    fanGeometry([[h, h], [-h, h], [-h, -h], [h, -h]], VIEW, VIEW),
+    new THREE.MeshStandardMaterial({
+      map: cachedTex('/art/sea.webp'),
+      transparent: true,
+      depthWrite: false,
+      roughness: 0.55,
+      metalness: 0.05,
+    }),
   );
   frameTop.position.y = FRAME_TOP;
   frameTop.receiveShadow = true;

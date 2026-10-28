@@ -146,8 +146,9 @@ Read this file instead of the originals; consult them only for fine detail.
   them with `room:create`, so the host sees the same names before and after.
 - Whose turn: the active chip steps forward, a light sweeps across it, then it glows
   slowly in the player's colour; other chips dim. Reduced motion keeps a static glow.
-- 3D: the wooden table is gone; the board's painted turquoise sea carries on to the horizon as one flat
-  colour (owner rejected a separate wave texture). Hand panel is deep lagoon blue instead of wood.
+- 3D: the wooden table is gone. The painted sea (sea.webp) is drawn as a full square that fades out
+  into its own deep rim colour, which carries on to the horizon: one sea, no hex edge (owner
+  rejected both a wave texture and a hard edge). Hand panel is deep lagoon blue instead of wood.
 
 ## Rules (classic base game)
 - 19 hexes (4 forest/lumber, 3 hills/brick, 4 pasture/wool, 4 fields/grain,
