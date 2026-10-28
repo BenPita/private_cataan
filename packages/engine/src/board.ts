@@ -52,7 +52,7 @@ export function generateRandomBoard(rng: Rng): Board {
     }));
     if (hasAdjacentRedNumbers(hexes)) continue;
     const robberHex = hexes.find((h) => h.terrain === 'desert')!.id;
-    const board = { hexes, harbors: generateHarbors(rng), robberHex };
+    const board: Board = { layout: 'classic', hexes, harbors: generateHarbors(rng), robberHex };
     validateBoard(board);
     return board;
   }
@@ -77,7 +77,7 @@ export function generateBeginnerBoard(): Board {
     index += gap;
     return h;
   });
-  const board = { hexes, harbors, robberHex: hexes.find((h) => h.terrain === 'desert')!.id };
+  const board: Board = { layout: 'classic', hexes, harbors, robberHex: hexes.find((h) => h.terrain === 'desert')!.id };
   validateBoard(board);
   return board;
 }

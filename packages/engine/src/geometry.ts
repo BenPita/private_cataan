@@ -1,11 +1,14 @@
 /**
- * Static board graph for the classic 3-4-5-4-3 island.
+ * Board graphs. Each layout (list of axial hex coordinates) has its own graph;
+ * the classic one is the 3-4-5-4-3 island.
  *
  * Hexes use pointy-top axial coordinates. Vertices and edges are derived once
  * from hex corner positions and given stable, sorted ids ("v0".."v53",
  * "e0".."e71"). Rules code works only with this graph, never with pixels;
  * the pixel positions are exported for rendering.
  */
+
+import type { Board, LayoutId } from './types';
 
 export interface HexGeo {
   id: number;
@@ -47,7 +50,7 @@ export interface BoardGraph {
 
 const SQRT3 = Math.sqrt(3);
 
-function axialCoords(): Array<[number, number]> {
+function classicCoords(): Array<[number, number]> {
   const coords: Array<[number, number]> = [];
   for (let r = -2; r <= 2; r++) {
     for (let q = -2; q <= 2; q++) {
@@ -62,8 +65,7 @@ function key(x: number, y: number): string {
   return `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
 }
 
-function buildGraph(): BoardGraph {
-  const coords = axialCoords();
+function buildGraph(coords: Array<[number, number]>): BoardGraph {
   const rawVertices = new Map<string, { x: number; y: number; hexes: Set<number> }>();
   const hexCorners: string[][] = [];
 
@@ -177,4 +179,26 @@ function buildGraph(): BoardGraph {
   };
 }
 
-export const GRAPH: BoardGraph = buildGraph();
+const LAYOUTS: Record<LayoutId, () => Array<[number, number]>> = {
+  classic: classicCoords,
+};
+
+const graphs = new Map<LayoutId, BoardGraph>();
+
+/** The (cached) graph of a layout. Graphs are immutable; share freely. */
+export function graphFor(layout: LayoutId): BoardGraph {
+  let g = graphs.get(layout);
+  if (!g) {
+    g = buildGraph(LAYOUTS[layout]());
+    graphs.set(layout, g);
+  }
+  return g;
+}
+
+/** The graph a board is played on. */
+export function boardGraph(board: Pick<Board, 'layout'>): BoardGraph {
+  return graphFor(board.layout ?? 'classic');
+}
+
+/** The classic 19-hex graph. Kept for tests; game code uses boardGraph(). */
+export const GRAPH: BoardGraph = graphFor('classic');

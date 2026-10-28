@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRAPH, Rng, generateBeginnerBoard, generateRandomBoard, hasAdjacentRedNumbers, validateBoard } from '../src';
+import { GRAPH, Rng, boardGraph, graphFor, generateBeginnerBoard, generateRandomBoard, hasAdjacentRedNumbers, validateBoard } from '../src';
 
 describe('board graph', () => {
   it('has the classic island dimensions', () => {
@@ -48,5 +48,19 @@ describe('board generation', () => {
 
   it('offers a valid fixed beginner board', () => {
     expect(() => validateBoard(generateBeginnerBoard())).not.toThrow();
+  });
+});
+
+describe('board graphs per layout', () => {
+  it('classic layout graph equals the classic GRAPH and is memoised', () => {
+    expect(graphFor('classic')).toBe(GRAPH);
+    expect(graphFor('classic')).toBe(graphFor('classic'));
+  });
+  it('a board without a layout (old save) uses the classic graph', () => {
+    const board = generateBeginnerBoard();
+    expect(boardGraph({ ...board, layout: undefined })).toBe(GRAPH);
+  });
+  it('new boards name their layout', () => {
+    expect(generateBeginnerBoard().layout).toBe('classic');
   });
 });

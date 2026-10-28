@@ -36,7 +36,12 @@ export interface Harbor {
   type: HarborType;
 }
 
+/** Shape of the island; each layout has its own vertex/edge graph (geometry.ts). */
+export type LayoutId = 'classic';
+
 export interface Board {
+  /** Missing on games saved before mods existed → 'classic'. */
+  layout?: LayoutId;
   hexes: HexTile[];
   harbors: Harbor[];
   robberHex: number;
@@ -106,7 +111,14 @@ export interface LastRoll {
   gains: ResMap[];
 }
 
+/** Installed mods (engine/src/mods). 'base' = the classic base game. */
+export type ModId = 'base';
+
 export interface GameConfig {
+  /** Missing on games saved before mods existed → 'base'. */
+  mod?: ModId;
+  /** Rules version of the mod this game started with. */
+  modVersion?: number;
   victoryTarget: number;
   boardType: 'random' | 'beginner';
   /** House rule: the first settlement also gives starting resources (official: only the second). */
