@@ -23,11 +23,26 @@ def hex_centers():
     return out
 
 
-def sea_frame(path):
-    n = SEA_PX
+# 5-6 player island (engine layout 'classic56'): rows 3-4-5-6-5-4-3, first q per row.
+Q_START_56 = {-3: 0, -2: -1, -1: -2, 0: -3, 1: -3, 2: -3, 3: -3}
+VIEW_56 = 12.94 * S  # = 2 * (largest vertex coordinate + 0.97), as the client computes it
+
+
+def hex_centers_56():
+    raw = [(SQRT3 * (q + r / 2) * S, 1.5 * r * S)
+           for r in range(-3, 4) for q in range(Q_START_56[r], Q_START_56[r] + 6 - abs(r))]
+    cx = sum(x for x, _ in raw) / len(raw)
+    cy = sum(y for _, y in raw) / len(raw)
+    return [(x - cx, y - cy) for x, y in raw]
+
+
+def sea_frame(path, centers=None, view=VIEW):
+    """Painted sea + beach around an island; `view` is the board's view size in board units."""
+    centers = centers or hex_centers()
+    n = round(SEA_PX * view / VIEW)
     land = Image.new('L', (n, n), 0)
     d = ImageDraw.Draw(land)
-    for x, y in hex_centers():
+    for x, y in centers:
         cx, cy = n / 2 + x * K, n / 2 + y * K
         rr = S * K * 1.02
         d.polygon([(cx + rr * math.cos(math.radians(60 * i - 90)), cy + rr * math.sin(math.radians(60 * i - 90))) for i in range(6)], fill=255)
@@ -376,6 +391,7 @@ def parchment(path):
 def build(out_dir, only=None):
     jobs = {
         'sea': lambda: sea_frame(os.path.join(out_dir, 'sea.webp')),
+        'sea-56': lambda: sea_frame(os.path.join(out_dir, 'sea-56.webp'), hex_centers_56(), VIEW_56),
         **{f'card-{n}': (lambda n=n: resource_card(n, os.path.join(out_dir, f'card-{n}.webp'))) for n in RESOURCES},
         'dev-knight': lambda: dev_knight(os.path.join(out_dir, 'dev-knight.webp')),
         'dev-victoryPoint': lambda: dev_vp(os.path.join(out_dir, 'dev-victoryPoint.webp')),

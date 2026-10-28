@@ -1,5 +1,5 @@
 import type { CSSProperties, PointerEvent } from 'react';
-import { MODS, isModId, type ModId } from '@hex/engine';
+import { MODS, isModId, modPlayerRange, type ModId } from '@hex/engine';
 import type { RoomConfig } from '../net';
 import { getLang, t, type Key } from '../i18n';
 
@@ -18,6 +18,13 @@ const CATALOG: Array<{ id: string; tiles: [string, string, string]; sea?: boolea
 ];
 
 const modText = (id: string, suffix = '') => t(`mod_${id}${suffix}` as Key);
+
+/** Whether a mod can be played with this many participants. */
+const fitsMod = (id: string, n: number) => {
+  if (!isModId(id)) return false;
+  const { min, max } = modPlayerRange(MODS[id]);
+  return n >= min && n <= max;
+};
 
 /** Display name of a mod (lobby tag, etc.). */
 export const modName = (id: string | undefined) => modText(id ?? 'base');
@@ -107,21 +114,23 @@ export function ModPicker({
       <div className="card panel">
         <div className="mod-shelf" role="radiogroup" aria-label={t('modTitle')}>
           {CATALOG.filter((c) => c.box).map(({ id, box }) => {
-            const mod = isModId(id) ? MODS[id] : null;
-            const playable = mod !== null && participants >= mod.minPlayers && participants <= mod.maxPlayers;
+            const playable = fitsMod(id, participants);
             return <GameBox key={id} id={id} art={box!.art} side={box!.side} on={playable && selected === id} playable={playable} onPick={() => update({ mod: id as ModId })} />;
           })}
         </div>
         <div className="mod-detail" aria-live="polite">
           <b>{modText(selected)}</b>
           <small>{modText(selected, '_desc')}</small>
-          <span className="mod-meta">{t('modPlayers', { min: MODS[selected].minPlayers, max: MODS[selected].maxPlayers })}</span>
+          <span className="mod-meta">
+            {t('modPlayers', modPlayerRange(MODS[selected]))}
+            {participants > 4 && MODS[selected].large && <span className="tag-56">{t('mod56Tag')}</span>}
+          </span>
         </div>
 
         <div className="mod-list">
           {CATALOG.filter((c) => !c.box).map(({ id, tiles, sea }) => {
             const mod = isModId(id) ? MODS[id] : null;
-            const fits = mod ? participants >= mod.minPlayers && participants <= mod.maxPlayers : false;
+            const fits = fitsMod(id, participants);
             const playable = mod !== null && fits;
             const on = playable && selected === id;
             return (
@@ -138,7 +147,7 @@ export function ModPicker({
                   <b>{modText(id)}</b>
                   <small>{modText(id, '_desc')}</small>
                   {mod && (
-                    <span className="mod-meta">{fits ? t('modPlayers', { min: mod.minPlayers, max: mod.maxPlayers }) : t('modTooMany', { n: participants })}</span>
+                    <span className="mod-meta">{fits ? t('modPlayers', modPlayerRange(mod)) : t('modTooMany', { n: participants })}</span>
                   )}
                 </span>
                 {!mod && <span className="soon-tag">{t('comingSoon')}</span>}

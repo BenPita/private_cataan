@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
-import { boardGraph, type Board as BoardData, type PlayerView } from '@hex/engine';
+import { boardGraph, graphBounds, type Board as BoardData, type PlayerView } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
 
 /** SVG units per hex radius. Must match art-src/extras.py (sea frame). */
 export const S = 60;
-const VIEW = 10.6 * S;
+
+/**
+ * The square a board is drawn in, in hex radii (10.6 for the classic island),
+ * and the painted sea made for that island shape by art-src/extras.py.
+ */
+export function boardFrame(board: Pick<BoardData, 'layout'>): { view: number; sea: string } {
+  const { maxX, maxY } = graphBounds(boardGraph(board));
+  return { view: 2 * (Math.max(maxX, maxY) + 0.97), sea: board.layout === 'classic56' ? '/art/sea-56.webp' : '/art/sea.webp' };
+}
 const TILE_R = S * 0.965; // a little smaller than the grid, so sandy seams show between tiles
 const TILE_W = Math.sqrt(3) * TILE_R;
 const TILE_H = 2 * TILE_R;
@@ -112,7 +120,7 @@ function City({ x, y, color }: { x: number; y: number; color: string }) {
 }
 
 /** Pan & pinch-zoom container. Taps after a drag are suppressed. */
-function PanZoom({ children, svgRef }: { children: ReactNode; svgRef?: React.MutableRefObject<SVGSVGElement | null> }) {
+function PanZoom({ children, svgRef, view: VIEW }: { children: ReactNode; svgRef?: React.MutableRefObject<SVGSVGElement | null>; view: number }) {
   const [t, setT] = useState({ x: 0, y: 0, k: 1 });
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ dist: number; k: number; moved: number } | null>(null);
@@ -215,11 +223,13 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
   const hSet = useMemo(() => new Set(targets.hexes ?? []), [targets.hexes]);
   const myColor = colors[view.me ?? 0];
   const robber = G.hexes[view.board.robberHex];
+  const frame = boardFrame(view.board);
+  const VIEW = frame.view * S;
 
   return (
-    <PanZoom svgRef={svgRef}>
+    <PanZoom svgRef={svgRef} view={VIEW}>
       {/* Sea frame and beach (pre-painted) */}
-      <image href="/art/sea.webp" x={-VIEW / 2} y={-VIEW / 2} width={VIEW} height={VIEW} preserveAspectRatio="none" />
+      <image href={frame.sea} x={-VIEW / 2} y={-VIEW / 2} width={VIEW} height={VIEW} preserveAspectRatio="none" />
 
       {/* Harbors: wooden pier and a parchment flag */}
       {view.board.harbors.map((h) => {

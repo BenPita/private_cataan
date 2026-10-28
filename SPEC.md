@@ -206,7 +206,15 @@ Build order
   opening roll; normal snake setup; 5 players use 5 colours (no neutral settlements); P2 may
   also win at the start of their phase (e.g. after gaining Longest Road during P1's turn).
   Beginner 5–6 harbors: coast index 0 onward, generic, wool, generic, ore, generic, grain,
-  brick, generic, lumber, generic, wool. Client part still to do.
+  brick, generic, lumber, generic, wool.
+  Client DONE 2026-10-29: boards size themselves from `graphBounds` (`boardFrame()` in Board.tsx:
+  2D viewBox, 3D frame plate + camera fit) with sea art per layout (`sea-56.webp`, made by
+  `art-src/extras.py sea-56`); menus offer 2–6 participants and a "5–6 players" tag; chips for
+  5–6 players sit in a 3×2 grid; during Player 2's phase everyone sees "Player 2: X — build and
+  trade with the bank only" and the trade sheet is bank-only. Checked live on localhost: a 6-player
+  game (1 human + 5 bots) ran 60 turns / 30 paired phases with a rule observer — Player 2 always
+  the 3rd after Player 1, no player trades in P2 phases, dice passed to the next player each time,
+  supply always 120 cards, 30 hexes / 11 harbors, P2 built and bank-traded.
 - Then one expansion at a time, each with its own spec section, tests, 100-game bot run,
   and owner check on localhost.
 

@@ -111,7 +111,7 @@ export function ResourceBar({ res, flash }: { res: ResMap; flash: Partial<ResMap
 
 export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSeat[] }) {
   return (
-    <div className="player-strip">
+    <div className={`player-strip${view.players.length > 4 ? ' many' : ''}`}>
       {view.turnOrder.map((i) => {
         const p = view.players[i];
         return (
@@ -261,7 +261,9 @@ export function BuildSheet({
 export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onClose: () => void; dispatch: Dispatch }) {
   const me = view.me!;
   const res = view.players[me].resources!;
-  const [tab, setTab] = useState<'bank' | 'player'>('player');
+  // Player 2 of a 5–6 paired turn may only trade with the bank.
+  const bankOnly = view.paired !== null && view.paired !== undefined;
+  const [tab, setTab] = useState<'bank' | 'player'>(bankOnly ? 'bank' : 'player');
   const rates = tradeRates(view, me);
   const [give, setGive] = useState<Resource | null>(null);
   const [get, setGet] = useState<Resource | null>(null);
@@ -323,7 +325,7 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
   return (
     <Sheet title={t('trade')} onClose={onClose}>
       <div className="tabs">
-        <button className={tab === 'player' ? 'on' : ''} onClick={() => setTab('player')}>
+        <button className={tab === 'player' ? 'on' : ''} disabled={bankOnly} onClick={() => setTab('player')}>
           {t('tabPlayers')}
         </button>
         <button className={tab === 'bank' ? 'on' : ''} onClick={() => setTab('bank')}>
@@ -331,7 +333,8 @@ export function TradeSheet({ view, onClose, dispatch }: { view: PlayerView; onCl
         </button>
       </div>
       {!canTrade && <p className="hint-text">{t('tradeWhen')}</p>}
-      {tab === 'bank' ? (
+      {bankOnly && canTrade && <p className="hint-text">{t('pairedBannerMe')}</p>}
+      {tab === 'bank' || bankOnly ? (
         <div className="bank-trade">
           <p className="label">{t('give')}</p>
           <div className="pick-row">

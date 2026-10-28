@@ -302,6 +302,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     if (!myTurn) {
       if (view.phase === 'ROBBER_DISCARD') return pendingDiscard ? t('hintDiscard', { n: pendingDiscard }) : t('hintWaitDiscards');
       if (view.phase === 'INITIAL_PLACEMENT') return t('hintPlacing', { name: currentName });
+      if (view.paired && view.phase === 'MAIN_ACTIONS') return t('pairedBanner', { name: currentName });
       return t('hintTheirTurn', { name: currentName });
     }
     switch (view.phase) {
@@ -318,7 +319,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       default:
         if (view.freeRoads > 0) return t('hintFreeRoads', { n: view.freeRoads });
         if (mode) return t('hintBuildMode');
-        return t('hintMain');
+        return view.paired ? t('pairedBannerMe') : t('hintMain');
     }
   })();
 

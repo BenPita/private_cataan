@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { boardGraph, graphFor, type PlayerView } from '@hex/engine';
-import { S, type BoardProps } from './Board';
+import { S, boardFrame, type BoardProps } from './Board';
 import { createDice } from './dice3d';
 import { diag } from '../diag';
 
@@ -314,10 +314,14 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   ocean.receiveShadow = true;
   scene.add(ocean);
 
-  const VIEW = 10.6;
-  const h = VIEW / 2;
+  /** The painted sea square under the island; resized for the island's shape in setBoard. */
+  let frameView = 10.6;
+  const frameGeometry = (view: number) => {
+    const h = view / 2;
+    return fanGeometry([[h, h], [-h, h], [-h, -h], [h, -h]], view, view);
+  };
   const frameTop = new THREE.Mesh(
-    fanGeometry([[h, h], [-h, h], [-h, -h], [h, -h]], VIEW, VIEW),
+    frameGeometry(frameView),
     new THREE.MeshStandardMaterial({
       map: cachedTex('/art/sea.webp'),
       transparent: true,
@@ -418,8 +422,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       framed = true;
       const vfov = (camera.fov * Math.PI) / 180;
       const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
-      const fitW = 5.6 / Math.tan(hfov / 2);
-      const fitH = 4.6 / Math.tan(vfov / 2);
+      // Sized for the classic island (frame 10.6); bigger islands scale the fit.
+      const fitW = (5.6 * frameView) / 10.6 / Math.tan(hfov / 2);
+      const fitH = (4.6 * frameView) / 10.6 / Math.tan(vfov / 2);
       const dist = Math.max(fitW, fitH) * 0.94;
       const polar = 0.5;
       camera.position.set(0, Math.cos(polar) * dist, Math.sin(polar) * dist + 0.15);
@@ -489,6 +494,17 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   function setBoard(view: PlayerView) {
     G = boardGraph(view.board);
+    const frame = boardFrame(view.board);
+    if (frame.view !== frameView) {
+      frameView = frame.view;
+      frameTop.geometry.dispose();
+      frameTop.geometry = frameGeometry(frameView);
+      const mat = frameTop.material as THREE.MeshStandardMaterial;
+      mat.map = cachedTex(frame.sea);
+      mat.needsUpdate = true;
+      framed = false;
+      resize();
+    }
     clear(tilesGroup);
     clear(discsGroup);
     clear(harborsGroup);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MODS, type BotDifficulty } from '@hex/engine';
+import { MODS, modPlayerRange, type BotDifficulty } from '@hex/engine';
 import { emit, saveToken, useConnected, type RoomConfig } from '../net';
 import { displayName, errorText, getLang, randomBotNames, t, type Lang } from '../i18n';
 import { LanguagePicker } from '../game/GameScreen';
@@ -7,7 +7,7 @@ import { HelpContent } from './Help';
 import { ModPicker } from './ModPicker';
 
 /** Most participants any installed mod allows. */
-export const MAX_PARTICIPANTS = Math.max(...Object.values(MODS).map((m) => m.maxPlayers));
+export const MAX_PARTICIPANTS = Math.max(...Object.values(MODS).map((m) => modPlayerRange(m).max));
 
 export function loadNickname() {
   try {

@@ -2518,3 +2518,30 @@ h3,
     --ry: 0deg !important;
   }
 }
+
+/* 5–6 players: chips in a 3-column grid (two rows), a little tighter */
+.player-strip.many {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  overflow: visible;
+}
+.player-strip.many .player-chip {
+  min-width: 0;
+  padding: 3px 6px 4px;
+}
+.player-strip.many .chip-top {
+  font-size: 12px;
+}
+.player-strip.many .chip-stats {
+  gap: 5px;
+  font-size: 11px;
+}
+.tag-56 {
+  margin-inline-start: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #3b2200;
+  background: linear-gradient(180deg, var(--gold-1), var(--gold-2));
+}

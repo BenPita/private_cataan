@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MODS, isModId } from '@hex/engine';
+import { MODS, isModId, modPlayerRange } from '@hex/engine';
 import { emit, saveToken, useConnected, useRoom, type RoomSnapshot } from '../net';
 import { displayName, errorText, t, type Lang } from '../i18n';
 import { ExitConfirm, GameScreen } from '../game/GameScreen';
@@ -143,7 +143,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
   const allReady = snapshot.seats.every((s) => s.kind === 'bot' || (s.claimed && s.ready));
   const needsInvite = snapshot.config.humans > 1;
   const claimedHumans = snapshot.seats.filter((s) => s.kind === 'human' && s.claimed).length;
-  const maxPlayers = MODS[snapshot.config.mod ?? 'base'].maxPlayers;
+  const maxPlayers = modPlayerRange(MODS[snapshot.config.mod ?? 'base']).max;
 
   const share = async () => {
     if (navigator.share) {
@@ -194,7 +194,10 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
 
       <div className="card parchment">
         <p className="label">{t('playersTitle', { n: snapshot.config.victoryTarget })}</p>
-        <p className="mod-tag">🗺️ {t('modLobbyTag', { name: modName(snapshot.config.mod) })}</p>
+        <p className="mod-tag">
+          🗺️ {t('modLobbyTag', { name: modName(snapshot.config.mod) })}
+          {snapshot.config.humans + snapshot.config.bots > 4 && <span className="tag">{t('mod56Tag')}</span>}
+        </p>
         {snapshot.config.startResBoth && <p className="house-rule-tag">🏠 {t('houseStartResOn')}</p>}
         {snapshot.config.devSameTurn && <p className="house-rule-tag">🏠 {t('houseDevNowOn')}</p>}
         <ul className="seats">
