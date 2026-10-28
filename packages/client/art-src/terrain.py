@@ -260,6 +260,53 @@ def desert(seed):
     return finish(img, seed)
 
 
+def gold(seed):
+    """Gold field: a rocky river gorge with gold glinting in the water and on the banks."""
+    r = rng(seed)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    n = fbm(H, W, seed, 5, 3)
+    rid = ridged(H, W, seed + 3, 5, 3)
+    # A river winding top to bottom through the gorge
+    river_x = W * 0.5 + np.sin(yy / H * math.pi * 2.2 + 0.6) * W * 0.16 + (n - 0.5) * 60
+    d_river = np.abs(xx - river_x) / (W * 0.09)
+    banks = np.clip(d_river - 1, 0, 3) / 3
+    hgt = banks * 0.55 + rid * 0.35 * banks + n * 0.1
+    rgb = ramp(hgt, [(0, (112, 84, 44)), (0.3, (150, 112, 58)), (0.6, (176, 140, 82)), (1, (204, 176, 118))])
+    rgb = apply_shade(rgb, hillshade(hgt * 120), 0.6)
+    water = np.clip(1.15 - d_river, 0, 1)[..., None]
+    rgb = rgb * (1 - water) + ramp(fbm(H, W, seed + 9, 5, 10), [(0, (64, 150, 168)), (1, (120, 200, 206))]) * water
+    img = to_image(rgb).convert('RGBA')
+    d = ImageDraw.Draw(img)
+    # Gold nuggets along the river bed and banks, with a bright glint
+    for _ in range(46):
+        t = r.random()
+        y = t * H
+        x = W * 0.5 + math.sin(t * math.pi * 2.2 + 0.6) * W * 0.16 + (r.random() - 0.5) * W * 0.34
+        s = 7 + r.random() * 9
+        shaded_ellipse(img, x, y, s, s * 0.75, (232, 176, 32), 1.5, 0.55, 3)
+        d.ellipse([x - s * 0.35, y - s * 0.45, x - s * 0.05, y - s * 0.15], fill=(255, 246, 196, 255))
+    # A prospector's sluice box on the bank
+    bx, by = W * 0.24, H * 0.36
+    shadow_blob(img, (bx + 10, by + 26), 70, 16, 90)
+    d.polygon([(bx - 70, by - 12), (bx + 60, by + 8), (bx + 60, by + 26), (bx - 70, by + 6)], fill=(122, 82, 42, 255), outline=(60, 38, 16, 255))
+    for k in range(5):
+        x0 = bx - 56 + k * 24
+        d.line([x0, by - 6 + k * 3.5, x0, by + 10 + k * 3.5], fill=(80, 52, 24, 255), width=4)
+    return finish(img, seed)
+
+
+def sea(seed):
+    """Open-sea tile matching the painted sea frame: rolling water with light wave crests."""
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    n = fbm(H, W, seed, 6, 4)
+    waves = np.sin((xx * 0.5 + yy) * 0.05 + n * 7) * 0.5 + 0.5
+    hgt = n * 0.7 + waves * 0.3
+    rgb = ramp(hgt, [(0, (22, 112, 148)), (0.5, (32, 146, 178)), (1, (70, 186, 204))])
+    crest = np.clip((waves - 0.86) * 6, 0, 1) * np.clip(n * 1.6 - 0.4, 0, 1)
+    rgb = rgb * (1 - crest[..., None] * 0.45) + 255 * crest[..., None] * 0.45
+    return finish(to_image(rgb), seed)
+
+
 TERRAINS = {
     'forest': forest,
     'hills': hills,
@@ -267,4 +314,6 @@ TERRAINS = {
     'fields': fields,
     'mountains': mountains,
     'desert': desert,
+    'gold': gold,
+    'sea': sea,
 }
