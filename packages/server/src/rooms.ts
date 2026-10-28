@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import {
   MODS,
   isModId,
+  modPlayerRange,
   applyAction,
   createGame,
   getPlayerView,
@@ -105,11 +106,12 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   const c = { ...DEFAULT_CONFIG, ...(raw ?? {}) };
   const modId = c.mod ?? 'base';
   if (!isModId(modId)) return { ok: false, error: 'Unknown mod' };
-  const mod = MODS[modId];
-  if (!Number.isInteger(c.humans) || c.humans < 1 || c.humans > mod.maxPlayers) return { ok: false, error: `Humans must be 1-${mod.maxPlayers}` };
-  if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > mod.maxPlayers - 1) return { ok: false, error: `Bots must be 0-${mod.maxPlayers - 1}` };
+  // Overall range, including the mod's 5–6 player rules.
+  const { min, max } = modPlayerRange(MODS[modId]);
+  if (!Number.isInteger(c.humans) || c.humans < 1 || c.humans > max) return { ok: false, error: `Humans must be 1-${max}` };
+  if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > max - 1) return { ok: false, error: `Bots must be 0-${max - 1}` };
   const total = c.humans + c.bots;
-  if (total < mod.minPlayers || total > mod.maxPlayers) return { ok: false, error: `A game needs ${mod.minPlayers}-${mod.maxPlayers} participants` };
+  if (total < min || total > max) return { ok: false, error: `A game needs ${min}-${max} participants` };
   const LEVELS = ['easy', 'medium', 'hard'];
   if (!LEVELS.includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
   const given = Array.isArray(c.botDifficulties) ? c.botDifficulties : [];
@@ -181,6 +183,7 @@ function migrate(room: Room): Room {
     g.config.mod ??= 'base';
     g.config.modVersion ??= 1;
     g.board.layout ??= 'classic';
+    g.paired ??= null;
   }
   return room;
 }

@@ -51,6 +51,7 @@ async function playHumans(m: RoomManager, room: Room, humans: number[]) {
 describe('player configurations', () => {
   const combos: Array<[number, number]> = [
     [1, 1], [1, 2], [1, 3], [2, 0], [2, 1], [2, 2], [3, 0], [3, 1], [4, 0],
+    [1, 4], [1, 5], [2, 3], [3, 3], [5, 0], [6, 0],
   ];
   for (const [humans, bots] of combos) {
     it(`supports ${humans} human(s) + ${bots} bot(s)`, async () => {
@@ -71,7 +72,7 @@ describe('player configurations', () => {
 
   it('rejects invalid configurations', async () => {
     const m = manager();
-    for (const cfg of [{ humans: 1, bots: 0 }, { humans: 2, bots: 3 }, { humans: 0, bots: 2 }, { humans: 1, bots: 4 }]) {
+    for (const cfg of [{ humans: 1, bots: 0 }, { humans: 2, bots: 5 }, { humans: 0, bots: 2 }, { humans: 1, bots: 6 }, { humans: 7, bots: 0 }]) {
       expect(await m.create('A', cfg)).toMatchObject({ ok: false });
     }
   });
@@ -84,6 +85,18 @@ describe('bots on the server', () => {
     if (!created.ok) throw new Error(created.error);
     const room = (await m.get(created.roomId))!;
     expect(await m.start(room, 0)).toEqual({ ok: true });
+    await playHumans(m, room, [0]);
+    expect(room.status).toBe('finished');
+    expect(room.game!.winner).not.toBeNull();
+  }, 180_000);
+
+  it('a solo player finishes a 6-player game (paired players) against 5 bots', async () => {
+    const m = manager();
+    const created = await m.create('Solo', { humans: 1, bots: 5, difficulty: 'medium' });
+    if (!created.ok) throw new Error(created.error);
+    const room = (await m.get(created.roomId))!;
+    expect(await m.start(room, 0)).toEqual({ ok: true });
+    expect(room.game!.board.layout).toBe('classic56');
     await playHumans(m, room, [0]);
     expect(room.status).toBe('finished');
     expect(room.game!.winner).not.toBeNull();

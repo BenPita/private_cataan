@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { legalSetupRoads, legalSetupSettlements, orderRollGroup } from '@hex/engine';
-import { RoomManager, type Room } from '../src/rooms';
+import { RoomManager, validateConfig, type Room } from '../src/rooms';
 import { MemoryStore } from '../src/store';
 
 async function twoPlayerRoom(store = new MemoryStore()) {
@@ -46,7 +46,7 @@ describe('room lifecycle', () => {
   it('validates configurations', async () => {
     const m = new RoomManager(new MemoryStore());
     expect(await m.create('A', { humans: 1, bots: 0 })).toMatchObject({ ok: false });
-    expect(await m.create('A', { humans: 4, bots: 1 } as never)).toMatchObject({ ok: false });
+    expect(await m.create('A', { humans: 4, bots: 3 } as never)).toMatchObject({ ok: false });
     expect(await m.create('', { humans: 2, bots: 0 })).toMatchObject({ ok: false });
     expect(await m.create('A', { humans: 3, bots: 0 })).toMatchObject({ ok: true });
     expect(await m.create('A', { humans: 4, bots: 0 })).toMatchObject({ ok: true });
@@ -197,6 +197,15 @@ describe('mods in rooms', () => {
     expect(room.game!.config.modVersion).toBe(1);
   });
 
+  it('participant limits include the 5–6 player rules', () => {
+    expect(validateConfig({ humans: 6, bots: 0 }).ok).toBe(true);
+    expect(validateConfig({ humans: 1, bots: 5 }).ok).toBe(true);
+    expect(validateConfig({ humans: 7, bots: 0 })).toMatchObject({ ok: false, error: 'Humans must be 1-6' });
+    expect(validateConfig({ humans: 1, bots: 6 })).toMatchObject({ ok: false, error: 'Bots must be 0-5' });
+    expect(validateConfig({ humans: 4, bots: 3 })).toMatchObject({ ok: false, error: 'A game needs 2-6 participants' });
+    expect(validateConfig({ humans: 1, bots: 0 })).toMatchObject({ ok: false, error: 'A game needs 2-6 participants' });
+  });
+
   it('rejects an unknown mod', async () => {
     const m = new RoomManager(new MemoryStore());
     expect(await m.create('Roy', { humans: 2, bots: 0, mod: 'nope' as never })).toMatchObject({ ok: false, error: /mod/i });
@@ -219,5 +228,18 @@ describe('mods in rooms', () => {
     expect(loaded.config.mod).toBe('base');
     expect(loaded.game!.config).toMatchObject({ mod: 'base', modVersion: 1 });
     expect(loaded.game!.board.layout).toBe('classic');
+  });
+
+  it('an old saved game without the paired-players field loads with none', async () => {
+    const store = new MemoryStore();
+    const { m, room } = await twoPlayerRoom(store);
+    await m.setReady(room, 1, true);
+    await m.start(room, 0);
+    await m.flush(room.id);
+    const saved = (await store.load(room.id))!;
+    delete (saved.game as { paired?: unknown }).paired;
+    await store.save(saved);
+    const loaded = (await new RoomManager(store).get(room.id))!;
+    expect(loaded.game!.paired).toBeNull();
   });
 });
