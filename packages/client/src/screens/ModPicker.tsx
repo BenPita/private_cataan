@@ -1,3 +1,4 @@
+import type { CSSProperties, PointerEvent } from 'react';
 import { MODS, isModId, type ModId } from '@hex/engine';
 import type { RoomConfig } from '../net';
 import { getLang, t, type Key } from '../i18n';
@@ -5,11 +6,12 @@ import { getLang, t, type Key } from '../i18n';
 /**
  * Every mod the game will offer, in menu order. Ids that exist in the engine's
  * MODS are playable; the rest show as "coming soon" so players see where the
- * game is going. Art is a small cluster of painted hex tiles.
+ * game is going. Mods with box art (`box` + the colour of the box's side)
+ * stand as 3D game boxes; the rest are rows with a cluster of hex tiles.
  */
-const CATALOG: Array<{ id: string; tiles: [string, string, string]; sea?: boolean }> = [
-  { id: 'base', tiles: ['fields', 'forest', 'mountains'] },
-  { id: 'seafarers', tiles: ['pasture', 'forest', 'hills'], sea: true },
+const CATALOG: Array<{ id: string; tiles: [string, string, string]; sea?: boolean; box?: { art: string; side: string } }> = [
+  { id: 'base', tiles: ['fields', 'forest', 'mountains'], box: { art: '/art/mod-base.webp', side: '#c8432f' } },
+  { id: 'seafarers', tiles: ['pasture', 'forest', 'hills'], sea: true, box: { art: '/art/mod-seafarers.webp', side: '#1f9cc0' } },
   { id: 'citiesKnights', tiles: ['mountains', 'hills', 'fields'] },
   { id: 'tradersBarbarians', tiles: ['desert', 'fields', 'pasture'] },
   { id: 'explorersPirates', tiles: ['forest', 'mountains', 'pasture'], sea: true },
@@ -27,6 +29,46 @@ function ModArt({ tiles, sea }: { tiles: [string, string, string]; sea?: boolean
         <img key={i} className={`t${i}`} src={`/art/hex-${terrain}-${i % 2}.webp`} alt="" />
       ))}
     </span>
+  );
+}
+
+/** Tilts a box a little toward the finger or mouse while it hovers / presses. */
+function tilt(e: PointerEvent<HTMLElement>) {
+  const r = e.currentTarget.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width - 0.5;
+  const y = (e.clientY - r.top) / r.height - 0.5;
+  e.currentTarget.style.setProperty('--ry', `${(x * 18).toFixed(1)}deg`);
+  e.currentTarget.style.setProperty('--rx', `${(-y * 14).toFixed(1)}deg`);
+}
+function untilt(e: PointerEvent<HTMLElement>) {
+  e.currentTarget.style.removeProperty('--ry');
+  e.currentTarget.style.removeProperty('--rx');
+}
+
+function GameBox({ id, art, side, on, playable, onPick }: { id: string; art: string; side: string; on: boolean; playable: boolean; onPick: () => void }) {
+  const soon = !isModId(id);
+  return (
+    <button
+      role="radio"
+      aria-checked={on}
+      className={`game-box${on ? ' on' : ''}${soon ? ' soon' : ''}${!soon && !playable ? ' blocked' : ''}`}
+      style={{ '--side': side } as CSSProperties}
+      disabled={!playable}
+      onClick={onPick}
+      onPointerMove={playable ? tilt : undefined}
+      onPointerLeave={untilt}
+    >
+      <span className="box-stage">
+        <span className="box-3d">
+          <span className="box-side right" />
+          <span className="box-side bottom" />
+          <img className="box-lid" src={art} alt="" draggable={false} />
+          {soon && <span className="box-ribbon">{t('comingSoon')}</span>}
+        </span>
+        <span className="box-floor" />
+      </span>
+      <span className="box-name">{modText(id)}</span>
+    </button>
   );
 }
 
@@ -63,8 +105,21 @@ export function ModPicker({
       </div>
 
       <div className="card panel">
-        <div className="mod-list" role="radiogroup" aria-label={t('modTitle')}>
-          {CATALOG.map(({ id, tiles, sea }) => {
+        <div className="mod-shelf" role="radiogroup" aria-label={t('modTitle')}>
+          {CATALOG.filter((c) => c.box).map(({ id, box }) => {
+            const mod = isModId(id) ? MODS[id] : null;
+            const playable = mod !== null && participants >= mod.minPlayers && participants <= mod.maxPlayers;
+            return <GameBox key={id} id={id} art={box!.art} side={box!.side} on={playable && selected === id} playable={playable} onPick={() => update({ mod: id as ModId })} />;
+          })}
+        </div>
+        <div className="mod-detail" aria-live="polite">
+          <b>{modText(selected)}</b>
+          <small>{modText(selected, '_desc')}</small>
+          <span className="mod-meta">{t('modPlayers', { min: MODS[selected].minPlayers, max: MODS[selected].maxPlayers })}</span>
+        </div>
+
+        <div className="mod-list">
+          {CATALOG.filter((c) => !c.box).map(({ id, tiles, sea }) => {
             const mod = isModId(id) ? MODS[id] : null;
             const fits = mod ? participants >= mod.minPlayers && participants <= mod.maxPlayers : false;
             const playable = mod !== null && fits;

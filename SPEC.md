@@ -188,6 +188,10 @@ Build order
   and house rules moved from step 1 to step 2. Step 1's participant limit = largest `maxPlayers` of any
   mod (4 today). Lobby shows "Mod: <name>" and caps players at the room mod's `maxPlayers`. A client
   that receives an unknown mod id shows "new version — reload" instead of the game.
+- Mod box art (owner decision, 2026-10-28): Base game and Seafarers show as 3D game boxes using box
+  images the owner supplied (`public/art/mod-base.webp`, `mod-seafarers.webp`, 246 px). This is a
+  deliberate exception to "no official assets" for the mod screen only. Pure CSS 3D (lid + side +
+  bottom faces); never put `mix-blend-mode`/`filter` on `.box-3d` itself — it flattens the 3D.
 - Stage 2: 5–6 players for the base game, from official rules the owner sends (larger board,
   bank, deck, extra colours, the official extra-build rule).
 - Then one expansion at a time, each with its own spec section, tests, 100-game bot run,
