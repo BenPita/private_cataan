@@ -6,7 +6,7 @@
  */
 import { io } from 'socket.io-client';
 import {
-  COSTS,
+  modFor,
   RESOURCES,
   emptyRes,
   hasRes,
@@ -31,6 +31,7 @@ interface Snap {
 
 function choose(v: PlayerView): Action | null {
   const me = v.me!;
+  const costs = modFor(v).costs;
   const res = v.players[me].resources!;
   if (v.phase === 'ROBBER_DISCARD') {
     const need = v.pendingDiscards[me];
@@ -74,15 +75,15 @@ function choose(v: PlayerView): Action | null {
         return e.length ? { type: 'placeFreeRoad', edge: e[0] } : { type: 'finishRoadBuilding' };
       }
       const city = legalCities(v, me);
-      if (city.length && hasRes(res, COSTS.city)) return { type: 'buildCity', vertex: city[0] };
+      if (city.length && hasRes(res, costs.city)) return { type: 'buildCity', vertex: city[0] };
       const sett = legalSettlements(v, me);
-      if (sett.length && hasRes(res, COSTS.settlement)) return { type: 'buildSettlement', vertex: sett[0] };
+      if (sett.length && hasRes(res, costs.settlement)) return { type: 'buildSettlement', vertex: sett[0] };
       const roads = legalRoads(v, me);
-      if (roads.length && hasRes(res, COSTS.road) && (sett.length === 0 || v.players[me].roadsBuilt < 6)) {
+      if (roads.length && hasRes(res, costs.road) && (sett.length === 0 || v.players[me].roadsBuilt < 6)) {
         return { type: 'buildRoad', edge: roads[Math.floor(Math.random() * roads.length)] };
       }
       // Trade surplus with the bank toward whatever the next build is missing.
-      const target = city.length ? COSTS.city : COSTS.settlement;
+      const target = city.length ? costs.city : costs.settlement;
       const rates = tradeRates(v, me);
       const missing = RESOURCES.find((r) => res[r] < (target[r] ?? 0) && v.bank[r] > 0);
       const surplus = RESOURCES.find((r) => r !== missing && res[r] - (target[r] ?? 0) >= rates[r]);

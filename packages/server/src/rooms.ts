@@ -1,19 +1,22 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import {
-  MAX_PLAYERS,
-  MIN_PLAYERS,
+  MODS,
+  isModId,
   applyAction,
   createGame,
   getPlayerView,
   type Action,
   type BotDifficulty,
   type GameState,
+  type ModId,
   type PlayerView,
 } from '@hex/engine';
 import { BotRunner } from './bots';
 import type { RoomStore } from './store';
 
 export interface RoomConfig {
+  /** Which mod (expansion) this room plays. Fixed once the room exists. */
+  mod?: ModId;
   humans: number;
   bots: number;
   /** Default level for bots without their own setting. */
@@ -100,10 +103,13 @@ export function cleanName(raw: unknown): string | null {
 
 export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ config: RoomConfig }> {
   const c = { ...DEFAULT_CONFIG, ...(raw ?? {}) };
-  if (!Number.isInteger(c.humans) || c.humans < 1 || c.humans > MAX_PLAYERS) return { ok: false, error: 'Humans must be 1-4' };
-  if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > 3) return { ok: false, error: 'Bots must be 0-3' };
+  const modId = c.mod ?? 'base';
+  if (!isModId(modId)) return { ok: false, error: 'Unknown mod' };
+  const mod = MODS[modId];
+  if (!Number.isInteger(c.humans) || c.humans < 1 || c.humans > mod.maxPlayers) return { ok: false, error: `Humans must be 1-${mod.maxPlayers}` };
+  if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > mod.maxPlayers - 1) return { ok: false, error: `Bots must be 0-${mod.maxPlayers - 1}` };
   const total = c.humans + c.bots;
-  if (total < MIN_PLAYERS || total > MAX_PLAYERS) return { ok: false, error: 'A game needs 2-4 participants' };
+  if (total < mod.minPlayers || total > mod.maxPlayers) return { ok: false, error: `A game needs ${mod.minPlayers}-${mod.maxPlayers} participants` };
   const LEVELS = ['easy', 'medium', 'hard'];
   if (!LEVELS.includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
   const given = Array.isArray(c.botDifficulties) ? c.botDifficulties : [];
@@ -120,6 +126,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   return {
     ok: true,
     config: {
+      mod: modId,
       humans: c.humans,
       bots: c.bots,
       difficulty: c.difficulty,
@@ -168,6 +175,12 @@ function migrate(room: Room): Room {
   if (g && !g.turnOrder) {
     g.turnOrder = g.players.map((_, i) => i);
     g.orderRoll = null;
+  }
+  room.config.mod ??= 'base';
+  if (g) {
+    g.config.mod ??= 'base';
+    g.config.modVersion ??= 1;
+    g.board.layout ??= 'classic';
   }
   return room;
 }
@@ -348,6 +361,7 @@ export class RoomManager {
   async updateConfig(room: Room, seat: number, raw: Partial<RoomConfig>): Promise<Result> {
     if (seat !== 0) return { ok: false, error: 'Only the host can change settings' };
     if (room.status !== 'lobby') return { ok: false, error: 'Settings are locked once the game starts' };
+    if (raw && 'mod' in raw && raw.mod !== (room.config.mod ?? 'base')) return { ok: false, error: 'The mod cannot be changed' };
     const v = validateConfig({ ...room.config, ...raw });
     if (!v.ok) return v;
     const claimedHumans = room.seats.filter((s) => s.kind === 'human' && s.tokenHash).length;
@@ -382,7 +396,7 @@ export class RoomManager {
     room.game = createGame(
       room.seats.map((s) => ({ name: s.name ?? 'Player', kind: s.kind, difficulty: s.difficulty })),
       this.seedSource(),
-      { victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true,
+      { mod: room.config.mod ?? 'base', victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true,
         devCardsSameTurn: room.config.devSameTurn === true,
       },
     );

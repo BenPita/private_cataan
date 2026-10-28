@@ -186,3 +186,38 @@ describe('secret victory points', () => {
     expect(m.snapshot(room, 0, connected).game!.players[1].victoryPoints).toBe(2);
   });
 });
+
+describe('mods in rooms', () => {
+  it('rooms default to the base mod and the game records it', async () => {
+    const { m, room } = await twoPlayerRoom();
+    expect(room.config.mod).toBe('base');
+    await m.setReady(room, 1, true);
+    await m.start(room, 0);
+    expect(room.game!.config.mod).toBe('base');
+    expect(room.game!.config.modVersion).toBe(1);
+  });
+
+  it('rejects an unknown mod', async () => {
+    const m = new RoomManager(new MemoryStore());
+    expect(await m.create('Roy', { humans: 2, bots: 0, mod: 'nope' as never })).toMatchObject({ ok: false, error: /mod/i });
+  });
+
+  it('an old saved game without a mod loads as base', async () => {
+    const store = new MemoryStore();
+    const { m, room } = await twoPlayerRoom(store);
+    await m.setReady(room, 1, true);
+    await m.start(room, 0);
+    await m.flush(room.id);
+    const saved = (await store.load(room.id))!;
+    delete (saved.config as { mod?: string }).mod;
+    delete saved.game!.config.mod;
+    delete saved.game!.config.modVersion;
+    delete saved.game!.board.layout;
+    await store.save(saved);
+    const fresh = new RoomManager(store);
+    const loaded = (await fresh.get(room.id))!;
+    expect(loaded.config.mod).toBe('base');
+    expect(loaded.game!.config).toMatchObject({ mod: 'base', modVersion: 1 });
+    expect(loaded.game!.board.layout).toBe('classic');
+  });
+});
