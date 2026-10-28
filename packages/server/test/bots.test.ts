@@ -138,3 +138,29 @@ describe('per-bot difficulty', () => {
     expect(await m.create('X', { humans: 1, bots: 1, botDifficulties: ['godlike' as never] })).toMatchObject({ ok: false });
   });
 });
+
+describe('bot names', () => {
+  it('uses the names shown on the home screen and keeps them when the config changes', async () => {
+    const m = manager();
+    const c = await m.create('Host', { humans: 2, bots: 2, botNames: ['Bot#7', 'Bot#30', 'Bot#3'] });
+    if (!c.ok) throw new Error(c.error);
+    const room = (await m.get(c.roomId))!;
+    const names = () => room.seats.filter((s) => s.kind === 'bot').map((s) => s.name);
+    expect(names()).toEqual(['Bot#7', 'Bot#30']);
+    await m.updateConfig(room, 0, { botDifficulties: ['hard', 'easy'] });
+    expect(names()).toEqual(['Bot#7', 'Bot#30']);
+    // A new bot gets a fresh, distinct name from the pool.
+    await m.updateConfig(room, 0, { humans: 1, bots: 3 });
+    expect(names().slice(0, 2)).toEqual(['Bot#7', 'Bot#30']);
+    expect(new Set(names()).size).toBe(3);
+    expect(names()[2]).toMatch(/^Bot#\d+$/);
+  });
+
+  it('ignores names outside the pool', async () => {
+    const m = manager();
+    const c = await m.create('Host', { humans: 1, bots: 1, botNames: ['<script>', 'Bot#999'] });
+    if (!c.ok) throw new Error(c.error);
+    const room = (await m.get(c.roomId))!;
+    expect(room.seats[1].name).toMatch(/^Bot#([0-9]|[1-4][0-9])$/);
+  });
+});

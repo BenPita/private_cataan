@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BotDifficulty } from '@hex/engine';
 import { emit, saveToken, useConnected, type RoomConfig } from '../net';
-import { errorText, t, type Lang } from '../i18n';
+import { displayName, errorText, randomBotNames, t, type Lang } from '../i18n';
 import { LanguagePicker } from '../game/GameScreen';
 import { HelpContent } from './Help';
 
@@ -116,6 +116,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
     boardType: 'random',
     startResBoth: false,
     devSameTurn: false,
+    botNames: randomBotNames(),
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -148,7 +149,13 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
         </label>
         <Stepper label={t('humans')} value={config.humans} min={1} max={4} onChange={(humans) => update({ humans })} />
         <Stepper label={t('bots')} value={config.bots} min={config.humans === 1 ? 1 : 0} max={4 - config.humans} onChange={(bots) => update({ bots })} />
-        {config.bots > 0 && <BotLevels levels={config.botDifficulties} onChange={(botDifficulties) => update({ botDifficulties })} />}
+        {config.bots > 0 && (
+          <BotLevels
+            levels={config.botDifficulties}
+            names={config.botNames?.map((n) => displayName(n, 'bot'))}
+            onChange={(botDifficulties) => update({ botDifficulties })}
+          />
+        )}
         <p className="tiny muted">
           {t('participants', { n: config.humans + config.bots })}
           {config.humans === 1 ? ` · ${t('soloHint')}` : ''}

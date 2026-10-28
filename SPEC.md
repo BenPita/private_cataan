@@ -142,7 +142,8 @@ Read this file instead of the originals; consult them only for fine detail.
 
 - Bots get random names from a pool of 25 men + 25 women (server stores `Bot#<index>`,
   client shows the Hebrew/English name; old `Bot N` rooms still display). Names stay
-  put when the lobby config changes.
+  put when the lobby config changes. The home screen draws the names up front and sends
+  them with `room:create`, so the host sees the same names before and after.
 - Whose turn: the active chip steps forward, a light sweeps across it, then it glows
   slowly in the player's colour; other chips dim. Reduced motion keeps a static glow.
 - 3D: the wooden table is replaced by a procedural open-sea plane (drawn once, no

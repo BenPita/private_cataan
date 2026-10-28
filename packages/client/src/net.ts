@@ -11,6 +11,7 @@ export interface RoomConfig {
   boardType: 'random' | 'beginner';
   startResBoth?: boolean;
   devSameTurn?: boolean;
+  botNames?: string[];
 }
 
 export interface PublicSeat {

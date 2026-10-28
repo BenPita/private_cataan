@@ -486,6 +486,16 @@ const BOT_NAMES: Record<Lang, string[]> = {
   ],
 };
 
+/** Three distinct random bot names (`Bot#<pool index>`) to show before a room exists. */
+export function randomBotNames(): string[] {
+  const pool = BOT_NAMES.he.map((_, i) => `Bot#${i}`);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3);
+}
+
 /** Display name for a seat: bots get a translated, numbered name. */
 export function displayName(name: string | null | undefined, kind?: 'human' | 'bot'): string {
   if (kind === 'bot' && name) {

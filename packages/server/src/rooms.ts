@@ -26,6 +26,8 @@ export interface RoomConfig {
   startResBoth?: boolean;
   /** House rule: development cards playable on the turn they were bought. */
   devSameTurn?: boolean;
+  /** Bot names the host already saw on the home screen (`Bot#<pool index>`). */
+  botNames?: string[];
 }
 
 export interface Seat {
@@ -109,6 +111,9 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   const botDifficulties = Array.from({ length: c.bots }, (_, i) => given[i] ?? c.difficulty);
   if (![10, 12].includes(c.victoryTarget)) return { ok: false, error: 'Target must be 10 or 12' };
   if (!['random', 'beginner'].includes(c.boardType)) return { ok: false, error: 'Invalid board type' };
+  const botNames = Array.isArray(c.botNames)
+    ? [...new Set(c.botNames.filter((n) => typeof n === 'string' && /^Bot#\d+$/.test(n) && Number(n.slice(4)) < BOT_NAME_POOL))]
+    : [];
   for (const flag of [c.startResBoth, c.devSameTurn]) {
     if (flag !== undefined && typeof flag !== 'boolean') return { ok: false, error: 'Invalid settings' };
   }
@@ -123,6 +128,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
       boardType: c.boardType,
       startResBoth: c.startResBoth === true,
       devSameTurn: c.devSameTurn === true,
+      ...(botNames.length ? { botNames: botNames.slice(0, c.bots) } : {}),
     },
   };
 }
@@ -130,9 +136,9 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
 /** Size of the bot name pool (the client maps each index to a real name). */
 const BOT_NAME_POOL = 50;
 
-/** Bot names for n seats: keeps the names bots already have, draws the rest at random. */
-function pickBotNames(n: number, existing: Seat[]): string[] {
-  const kept = existing.filter((s) => s.kind === 'bot' && s.name).map((s) => s.name!).slice(0, n);
+/** Bot names for n seats: keeps the names given (in order), draws the rest at random. */
+function pickBotNames(n: number, given: string[]): string[] {
+  const kept = given.slice(0, n);
   const all = Array.from({ length: BOT_NAME_POOL }, (_, i) => `Bot#${i}`).filter((name) => !kept.includes(name));
   for (let i = all.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -144,7 +150,8 @@ function pickBotNames(n: number, existing: Seat[]): string[] {
 function buildSeats(config: RoomConfig, existing: Seat[] = []): Seat[] {
   const humans: Seat[] = existing.filter((s) => s.kind === 'human').slice(0, config.humans);
   while (humans.length < config.humans) humans.push({ kind: 'human', name: null, tokenHash: null, ready: false });
-  const names = pickBotNames(config.bots, existing);
+  const current = existing.filter((s) => s.kind === 'bot' && s.name).map((s) => s.name!);
+  const names = pickBotNames(config.bots, current.length ? current : (config.botNames ?? []));
   const bots: Seat[] = Array.from({ length: config.bots }, (_, i) => ({
     kind: 'bot',
     name: names[i],
