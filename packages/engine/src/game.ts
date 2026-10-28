@@ -1,6 +1,6 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { BASE_MOD } from './mods';
-import { GRAPH } from './geometry';
+import { BASE_MOD, modFor } from './mods';
+import { boardGraph } from './geometry';
 import {
   isRoadConnected,
   legalRoads,
@@ -14,14 +14,9 @@ import { addRes, emptyRes, hasRes, isResource, isValidResMap, resOf, totalRes } 
 import { LOG_EN, englishFormatter, formatLog, type LogKey, type LogParams } from './log';
 import { Rng } from './rng';
 import {
-  BANK_SUPPLY_PER_RESOURCE,
-  COSTS,
-  DEV_DECK,
   DISCARD_THRESHOLD,
   LARGEST_ARMY_MIN,
   LONGEST_ROAD_MIN,
-  PIECE_LIMITS,
-  PLAYER_COLORS,
   TERRAIN_RESOURCE,
   rulesetFor,
   devCardReady,
@@ -68,29 +63,31 @@ function fail(msg: string): never {
 /** Game state is plain JSON, so a JSON round-trip is a safe deep copy. */
 export const cloneState = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-export const MIN_PLAYERS = 2;
-export const MAX_PLAYERS = 4;
+/** Participant range of the base game (server validation for base rooms). */
+export const MIN_PLAYERS = BASE_MOD.minPlayers;
+export const MAX_PLAYERS = BASE_MOD.maxPlayers;
 
 export function createGame(
   players: PlayerSetup[],
   seed: number,
   config: Partial<GameConfig> = {},
 ): GameState {
-  if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) {
-    throw new GameError(`A game needs ${MIN_PLAYERS}-${MAX_PLAYERS} participants`);
+  const mod = modFor({ config });
+  if (players.length < mod.minPlayers || players.length > mod.maxPlayers) {
+    throw new GameError(`A game needs ${mod.minPlayers}-${mod.maxPlayers} participants`);
   }
-  const fullConfig: GameConfig = { victoryTarget: 10, boardType: 'random', ...config };
+  const fullConfig: GameConfig = { victoryTarget: 10, boardType: 'random', ...config, mod: mod.id, modVersion: mod.version };
   const rng = new Rng(seed);
-  const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard(BASE_MOD) : generateRandomBoard(rng, BASE_MOD);
+  const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard(mod) : generateRandomBoard(rng, mod);
 
   const deck: DevCardType[] = [];
-  (Object.keys(DEV_DECK) as DevCardType[]).forEach((t) => {
-    for (let i = 0; i < DEV_DECK[t]; i++) deck.push(t);
+  (Object.keys(mod.devDeck) as DevCardType[]).forEach((t) => {
+    for (let i = 0; i < mod.devDeck[t]; i++) deck.push(t);
   });
 
   const ruleset = rulesetFor(players.length);
   const bank = emptyRes();
-  for (const r of RESOURCES) bank[r] = BANK_SUPPLY_PER_RESOURCE;
+  for (const r of RESOURCES) bank[r] = mod.bankPerResource;
 
   const state: GameState = {
     config: fullConfig,
@@ -101,7 +98,7 @@ export function createGame(
     players: players.map(
       (p, i): PlayerState => ({
         ...p,
-        color: PLAYER_COLORS[i],
+        color: mod.colors[i],
         resources: emptyRes(),
         devCards: [],
         knightsPlayed: 0,
@@ -219,9 +216,9 @@ function requireNoFreeRoads(state: GameState): void {
 }
 
 function placeRoad(state: GameState, player: number, edge: string): void {
-  if (!GRAPH.edges[edge]) fail('Unknown edge');
+  if (!boardGraph(state.board).edges[edge]) fail('Unknown edge');
   if (state.roads[edge] !== undefined) fail('That edge already has a road');
-  if (state.players[player].roadsBuilt >= PIECE_LIMITS.roads) fail('No roads left');
+  if (state.players[player].roadsBuilt >= modFor(state).pieceLimits.roads) fail('No roads left');
   if (!isRoadConnected(state, player, edge)) fail('Road must connect to your network');
   state.roads[edge] = player;
   state.players[player].roadsBuilt++;
@@ -235,7 +232,7 @@ function produce(state: GameState, roll: number): { producing: number[]; gains: 
   for (const hexId of producing) {
     const resource = TERRAIN_RESOURCE[state.board.hexes[hexId].terrain];
     if (!resource) continue;
-    for (const v of GRAPH.hexes[hexId].vertices) {
+    for (const v of boardGraph(state.board).hexes[hexId].vertices) {
       const b = state.buildings[v];
       if (b) entitled[b.owner][resource] += b.type === 'city' ? 2 : 1;
     }
@@ -393,6 +390,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
   if (!Number.isInteger(player) || player < 0 || player >= state.players.length) fail('Unknown player');
   if (state.phase === 'GAME_OVER') fail('The game is over');
   const me = state.players[player];
+  const mod = modFor(state);
+  const G = boardGraph(state.board);
 
   switch (action.type) {
     case 'rollForOrder': {
@@ -420,7 +419,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       const isSecond = setup.step >= state.players.length;
       if (isSecond || state.config.startResBothSettlements) {
         const gained = emptyRes();
-        for (const h of GRAPH.vertices[action.vertex].hexes) {
+        for (const h of G.vertices[action.vertex].hexes) {
           const r = TERRAIN_RESOURCE[state.board.hexes[h].terrain];
           if (r && state.bank[r] > 0) gained[r]++;
         }
@@ -535,10 +534,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
-      if (me.roadsBuilt >= PIECE_LIMITS.roads) fail('No roads left');
-      if (!hasRes(me.resources, COSTS.road)) fail('Not enough resources for a road');
+      if (me.roadsBuilt >= mod.pieceLimits.roads) fail('No roads left');
+      if (!hasRes(me.resources, mod.costs.road)) fail('Not enough resources for a road');
       placeRoad(state, player, action.edge);
-      pay(state, player, COSTS.road, 'a road');
+      pay(state, player, mod.costs.road, 'a road');
       say(state, 'builtRoad', { p: player });
       updateLongestRoad(state);
       checkVictory(state);
@@ -549,13 +548,13 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
-      if (me.settlementsBuilt - me.citiesBuilt >= PIECE_LIMITS.settlements) fail('No settlements left');
-      if (!GRAPH.vertices[action.vertex]) fail('Unknown spot');
+      if (me.settlementsBuilt - me.citiesBuilt >= mod.pieceLimits.settlements) fail('No settlements left');
+      if (!G.vertices[action.vertex]) fail('Unknown spot');
       if (!satisfiesDistanceRule(state, action.vertex)) fail('Settlement must be on an empty spot at least two roads from others');
-      if (!GRAPH.vertices[action.vertex].edges.some((e) => state.roads[e] === player)) {
+      if (!G.vertices[action.vertex].edges.some((e) => state.roads[e] === player)) {
         fail('Settlement must connect to one of your roads');
       }
-      pay(state, player, COSTS.settlement, 'a settlement');
+      pay(state, player, mod.costs.settlement, 'a settlement');
       state.buildings[action.vertex] = { owner: player, type: 'settlement' };
       me.settlementsBuilt++;
       say(state, 'builtSettlement', { p: player });
@@ -570,8 +569,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireNoFreeRoads(state);
       const b = state.buildings[action.vertex];
       if (!b || b.type !== 'settlement' || b.owner !== player) fail('A city must replace one of your settlements');
-      if (me.citiesBuilt >= PIECE_LIMITS.cities) fail('No cities left');
-      pay(state, player, COSTS.city, 'a city');
+      if (me.citiesBuilt >= mod.pieceLimits.cities) fail('No cities left');
+      pay(state, player, mod.costs.city, 'a city');
       state.buildings[action.vertex] = { owner: player, type: 'city' };
       me.citiesBuilt++;
       say(state, 'builtCity', { p: player });
@@ -584,7 +583,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       requireNoFreeRoads(state);
       if (state.devDeck.length === 0) fail('The development deck is empty');
-      pay(state, player, COSTS.devCard, 'a development card');
+      pay(state, player, mod.costs.devCard, 'a development card');
       const card = state.devDeck.shift()!;
       me.devCards.push({ type: card, boughtTurn: state.turn });
       say(state, 'boughtDev', { p: player });
@@ -614,7 +613,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireNoFreeRoads(state);
       const idx = playableCard(state, player, 'roadBuilding');
       useCard(state, player, idx);
-      state.freeRoads = Math.min(2, PIECE_LIMITS.roads - me.roadsBuilt);
+      state.freeRoads = Math.min(2, mod.pieceLimits.roads - me.roadsBuilt);
       if (legalRoads(state, player).length === 0) state.freeRoads = 0;
       say(state, 'playedRoadBuilding', { p: player });
       return;

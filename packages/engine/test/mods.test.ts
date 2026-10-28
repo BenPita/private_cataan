@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_MOD, COSTS, DEV_DECK, MODS, PIECE_LIMITS, PLAYER_COLORS, isModId, modFor } from '../src';
+import { BASE_MOD, createGame, COSTS, DEV_DECK, MODS, PIECE_LIMITS, PLAYER_COLORS, isModId, modFor } from '../src';
 
 describe('mods registry', () => {
   it('has the base game', () => {
@@ -18,5 +18,19 @@ describe('mods registry', () => {
   it('a game without a mod (old save) is the base game', () => {
     expect(modFor({ config: {} })).toBe(BASE_MOD);
     expect(modFor({ config: { mod: 'base' } })).toBe(BASE_MOD);
+  });
+});
+
+describe('games record their mod', () => {
+  const two = [{ name: 'A', kind: 'human' as const }, { name: 'B', kind: 'human' as const }];
+  it('a new game is base, version 1', () => {
+    const s = createGame(two, 1);
+    expect(s.config.mod).toBe('base');
+    expect(s.config.modVersion).toBe(1);
+    expect(s.board.layout).toBe('classic');
+  });
+  it('player range comes from the mod', () => {
+    expect(() => createGame([two[0]], 1)).toThrow(/2-4/);
+    expect(() => createGame(Array(5).fill(two[0]), 1)).toThrow(/2-4/);
   });
 });
