@@ -1,6 +1,7 @@
 /**
  * Board graphs. Each layout (list of axial hex coordinates) has its own graph;
- * the classic one is the 3-4-5-4-3 island.
+ * the classic one is the 3-4-5-4-3 island, classic56 the 3-4-5-6-5-4-3 island
+ * of the 5–6 player game. Every graph is centred on the centroid of its hexes.
  *
  * Hexes use pointy-top axial coordinates. Vertices and edges are derived once
  * from hex corner positions and given stable, sorted ids ("v0".."v53",
@@ -61,6 +62,16 @@ function classicCoords(): Array<[number, number]> {
   return coords;
 }
 
+/** The 5–6 player island: rows 3-4-5-6-5-4-3 (row r has 6-|r| hexes). */
+function classic56Coords(): Array<[number, number]> {
+  const coords: Array<[number, number]> = [];
+  for (let r = -3; r <= 3; r++) {
+    const start = r <= 0 ? -3 - r : -3;
+    for (let q = start; q < start + 6 - Math.abs(r); q++) coords.push([q, r]);
+  }
+  return coords;
+}
+
 function key(x: number, y: number): string {
   return `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
 }
@@ -68,10 +79,15 @@ function key(x: number, y: number): string {
 function buildGraph(coords: Array<[number, number]>): BoardGraph {
   const rawVertices = new Map<string, { x: number; y: number; hexes: Set<number> }>();
   const hexCorners: string[][] = [];
+  const centre = (q: number, r: number) => ({ x: SQRT3 * (q + r / 2), y: 1.5 * r });
+  // Centroid offset, snapped to 0 for symmetric islands so classic stays bit-identical.
+  const snap = (n: number) => (Math.abs(n) < 1e-9 ? 0 : n);
+  const ox = snap(coords.reduce((s, [q, r]) => s + centre(q, r).x, 0) / coords.length);
+  const oy = snap(coords.reduce((s, [q, r]) => s + centre(q, r).y, 0) / coords.length);
 
   coords.forEach(([q, r], hexId) => {
-    const cx = SQRT3 * (q + r / 2);
-    const cy = 1.5 * r;
+    const cx = centre(q, r).x - ox;
+    const cy = centre(q, r).y - oy;
     const corners: string[] = [];
     for (let i = 0; i < 6; i++) {
       const angle = (Math.PI / 180) * (60 * i - 90);
@@ -156,7 +172,7 @@ function buildGraph(coords: Array<[number, number]>): BoardGraph {
       const [lo, hi] = Number(a.slice(1)) < Number(b.slice(1)) ? [a, b] : [b, a];
       es.push(edgeIdByKey.get(`${lo}-${hi}`)!);
     }
-    return { id, q, r, x: SQRT3 * (q + r / 2), y: 1.5 * r, vertices: vs, edges: es, neighbors: [] };
+    return { id, q, r, x: centre(q, r).x - ox, y: centre(q, r).y - oy, vertices: vs, edges: es, neighbors: [] };
   });
   for (const h of hexes) {
     h.neighbors = hexes
@@ -181,6 +197,7 @@ function buildGraph(coords: Array<[number, number]>): BoardGraph {
 
 const LAYOUTS: Record<LayoutId, () => Array<[number, number]>> = {
   classic: classicCoords,
+  classic56: classic56Coords,
 };
 
 const graphs = new Map<LayoutId, BoardGraph>();
@@ -198,6 +215,12 @@ export function graphFor(layout: LayoutId): BoardGraph {
 /** The graph a board is played on. */
 export function boardGraph(board: Pick<Board, 'layout'>): BoardGraph {
   return graphFor(board.layout ?? 'classic');
+}
+
+/** Half-width and half-height of a graph (max |x| and |y| of its vertices), for sizing renderers. */
+export function graphBounds(graph: BoardGraph): { maxX: number; maxY: number } {
+  const vs = Object.values(graph.vertices);
+  return { maxX: Math.max(...vs.map((v) => Math.abs(v.x))), maxY: Math.max(...vs.map((v) => Math.abs(v.y))) };
 }
 
 /** The classic 19-hex graph. Kept for tests; game code uses boardGraph(). */

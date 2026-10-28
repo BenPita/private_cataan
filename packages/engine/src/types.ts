@@ -37,7 +37,7 @@ export interface Harbor {
 }
 
 /** Shape of the island; each layout has its own vertex/edge graph (geometry.ts). */
-export type LayoutId = 'classic';
+export type LayoutId = 'classic' | 'classic56';
 
 export interface Board {
   /** Missing on games saved before mods existed → 'classic'. */
