@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { MODS, isModId } from '@hex/engine';
 import { emit, saveToken, useConnected, useRoom, type RoomSnapshot } from '../net';
 import { displayName, errorText, t, type Lang } from '../i18n';
 import { ExitConfirm, GameScreen } from '../game/GameScreen';
 import { BotLevels, Stepper, fitConfig, loadNickname, saveNickname } from './Home';
+import { modName } from './ModPicker';
 
 export function Room({ roomId, navigate, onLang }: { roomId: string; navigate: (p: string) => void; onLang: (l: Lang) => void }) {
   const { snapshot, status, error, closed } = useRoom(roomId);
@@ -42,6 +44,19 @@ export function Room({ roomId, navigate, onLang }: { roomId: string; navigate: (
     body = <JoinForm roomId={roomId} />;
   } else if (!snapshot) {
     body = <div className="screen center muted-light">{t('loading')}</div>;
+  } else if (snapshot.config.mod !== undefined && !isModId(snapshot.config.mod)) {
+    // The server knows a mod this (cached, older) client does not: never draw a broken game.
+    body = (
+      <div className="screen center">
+        <div className="card parchment closed-card">
+          <h2>{t('newVersionTitle')}</h2>
+          <p>{t('newVersionText')}</p>
+          <button className="btn primary wide big" onClick={() => location.reload()}>
+            {t('reload')}
+          </button>
+        </div>
+      </div>
+    );
   } else if (snapshot.status === 'lobby') {
     body = <Lobby snapshot={snapshot} />;
   } else {
@@ -128,6 +143,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
   const allReady = snapshot.seats.every((s) => s.kind === 'bot' || (s.claimed && s.ready));
   const needsInvite = snapshot.config.humans > 1;
   const claimedHumans = snapshot.seats.filter((s) => s.kind === 'human' && s.claimed).length;
+  const maxPlayers = MODS[snapshot.config.mod ?? 'base'].maxPlayers;
 
   const share = async () => {
     if (navigator.share) {
@@ -178,6 +194,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
 
       <div className="card parchment">
         <p className="label">{t('playersTitle', { n: snapshot.config.victoryTarget })}</p>
+        <p className="mod-tag">🗺️ {t('modLobbyTag', { name: modName(snapshot.config.mod) })}</p>
         {snapshot.config.startResBoth && <p className="house-rule-tag">🏠 {t('houseStartResOn')}</p>}
         {snapshot.config.devSameTurn && <p className="house-rule-tag">🏠 {t('houseDevNowOn')}</p>}
         <ul className="seats">
@@ -204,12 +221,12 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
         </ul>
         {isHost && (
           <div className="host-controls">
-            <Stepper label={t('humans')} value={snapshot.config.humans} min={Math.max(1, claimedHumans)} max={4} onChange={(humans) => setConfig({ humans })} />
+            <Stepper label={t('humans')} value={snapshot.config.humans} min={Math.max(1, claimedHumans)} max={maxPlayers} onChange={(humans) => setConfig({ humans })} />
             <Stepper
               label={t('bots')}
               value={snapshot.config.bots}
               min={snapshot.config.humans === 1 ? 1 : 0}
-              max={4 - snapshot.config.humans}
+              max={maxPlayers - snapshot.config.humans}
               onChange={(bots) => setConfig({ bots })}
             />
             {snapshot.config.bots > 0 && (

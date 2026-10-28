@@ -1,9 +1,13 @@
-import { useState } from 'react';
-import type { BotDifficulty } from '@hex/engine';
+import { useEffect, useState } from 'react';
+import { MODS, type BotDifficulty } from '@hex/engine';
 import { emit, saveToken, useConnected, type RoomConfig } from '../net';
-import { displayName, errorText, randomBotNames, t, type Lang } from '../i18n';
+import { displayName, errorText, getLang, randomBotNames, t, type Lang } from '../i18n';
 import { LanguagePicker } from '../game/GameScreen';
 import { HelpContent } from './Help';
+import { ModPicker } from './ModPicker';
+
+/** Most participants any installed mod allows. */
+export const MAX_PARTICIPANTS = Math.max(...Object.values(MODS).map((m) => m.maxPlayers));
 
 export function loadNickname() {
   try {
@@ -94,11 +98,11 @@ export function BotLevels({
   );
 }
 
-/** Keeps humans + bots within 2..4 and one level per bot. */
+/** Keeps humans + bots within 2..MAX_PARTICIPANTS and one level per bot. */
 export function fitConfig(c: RoomConfig): RoomConfig {
-  const humans = Math.min(4, Math.max(1, c.humans));
-  let bots = Math.min(3, Math.max(0, c.bots));
-  if (humans + bots > 4) bots = 4 - humans;
+  const humans = Math.min(MAX_PARTICIPANTS, Math.max(1, c.humans));
+  let bots = Math.min(MAX_PARTICIPANTS - 1, Math.max(0, c.bots));
+  if (humans + bots > MAX_PARTICIPANTS) bots = MAX_PARTICIPANTS - humans;
   if (humans + bots < 2) bots = 2 - humans;
   const current = c.botDifficulties ?? [];
   const botDifficulties = Array.from({ length: bots }, (_, i) => current[i] ?? c.difficulty ?? 'medium');
@@ -108,6 +112,7 @@ export function fitConfig(c: RoomConfig): RoomConfig {
 export function Home({ navigate, onLang }: { navigate: (path: string) => void; onLang: (l: Lang) => void }) {
   const [name, setName] = useState(loadNickname());
   const [config, setConfig] = useState<RoomConfig>({
+    mod: 'base',
     humans: 2,
     bots: 2,
     difficulty: 'medium',
@@ -123,6 +128,23 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
   const [help, setHelp] = useState(false);
   const connected = useConnected();
   const update = (patch: Partial<RoomConfig>) => setConfig((c) => fitConfig({ ...c, ...patch }));
+  // Step 2 (mod + settings) is a history entry, so the phone's back button returns to step 1.
+  const [step, setStep] = useState<'players' | 'mod'>('players');
+  useEffect(() => {
+    // A reload on step 2 starts at step 1, so the entry must say so too.
+    if ((history.state as { homeStep?: string } | null)?.homeStep === 'mod') history.replaceState(null, '');
+    const onPop = () => setStep((history.state as { homeStep?: string } | null)?.homeStep === 'mod' ? 'mod' : 'players');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
+  const chooseMod = () => {
+    saveNickname(name.trim());
+    history.pushState({ homeStep: 'mod' }, '');
+    setStep('mod');
+  };
 
   const create = async () => {
     setBusy(true);
@@ -134,6 +156,20 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
     saveToken(res.roomId, res.token);
     navigate(`/g/${res.roomId}`);
   };
+
+  if (step === 'mod') {
+    return (
+      <ModPicker
+        config={config}
+        update={update}
+        onBack={() => history.back()}
+        onCreate={create}
+        canCreate={!!name.trim() && !busy && connected}
+        createLabel={connected ? t('createGame') : t('offline')}
+        error={error}
+      />
+    );
+  }
 
   return (
     <div className="screen home scenic">
@@ -147,8 +183,14 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
           <span>{t('nickname')}</span>
           <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder={t('nicknamePlaceholder')} />
         </label>
-        <Stepper label={t('humans')} value={config.humans} min={1} max={4} onChange={(humans) => update({ humans })} />
-        <Stepper label={t('bots')} value={config.bots} min={config.humans === 1 ? 1 : 0} max={4 - config.humans} onChange={(bots) => update({ bots })} />
+        <Stepper label={t('humans')} value={config.humans} min={1} max={MAX_PARTICIPANTS} onChange={(humans) => update({ humans })} />
+        <Stepper
+          label={t('bots')}
+          value={config.bots}
+          min={config.humans === 1 ? 1 : 0}
+          max={MAX_PARTICIPANTS - config.humans}
+          onChange={(bots) => update({ bots })}
+        />
         {config.bots > 0 && (
           <BotLevels
             levels={config.botDifficulties}
@@ -160,44 +202,9 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
           {t('participants', { n: config.humans + config.bots })}
           {config.humans === 1 ? ` · ${t('soloHint')}` : ''}
         </p>
-        <div className="seg">
-          <span>{t('victoryTarget')}</span>
-          <div className="seg-buttons">
-            {[10, 12].map((n) => (
-              <button key={n} className={config.victoryTarget === n ? 'on' : ''} onClick={() => update({ victoryTarget: n })}>
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="seg">
-          <span>{t('board')}</span>
-          <div className="seg-buttons">
-            <button className={config.boardType === 'random' ? 'on' : ''} onClick={() => update({ boardType: 'random' })}>
-              {t('randomBoard')}
-            </button>
-            <button className={config.boardType === 'beginner' ? 'on' : ''} onClick={() => update({ boardType: 'beginner' })}>
-              {t('beginnerBoard')}
-            </button>
-          </div>
-        </div>
-        <label className="check house-rule">
-          <input type="checkbox" checked={!!config.startResBoth} onChange={(e) => update({ startResBoth: e.target.checked })} />
-          <span>
-            <b>{t('houseStartRes')}</b>
-            <small>{t('houseStartResInfo')}</small>
-          </span>
-        </label>
-        <label className="check house-rule">
-          <input type="checkbox" checked={!!config.devSameTurn} onChange={(e) => update({ devSameTurn: e.target.checked })} />
-          <span>
-            <b>{t('houseDevNow')}</b>
-            <small>{t('houseDevNowInfo')}</small>
-          </span>
-        </label>
         {error && <p className="error">{error}</p>}
-        <button className="btn primary wide big" disabled={!name.trim() || busy || !connected} onClick={create}>
-          {connected ? t('createGame') : t('offline')}
+        <button className="btn primary wide big" disabled={!name.trim()} onClick={chooseMod}>
+          {t('chooseMod')} {getLang() === 'he' ? '←' : '→'}
         </button>
       </div>
 

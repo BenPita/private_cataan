@@ -181,7 +181,13 @@ Build order
   that snapshot to make a change pass).
   Original plan: move the base game into the mod structure with zero visible change. All existing
   tests and seeded bot simulations must produce identical results to before.
-- Stage 1: mod-selection screen (screen 2) and lobby display.
+- Stage 1 — DONE 2026-10-28 (branch `mods-stage0`): `client/src/screens/ModPicker.tsx` is home step 2
+  (a history entry, so the phone back button returns to step 1). Menu list `CATALOG` there: ids in the
+  engine's `MODS` are playable, the rest show greyed as "Coming soon" (Seafarers, Cities & Knights,
+  Traders & Barbarians, Explorers & Pirates). Card art = three painted hex tiles. Victory target, board
+  and house rules moved from step 1 to step 2. Step 1's participant limit = largest `maxPlayers` of any
+  mod (4 today). Lobby shows "Mod: <name>" and caps players at the room mod's `maxPlayers`. A client
+  that receives an unknown mod id shows "new version — reload" instead of the game.
 - Stage 2: 5–6 players for the base game, from official rules the owner sends (larger board,
   bank, deck, extra colours, the official extra-build rule).
 - Then one expansion at a time, each with its own spec section, tests, 100-game bot run,
