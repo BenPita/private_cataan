@@ -4,7 +4,7 @@ import { emit, saveToken, useConnected, useRoom, type RoomSnapshot } from '../ne
 import { displayName, errorText, t, type Lang } from '../i18n';
 import { ExitConfirm, GameScreen } from '../game/GameScreen';
 import { BotLevels, Stepper, fitConfig, loadNickname, saveNickname } from './Home';
-import { modName } from './ModPicker';
+import { modName, roomTarget, scenarioName } from './ModPicker';
 
 export function Room({ roomId, navigate, onLang }: { roomId: string; navigate: (p: string) => void; onLang: (l: Lang) => void }) {
   const { snapshot, status, error, closed } = useRoom(roomId);
@@ -193,11 +193,12 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
       )}
 
       <div className="card parchment">
-        <p className="label">{t('playersTitle', { n: snapshot.config.victoryTarget })}</p>
+        <p className="label">{t('playersTitle', { n: roomTarget(snapshot.config) })}</p>
         <p className="mod-tag">
           🗺️ {t('modLobbyTag', { name: modName(snapshot.config.mod) })}
           {snapshot.config.humans + snapshot.config.bots > 4 && <span className="tag">{t('mod56Tag')}</span>}
         </p>
+        {snapshot.config.scenario && <p className="mod-tag">⛵ {t('scenarioLobbyTag', { name: scenarioName(snapshot.config.scenario) })}</p>}
         {snapshot.config.startResBoth && <p className="house-rule-tag">🏠 {t('houseStartResOn')}</p>}
         {snapshot.config.devSameTurn && <p className="house-rule-tag">🏠 {t('houseDevNowOn')}</p>}
         <ul className="seats">

@@ -225,6 +225,54 @@ const en = {
   view3d: '3D',
   view2d: '2D',
   vibration: 'Vibration',
+  // Seafarers: scenarios
+  scenarioTitle: 'Scenario',
+  scenarioTarget: 'First to {n} points',
+  scenarioLobbyTag: 'Scenario: {name}',
+  scenario_newShores: 'Heading for New Shores',
+  scenario_newShores_goal: 'Sail to the small islands: +2 points for your first settlement on each.',
+  scenario_fourIslands: 'The Four Islands',
+  scenario_fourIslands_goal: 'Start on two islands, then settle the others for bonus points.',
+  scenario_fogIslands: 'The Fog Islands',
+  scenario_fogIslands_goal: 'Sail into the fog and discover new land.',
+  scenario_throughDesert: 'Through the Desert',
+  scenario_throughDesert_goal: 'Cross the desert to reach the unexplored lands.',
+  scenario_forgottenTribe: 'The Forgotten Tribe',
+  scenario_forgottenTribe_goal: 'Find the forgotten tribe and collect its gifts.',
+  scenario_clothForCatan: 'Cloth for Catan',
+  scenario_clothForCatan_goal: 'Bring cloth from the villages of the small islands.',
+  scenario_pirateIslands: 'The Pirate Islands',
+  scenario_pirateIslands_goal: 'Sail your warships to capture a pirate fortress.',
+  scenario_wondersOfCatan: 'The Wonders of Catan',
+  scenario_wondersOfCatan_goal: 'Be the first to complete your wonder.',
+  scenario_newWorld: 'New World',
+  scenario_newWorld_goal: 'A new random archipelago every game.',
+  // Seafarers: game
+  ship: 'Ship',
+  ships: 'Ships on the board',
+  moveShip: 'Move ship',
+  moveShipInfo: 'Once per turn, a ship with an open end',
+  reasonShipMoved: 'Already moved a ship this turn',
+  reasonNoMovable: 'No ship can move',
+  hintPlaceRoadOrShip: 'Place a road or a ship next to your settlement',
+  hintMoveRobberPirate: 'Move the robber (land) or the pirate (sea)',
+  hintFreePieces: 'Place {n} free road(s) or ship(s)',
+  hintPickShip: 'Tap one of your highlighted ships',
+  hintShipTo: 'Tap where the ship should sail',
+  hintGold: 'Gold field: choose {n} resources',
+  hintWaitGold: 'Waiting for {names} to choose gold…',
+  confirmSetupShip: 'Place ship here?',
+  confirmShip: 'Build ship for',
+  confirmFreeShip: 'Place a free ship here?',
+  confirmPirate: 'Move the pirate here?',
+  confirmMoveShip: 'Sail the ship here?',
+  roadOrShip: 'Road or ship?',
+  freeRoadOrShip: 'Free piece here: road or ship?',
+  pirateHere: 'pirate',
+  goldTitle: 'Gold field: choose {n}',
+  goldText: 'Your gold field produced. Choose {n} resources of your choice from the bank.',
+  goldBtn: 'Take {k}/{n}',
+  bonusTitle: '+{n} points: new island!',
 };
 
 type Dict = typeof en;
@@ -433,6 +481,54 @@ const he: Dict = {
   view3d: 'תלת-ממד',
   view2d: 'דו-ממד',
   vibration: 'רטט',
+  // Seafarers: scenarios
+  scenarioTitle: 'תרחיש',
+  scenarioTarget: 'הראשון ל-{n} נקודות',
+  scenarioLobbyTag: 'תרחיש: {name}',
+  scenario_newShores: 'לקראת חופים חדשים',
+  scenario_newShores_goal: 'הפליגו לאיים הקטנים: +2 נקודות על היישוב הראשון בכל אי.',
+  scenario_fourIslands: 'ארבעת האיים',
+  scenario_fourIslands_goal: 'מתחילים בשני איים, ומתיישבים באחרים בשביל נקודות בונוס.',
+  scenario_fogIslands: 'איי הערפל',
+  scenario_fogIslands_goal: 'הפליגו לתוך הערפל וגלו ארצות חדשות.',
+  scenario_throughDesert: 'דרך המדבר',
+  scenario_throughDesert_goal: 'חצו את המדבר כדי להגיע לארצות שלא נחקרו.',
+  scenario_forgottenTribe: 'השבט הנשכח',
+  scenario_forgottenTribe_goal: 'מצאו את השבט הנשכח ואספו את המתנות שלו.',
+  scenario_clothForCatan: 'בדים לאי',
+  scenario_clothForCatan_goal: 'הביאו בדים מהכפרים שבאיים הקטנים.',
+  scenario_pirateIslands: 'איי הפיראטים',
+  scenario_pirateIslands_goal: 'שלחו ספינות מלחמה לכבוש מבצר פיראטים.',
+  scenario_wondersOfCatan: 'פלאי האי',
+  scenario_wondersOfCatan_goal: 'היו הראשונים להשלים את פלא העולם שלכם.',
+  scenario_newWorld: 'עולם חדש',
+  scenario_newWorld_goal: 'ארכיפלג אקראי חדש בכל משחק.',
+  // Seafarers: game
+  ship: 'ספינה',
+  ships: 'ספינות על הלוח',
+  moveShip: 'הזזת ספינה',
+  moveShipInfo: 'פעם בתור, ספינה עם קצה פתוח',
+  reasonShipMoved: 'כבר הזזת ספינה בתור הזה',
+  reasonNoMovable: 'אין ספינה שאפשר להזיז',
+  hintPlaceRoadOrShip: 'הנח/י דרך או ספינה ליד היישוב',
+  hintMoveRobberPirate: 'הזז/י את השודד (יבשה) או את הפיראט (ים)',
+  hintFreePieces: 'הנח/י {n} דרכים או ספינות בחינם',
+  hintPickShip: 'הקש/י על אחת הספינות המסומנות שלך',
+  hintShipTo: 'הקש/י על המקום שאליו הספינה תפליג',
+  hintGold: 'שדה זהב: בחר/י {n} משאבים',
+  hintWaitGold: 'מחכים ש{names} יבחרו משאבים משדה זהב…',
+  confirmSetupShip: 'להניח כאן ספינה?',
+  confirmShip: 'לבנות ספינה תמורת',
+  confirmFreeShip: 'להניח כאן ספינה בחינם?',
+  confirmPirate: 'להזיז את הפיראט לכאן?',
+  confirmMoveShip: 'להפליג עם הספינה לכאן?',
+  roadOrShip: 'דרך או ספינה?',
+  freeRoadOrShip: 'חלק חינמי כאן: דרך או ספינה?',
+  pirateHere: 'פיראט',
+  goldTitle: 'שדה זהב: בחר/י {n}',
+  goldText: 'שדה הזהב שלך הניב. בחר/י {n} משאבים לבחירתך מהבנק.',
+  goldBtn: 'לקחת {k}/{n}',
+  bonusTitle: '+{n} נקודות: אי חדש!',
 };
 
 export type Key = keyof Dict;
@@ -504,7 +600,18 @@ const DEV: Record<Lang, Record<DevCardType, { name: string; text: string }>> = {
 
 export const resourceName = (r: Resource) => RESOURCE_NAMES[lang][r];
 export const terrainName = (tr: Terrain) => TERRAIN_NAMES[lang][tr];
-export const devInfo = (d: DevCardType) => DEV[lang][d];
+/** Seafarers wording: the Knight may move the pirate, Road Building also builds ships. */
+const DEV_SEA: Record<Lang, Partial<Record<DevCardType, { name: string; text: string }>>> = {
+  en: {
+    knight: { name: 'Knight', text: 'Move the robber to a new land or the pirate to a new sea, and steal 1 random card. Counts toward Largest Army.' },
+    roadBuilding: { name: 'Road Building', text: 'Build 2 roads, 2 ships, or 1 of each at no cost.' },
+  },
+  he: {
+    knight: { name: 'אביר', text: 'הזז/י את השודד לשטח חדש או את הפיראט לים אחר, וגנוב/י קלף אקראי. נספר לצבא הגדול.' },
+    roadBuilding: { name: 'בניית דרכים', text: 'בנה/י בחינם 2 דרכים, 2 ספינות, או אחת מכל סוג.' },
+  },
+};
+export const devInfo = (d: DevCardType, sea = false) => (sea && DEV_SEA[lang][d]) || DEV[lang][d];
 export const difficultyName = (d: 'easy' | 'medium' | 'hard') => t(d);
 
 export function resourcesText(res: Partial<ResMap>): string {
@@ -694,6 +801,35 @@ const ERRORS_HE: Record<string, string> = {
   'Target must be 10 or 12': 'היעד חייב להיות 10 או 12',
   'Invalid board type': 'סוג לוח לא תקין',
   'Invalid settings': 'הגדרות לא תקינות',
+  // Seafarers
+  'A ship built this turn cannot move': 'ספינה שנבנתה בתור הזה לא יכולה לזוז',
+  'Invalid choice': 'בחירה לא תקינה',
+  'Move the ship to a different edge': 'יש להזיז את הספינה למקום אחר',
+  'No ship may be placed next to the pirate': 'אסור להניח ספינה ליד הפיראט',
+  'No ships left': 'לא נשארו ספינות',
+  'Not enough resources for a ship': 'אין מספיק משאבים לספינה',
+  'Only a ship with an open end can move': 'רק ספינה עם קצה פתוח יכולה לזוז',
+  'Roads must be built next to land': 'דרכים נבנות רק ליד יבשה',
+  'Ship must connect to your ship or building': 'הספינה חייבת להתחבר לספינה או למבנה שלך',
+  'Ships must be placed next to the sea': 'ספינות מונחות רק ליד הים',
+  'Ships next to the pirate cannot move': 'ספינות ליד הפיראט לא יכולות לזוז',
+  'Starting settlements must be placed on the main island': 'יישובי הפתיחה חייבים להיות על האי הראשי',
+  'That edge already has a ship': 'כבר יש כאן ספינה',
+  'That is not your ship': 'זו לא הספינה שלך',
+  'The mod cannot be changed': 'אי אפשר לשנות את המוד',
+  'The pirate must move to a different hex': 'הפיראט חייב לזוז לשטח ים אחר',
+  'The pirate must move to a sea hex': 'הפיראט חייב לזוז לשטח ים',
+  'The robber must stay on land': 'השודד חייב להישאר ביבשה',
+  'The scenario cannot be changed': 'אי אפשר לשנות את התרחיש',
+  'The ship must touch the settlement you just placed, on a sea edge': 'הספינה חייבת לגעת ביישוב שהנחת עכשיו, בצלע שליד הים',
+  'There is no pirate in this game': 'אין פיראט במשחק הזה',
+  'This game has no ships': 'אין ספינות במשחק הזה',
+  'This ship links two of your buildings': 'הספינה הזו מחברת בין שני מבנים שלך',
+  'Unknown mod': 'מוד לא ידוע',
+  'Unknown scenario': 'תרחיש לא ידוע',
+  'You already moved a ship this turn': 'כבר הזזת ספינה בתור הזה',
+  'You have no gold to choose': 'אין לך זהב לבחור',
+  'Settlement must connect to one of your roads or ships': 'היישוב חייב להתחבר לאחת הדרכים או הספינות שלך',
 };
 
 export function errorText(msg: string): string {
@@ -701,6 +837,8 @@ export function errorText(msg: string): string {
   if (ERRORS_HE[msg]) return ERRORS_HE[msg];
   let m = msg.match(/^You must discard exactly (\d+) cards$/);
   if (m) return `יש לזרוק בדיוק ${m[1]} קלפים`;
+  m = msg.match(/^Choose exactly (\d+) resources$/);
+  if (m) return `יש לבחור בדיוק ${m[1]} משאבים`;
   m = msg.match(/^Not enough resources for (.+)$/);
   if (m) return 'אין מספיק משאבים';
   m = msg.match(/^Not allowed during (\w+)$/);

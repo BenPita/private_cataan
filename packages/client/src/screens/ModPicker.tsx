@@ -1,5 +1,5 @@
 import type { CSSProperties, PointerEvent } from 'react';
-import { MODS, isModId, modPlayerRange, type ModId } from '@hex/engine';
+import { MODS, SEAFARERS_MOD, isModId, modPlayerRange, type ModId } from '@hex/engine';
 import type { RoomConfig } from '../net';
 import { getLang, t, type Key } from '../i18n';
 
@@ -28,6 +28,61 @@ const fitsMod = (id: string, n: number) => {
 
 /** Display name of a mod (lobby tag, etc.). */
 export const modName = (id: string | undefined) => modText(id ?? 'base');
+
+/**
+ * Seafarers scenarios in rulebook order. Ids in the engine's
+ * `SEAFARERS_MOD.scenarios` are playable; the rest show as "coming soon".
+ */
+const SCENARIOS = [
+  'newShores',
+  'fourIslands',
+  'fogIslands',
+  'throughDesert',
+  'forgottenTribe',
+  'clothForCatan',
+  'pirateIslands',
+  'wondersOfCatan',
+  'newWorld',
+];
+
+/** Display name of a Seafarers scenario. */
+export const scenarioName = (id: string) => t(`scenario_${id}` as Key);
+
+/** Victory target of a room: the scenario's, if the mod has scenarios. */
+export function roomTarget(config: Pick<RoomConfig, 'mod' | 'scenario' | 'victoryTarget'>): number {
+  const def = isModId(config.mod) ? MODS[config.mod] : null;
+  const scenario = def?.scenarios?.[config.scenario ?? def.defaultScenario ?? ''];
+  return scenario?.victoryTarget ?? config.victoryTarget;
+}
+
+function ScenarioPicker({ value, onPick }: { value: string; onPick: (id: string) => void }) {
+  const playable = SEAFARERS_MOD.scenarios ?? {};
+  return (
+    <div className="scenario-list" role="radiogroup" aria-label={t('scenarioTitle')}>
+      {SCENARIOS.map((id) => {
+        const def = playable[id];
+        const on = !!def && value === id;
+        return (
+          <button
+            key={id}
+            role="radio"
+            aria-checked={on}
+            className={`scenario-card${on ? ' on' : ''}${def ? '' : ' soon'}`}
+            disabled={!def}
+            onClick={() => onPick(id)}
+          >
+            <span className="mod-text">
+              <b>{scenarioName(id)}</b>
+              {def && <small>{t(`scenario_${id}_goal` as Key)}</small>}
+              {def && <span className="mod-meta">{t('scenarioTarget', { n: def.victoryTarget })}</span>}
+            </span>
+            {!def && <span className="soon-tag">{t('comingSoon')}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function ModArt({ tiles, sea }: { tiles: [string, string, string]; sea?: boolean }) {
   return (
@@ -100,6 +155,12 @@ export function ModPicker({
   const participants = config.humans + config.bots;
   const selected = config.mod ?? 'base';
   const rtl = getLang() === 'he';
+  const selectedDef = MODS[selected];
+  // A scenario-based mod always sends a scenario; other mods never do.
+  const pickMod = (id: string) => {
+    const def = MODS[id as ModId];
+    update({ mod: id as ModId, scenario: def.scenarios ? (config.scenario && def.scenarios[config.scenario] ? config.scenario : def.defaultScenario) : undefined });
+  };
 
   return (
     <div className="screen home scenic mod-screen">
@@ -115,7 +176,7 @@ export function ModPicker({
         <div className="mod-shelf" role="radiogroup" aria-label={t('modTitle')}>
           {CATALOG.filter((c) => c.box).map(({ id, box }) => {
             const playable = fitsMod(id, participants);
-            return <GameBox key={id} id={id} art={box!.art} side={box!.side} on={playable && selected === id} playable={playable} onPick={() => update({ mod: id as ModId })} />;
+            return <GameBox key={id} id={id} art={box!.art} side={box!.side} on={playable && selected === id} playable={playable} onPick={() => pickMod(id)} />;
           })}
         </div>
         <div className="mod-detail" aria-live="polite">
@@ -140,7 +201,7 @@ export function ModPicker({
                 aria-checked={on}
                 className={`mod-card${on ? ' on' : ''}${mod ? '' : ' soon'}${mod && !fits ? ' blocked' : ''}`}
                 disabled={!playable}
-                onClick={() => update({ mod: id as ModId })}
+                onClick={() => pickMod(id)}
               >
                 <ModArt tiles={tiles} sea={sea} />
                 <span className="mod-text">
@@ -156,28 +217,44 @@ export function ModPicker({
           })}
         </div>
 
+        {selectedDef.scenarios && (
+          <>
+            <p className="mod-settings-title">{t('scenarioTitle')}</p>
+            <ScenarioPicker value={config.scenario ?? selectedDef.defaultScenario ?? ''} onPick={(scenario) => update({ scenario })} />
+          </>
+        )}
+
         <p className="mod-settings-title">{t('modSettings')}</p>
-        <div className="seg">
-          <span>{t('victoryTarget')}</span>
-          <div className="seg-buttons">
-            {[10, 12].map((n) => (
-              <button key={n} className={config.victoryTarget === n ? 'on' : ''} onClick={() => update({ victoryTarget: n })}>
-                {n}
-              </button>
-            ))}
+        {selectedDef.scenarios ? (
+          <div className="seg">
+            <span>{t('victoryTarget')}</span>
+            <b className="scenario-target">{roomTarget(config)}</b>
           </div>
-        </div>
-        <div className="seg">
-          <span>{t('board')}</span>
-          <div className="seg-buttons">
-            <button className={config.boardType === 'random' ? 'on' : ''} onClick={() => update({ boardType: 'random' })}>
-              {t('randomBoard')}
-            </button>
-            <button className={config.boardType === 'beginner' ? 'on' : ''} onClick={() => update({ boardType: 'beginner' })}>
-              {t('beginnerBoard')}
-            </button>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="seg">
+              <span>{t('victoryTarget')}</span>
+              <div className="seg-buttons">
+                {[10, 12].map((n) => (
+                  <button key={n} className={config.victoryTarget === n ? 'on' : ''} onClick={() => update({ victoryTarget: n })}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="seg">
+              <span>{t('board')}</span>
+              <div className="seg-buttons">
+                <button className={config.boardType === 'random' ? 'on' : ''} onClick={() => update({ boardType: 'random' })}>
+                  {t('randomBoard')}
+                </button>
+                <button className={config.boardType === 'beginner' ? 'on' : ''} onClick={() => update({ boardType: 'beginner' })}>
+                  {t('beginnerBoard')}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
         <label className="check house-rule">
           <input type="checkbox" checked={!!config.startResBoth} onChange={(e) => update({ startResBoth: e.target.checked })} />
           <span>
@@ -193,7 +270,7 @@ export function ModPicker({
           </span>
         </label>
         {error && <p className="error">{error}</p>}
-        <button className="btn primary wide big" disabled={!canCreate} onClick={onCreate}>
+        <button className="btn primary wide big" disabled={!canCreate || !fitsMod(selected, participants)} onClick={onCreate}>
           {createLabel}
         </button>
       </div>

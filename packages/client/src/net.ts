@@ -13,6 +13,8 @@ export interface RoomConfig {
   startResBoth?: boolean;
   devSameTurn?: boolean;
   botNames?: string[];
+  /** Seafarers scenario id (fixed once the room exists). */
+  scenario?: string;
 }
 
 export interface PublicSeat {
