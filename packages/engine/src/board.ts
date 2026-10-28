@@ -1,7 +1,8 @@
-import { graphFor, type BoardGraph } from './geometry';
+import { graphFor, hexSideEdge, registerLayout, type BoardGraph } from './geometry';
+import { boardHexes, type ScenarioMap } from './mods/seafarers/mapTypes';
 import type { ModDef } from './mods/types';
 import { Rng } from './rng';
-import type { Board, Harbor, HexTile, Terrain } from './types';
+import type { Board, Harbor, HexTile, LayoutId, Terrain } from './types';
 
 const isRed = (n: number | null) => n === 6 || n === 8;
 
@@ -28,7 +29,7 @@ export function generateRandomBoard(rng: Rng, mod: ModDef): Board {
   const graph = graphFor(mod.layout);
   const terrains: Terrain[] = [];
   (Object.keys(mod.terrainCounts) as Terrain[]).forEach((t) => {
-    for (let i = 0; i < mod.terrainCounts[t]; i++) terrains.push(t);
+    for (let i = 0; i < (mod.terrainCounts[t] ?? 0); i++) terrains.push(t);
   });
 
   // Balanced generation: reshuffle until no two 6/8 tokens touch.
@@ -81,4 +82,32 @@ export function validateBoard(board: Board, mod: ModDef): void {
   }
   if (board.harbors.length !== mod.harborGaps.length) throw new Error(`Board must have ${mod.harborGaps.length} harbors`);
   if (board.hexes[board.robberHex].terrain !== 'desert') throw new Error('Robber must start on the desert');
+}
+
+/**
+ * A fixed (printed) scenario board: hexes in map order with their printed
+ * numbers, ports on the given hex sides, robber and pirate where shown.
+ * Registers the map's layout under `layout` so its graph can be built.
+ */
+export function boardFromMap(map: ScenarioMap, layout: LayoutId, startRegions?: string[]): Board {
+  const all = boardHexes(map);
+  registerLayout(layout, all.map((h): [number, number] => [h.q, h.r]));
+  const graph = graphFor(layout);
+  const index = (q: number, r: number, what: string): number => {
+    const i = all.findIndex((h) => h.q === q && h.r === r);
+    if (i < 0) throw new Error(`${what} at (${q},${r}) is not on the map`);
+    return i;
+  };
+  const hexes: HexTile[] = all.map((h, id) => ({
+    id,
+    terrain: h.t,
+    number: h.n,
+    ...(h.region && h.t !== 'sea' ? { region: h.region } : {}),
+  }));
+  const harbors: Harbor[] = map.ports.map((p) => ({ edge: hexSideEdge(graph, index(p.q, p.r, 'Port'), p.dir), type: p.type }));
+  const robberHex = index(map.robber[0], map.robber[1], 'Robber');
+  const pirateHex = index(map.pirate[0], map.pirate[1], 'Pirate');
+  if (hexes[robberHex].terrain === 'sea') throw new Error('The robber must start on land');
+  if (hexes[pirateHex].terrain !== 'sea') throw new Error('The pirate must start on the sea');
+  return { layout, hexes, harbors, robberHex, pirateHex, ...(startRegions ? { startRegions: [...startRegions] } : {}) };
 }

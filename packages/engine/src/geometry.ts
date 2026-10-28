@@ -195,10 +195,29 @@ function buildGraph(coords: Array<[number, number]>): BoardGraph {
   };
 }
 
-const LAYOUTS: Record<LayoutId, () => Array<[number, number]>> = {
-  classic: classicCoords,
-  classic56: classic56Coords,
-};
+const LAYOUTS = new Map<LayoutId, () => Array<[number, number]>>([
+  ['classic', classicCoords],
+  ['classic56', classic56Coords],
+]);
+
+/**
+ * Registers a layout from a list of axial hex coordinates (hex id = index),
+ * e.g. a Seafarers scenario map with its sea hexes. Re-registering the same
+ * id with the same coordinates is a no-op; different coordinates are an error.
+ */
+export function registerLayout(id: LayoutId, coords: Array<[number, number]>): void {
+  const existing = LAYOUTS.get(id);
+  if (existing) {
+    if (JSON.stringify(existing()) !== JSON.stringify(coords)) throw new Error(`Layout ${id} is already registered`);
+    return;
+  }
+  const copy = coords.map(([q, r]): [number, number] => [q, r]);
+  LAYOUTS.set(id, () => copy);
+}
+
+export function isLayoutId(id: unknown): id is LayoutId {
+  return typeof id === 'string' && LAYOUTS.has(id as LayoutId);
+}
 
 const graphs = new Map<LayoutId, BoardGraph>();
 
@@ -206,7 +225,9 @@ const graphs = new Map<LayoutId, BoardGraph>();
 export function graphFor(layout: LayoutId): BoardGraph {
   let g = graphs.get(layout);
   if (!g) {
-    g = buildGraph(LAYOUTS[layout]());
+    const coords = LAYOUTS.get(layout);
+    if (!coords) throw new Error(`Unknown layout: ${layout}`);
+    g = buildGraph(coords());
     graphs.set(layout, g);
   }
   return g;
@@ -215,6 +236,29 @@ export function graphFor(layout: LayoutId): BoardGraph {
 /** The graph a board is played on. */
 export function boardGraph(board: Pick<Board, 'layout'>): BoardGraph {
   return graphFor(board.layout ?? 'classic');
+}
+
+/**
+ * The edge on side `dir` of a hex, `dir` indexing the axial neighbour
+ * directions east, north-east, north-west, west, south-west, south-east.
+ */
+export function hexSideEdge(graph: BoardGraph, hexId: number, dir: number): string {
+  const DIRS: Array<[number, number]> = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const [dq, dr] = DIRS[dir];
+  const h = graph.hexes[hexId];
+  // The edge midpoint lies halfway to the neighbour's centre.
+  const tx = h.x + (SQRT3 * (dq + dr / 2)) / 2;
+  const ty = h.y + (1.5 * dr) / 2;
+  let best = h.edges[0];
+  let bestD = Infinity;
+  for (const e of h.edges) {
+    const d = (graph.edges[e].x - tx) ** 2 + (graph.edges[e].y - ty) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
 }
 
 /** Half-width and half-height of a graph (max |x| and |y| of its vertices), for sizing renderers. */

@@ -21,7 +21,7 @@ export const PIECE_LIMITS = { roads: 15, settlements: 5, cities: 4 };
 
 export const BANK_SUPPLY_PER_RESOURCE = 19;
 
-export const TERRAIN_COUNTS: Record<Terrain, number> = {
+export const TERRAIN_COUNTS: Partial<Record<Terrain, number>> = {
   forest: 4,
   hills: 3,
   pasture: 4,
@@ -37,6 +37,9 @@ export const TERRAIN_RESOURCE: Record<Terrain, Resource | null> = {
   fields: 'grain',
   mountains: 'ore',
   desert: null,
+  sea: null,
+  /** Gold produces a resource of the owner's choice (GOLD_CHOICE), never a fixed one. */
+  gold: null,
 };
 
 export const NUMBER_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];

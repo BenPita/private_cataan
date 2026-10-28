@@ -4,7 +4,10 @@ export const RESOURCES = ['lumber', 'brick', 'wool', 'grain', 'ore'] as const;
 export type Resource = (typeof RESOURCES)[number];
 export type ResMap = Record<Resource, number>;
 
-export type Terrain = 'forest' | 'hills' | 'pasture' | 'fields' | 'mountains' | 'desert';
+/** Land terrains of the base game. */
+export type BaseTerrain = 'forest' | 'hills' | 'pasture' | 'fields' | 'mountains' | 'desert';
+/** Every hex terrain. Seafarers adds sea hexes and gold fields (1 resource of choice). */
+export type Terrain = BaseTerrain | 'sea' | 'gold';
 
 export type DevCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly';
 
@@ -18,6 +21,7 @@ export type Phase =
   | 'ROBBER_DISCARD'
   | 'ROBBER_MOVE'
   | 'ROBBER_STEAL'
+  | 'GOLD_CHOICE'
   | 'MAIN_ACTIONS'
   | 'GAME_OVER';
 
@@ -26,8 +30,10 @@ export type BotDifficulty = 'easy' | 'medium' | 'hard';
 export interface HexTile {
   id: number;
   terrain: Terrain;
-  /** Dice number token; null for the desert. */
+  /** Dice number token; null for the desert and sea. */
   number: number | null;
+  /** Seafarers: land region (island) of the hex, e.g. 'main'. Missing on base boards and sea. */
+  region?: string;
 }
 
 export interface Harbor {
@@ -36,8 +42,11 @@ export interface Harbor {
   type: HarborType;
 }
 
-/** Shape of the island; each layout has its own vertex/edge graph (geometry.ts). */
-export type LayoutId = 'classic' | 'classic56';
+/**
+ * Shape of the island; each layout has its own vertex/edge graph (geometry.ts).
+ * Seafarers scenario maps register layouts named `sf-<scenario>-<n>p`.
+ */
+export type LayoutId = 'classic' | 'classic56' | `sf-${string}`;
 
 export interface Board {
   /** Missing on games saved before mods existed → 'classic'. */
@@ -45,6 +54,10 @@ export interface Board {
   hexes: HexTile[];
   harbors: Harbor[];
   robberHex: number;
+  /** Seafarers: sea hex holding the pirate. Missing on boards without a pirate. */
+  pirateHex?: number;
+  /** Seafarers: regions where starting settlements may go (missing = anywhere). */
+  startRegions?: string[];
 }
 
 export interface Building {
@@ -73,6 +86,12 @@ export interface PlayerState extends PlayerSetup {
   settlementsBuilt: number;
   citiesBuilt: number;
   playedDevThisTurn: boolean;
+  /** Seafarers: ships placed (pieces on the board). Missing on older saves → 0. */
+  shipsBuilt?: number;
+  /** Seafarers: victory point tokens (public VP), e.g. +2 for a first settlement on an island. */
+  vpTokens?: number;
+  /** Seafarers: regions in which this player already received the first-settlement bonus. */
+  bonusRegions?: string[];
 }
 
 export interface TradeOffer {
@@ -112,7 +131,7 @@ export interface LastRoll {
 }
 
 /** Installed mods (engine/src/mods). 'base' = the classic base game. */
-export type ModId = 'base';
+export type ModId = 'base' | 'seafarers';
 
 export interface GameConfig {
   /** Missing on games saved before mods existed → 'base'. */
@@ -125,6 +144,8 @@ export interface GameConfig {
   startResBothSettlements?: boolean;
   /** House rule: development cards may be played on the turn they were bought (official: next turn). */
   devCardsSameTurn?: boolean;
+  /** Seafarers: scenario id (default 'newShores'). Missing for mods without scenarios. */
+  scenario?: string;
 }
 
 export interface GameState {
@@ -133,6 +154,8 @@ export interface GameState {
   board: Board;
   buildings: Record<string, Building>;
   roads: Record<string, number>;
+  /** Seafarers: ships by edge id → owner. Missing on older/base saves → {}. */
+  ships?: Record<string, number>;
   players: PlayerState[];
   bank: ResMap;
   devDeck: DevCardType[];
@@ -158,6 +181,17 @@ export interface GameState {
   /** Phase to return to after the robber is resolved (PRE_ROLL when a Knight is played before rolling). */
   robberReturnPhase: 'PRE_ROLL' | 'MAIN_ACTIONS';
   stealCandidates: number[];
+  /**
+   * Seafarers gold fields: resources of their choice each player still has to
+   * take (GOLD_CHOICE phase). Missing on older saves → {}.
+   */
+  pendingGold?: Record<number, number>;
+  /** Phase to return to once every gold choice is made. */
+  goldReturnPhase?: 'INITIAL_PLACEMENT' | 'MAIN_ACTIONS';
+  /** Seafarers: the active player already moved a ship this turn. */
+  shipMoved?: boolean;
+  /** Seafarers: edges of ships built this turn (they may not be moved this turn). */
+  newShips?: string[];
   freeRoads: number;
   trade: TradeOffer | null;
   /**
@@ -178,18 +212,24 @@ export interface GameState {
 export type Action =
   | { type: 'rollForOrder' }
   | { type: 'placeSetupSettlement'; vertex: string }
-  | { type: 'placeSetupRoad'; edge: string }
+  /** `ship: true` places a ship instead (Seafarers, coastal starting settlement). */
+  | { type: 'placeSetupRoad'; edge: string; ship?: boolean }
   | { type: 'rollDice' }
   | { type: 'discard'; resources: ResMap }
   | { type: 'moveRobber'; hex: number }
+  | { type: 'movePirate'; hex: number }
   | { type: 'steal'; victim: number }
   | { type: 'buildRoad'; edge: string }
+  | { type: 'buildShip'; edge: string }
+  | { type: 'moveShip'; from: string; to: string }
+  | { type: 'chooseGold'; resources: ResMap }
   | { type: 'buildSettlement'; vertex: string }
   | { type: 'buildCity'; vertex: string }
   | { type: 'buyDevCard' }
   | { type: 'playKnight' }
   | { type: 'playRoadBuilding' }
-  | { type: 'placeFreeRoad'; edge: string }
+  /** `ship: true` places a free ship instead (Seafarers). */
+  | { type: 'placeFreeRoad'; edge: string; ship?: boolean }
   | { type: 'finishRoadBuilding' }
   | { type: 'playYearOfPlenty'; resources: [Resource, Resource] }
   | { type: 'playMonopoly'; resource: Resource }

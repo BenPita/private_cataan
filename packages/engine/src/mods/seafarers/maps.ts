@@ -70,6 +70,7 @@ export const NEW_SHORES_3P: ScenarioMap = {
   ],
   robber: [2, 0],
   pirate: [5, 3],
+  frameSea: [[-1, 3], [5, 3]],
 };
 
 /** 4-player map (rulebook p. 5): 28 land + 14 sea hexes, 9 ports. */
@@ -138,4 +139,5 @@ export const NEW_SHORES_4P: ScenarioMap = {
   ],
   robber: [1, 4],
   pirate: [6, 3],
+  frameSea: [[-1, 3], [6, 3]],
 };
