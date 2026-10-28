@@ -199,6 +199,13 @@ Known risks and how they are handled
 - Old cached client vs new mod → unknown-mod reload prompt (see above).
 - Unclear expansion rules → only from owner-supplied official material; ask, then record here.
 
+Stage 2 (5–6 players) notes from the stage-0 review — still hard-wired to the base game:
+`rulesetFor(playerCount)` (setup order) is not mod-aware; `DISCARD_THRESHOLD`, award minimums,
+`TERRAIN_RESOURCE` and the 4:1 / 3:1 trade rates are global; harbor gaps assume the 30-edge
+classic coast; Home `fitConfig` clamps to 4 players; 2D `VIEW` size, sea art and the 3D camera
+fit/sea plane are sized for the 19-hex island (compute from graph bounds); Board3D's board effect
+should also depend on `board.layout`.
+
 ## Game screen look (2026-10-28)
 
 - Bots get random names from a pool of 25 men + 25 women (server stores `Bot#<index>`,
