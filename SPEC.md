@@ -48,6 +48,10 @@ Read this file instead of the originals; consult them only for fine detail.
   painted wheat fields, no text or border. PNG master: `public/eden-island-icon-1024.png`;
   192/512 PNGs for PWA (including maskable), 180 PNG for Apple home screens, multi-size
   `favicon.ico` for browser tabs. Replaces the hexagon SVG; service-worker cache v3.
+  Install splash background is the icon's sky color `#e2583d`.
+- Menu screens (2026-10-28): the icon artwork (`public/art/menu-bg.webp`) is a fixed
+  backdrop behind every `.screen`; the home form sits on a warm smoked-glass `.card.panel`
+  with gold selected states. Mobile portrait first; the old hex SVG logo is gone.
 - Private online board game inspired by base CATAN (no expansions). Original
   name/art/sounds — no official logos/assets.
 - Owner plays with girlfriend/friends on separate phones via an invite link.

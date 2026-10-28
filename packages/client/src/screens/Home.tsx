@@ -126,20 +126,13 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
   };
 
   return (
-    <div className="screen home">
+    <div className="screen home scenic">
       <div className="logo">
-        <svg viewBox="0 0 64 64" width="88" height="88" aria-hidden>
-          <polygon points="32,3 57,17.5 57,46.5 32,61 7,46.5 7,17.5" fill="#2fb3cf" stroke="#f6e7bf" strokeWidth="3" />
-          <polygon points="32,13 48,22 48,42 32,51 16,42 16,22" fill="#ecd59a" />
-          <polygon points="32,19 43,25.5 43,38.5 32,45 21,38.5 21,25.5" fill="#3f8a3a" />
-          <polygon points="26,38 32,26 38,38" fill="#6b7480" />
-          <polygon points="30,30 32,26 34,30" fill="#fff" />
-        </svg>
         <h1>{t('appName')}</h1>
         <p className="tagline">{t('tagline')}</p>
       </div>
 
-      <div className="card parchment">
+      <div className="card panel">
         <label className="field">
           <span>{t('nickname')}</span>
           <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder={t('nicknamePlaceholder')} />
@@ -192,7 +185,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
         </button>
       </div>
 
-      <div className="card parchment slim">
+      <div className="card panel slim">
         <LanguagePicker onLang={onLang} />
       </div>
 
@@ -200,7 +193,7 @@ export function Home({ navigate, onLang }: { navigate: (path: string) => void; o
         📖 {t('rules')}
       </button>
       {help && (
-        <div className="card parchment help-card">
+        <div className="card panel help-card">
           <HelpContent />
         </div>
       )}
