@@ -24,4 +24,11 @@ export interface ModDef {
   pieceLimits: { roads: number; settlements: number; cities: number };
   /** Piece colour per seat. */
   colors: string[];
+  /**
+   * 5–6 player game (official "paired players" rule): after Player 1's turn,
+   * the third player after them takes a build-only Action phase as Player 2.
+   */
+  pairedPlayers?: boolean;
+  /** The 5–6 player rules of this mod, used when more than `maxPlayers` take part. */
+  large?: ModDef;
 }

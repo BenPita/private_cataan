@@ -17,6 +17,18 @@ describe('bots', () => {
     }
   }
 
+  for (const level of ['easy', 'medium', 'hard'] as const) {
+    for (const n of [5, 6]) {
+      it(`${level} bots finish ${n}-player games (paired players)`, () => {
+        const r = playBotGame(Array(n).fill(level), 200 + n, 20000);
+        expect(r.state.phase).toBe('GAME_OVER');
+        expect(r.state.winner).not.toBeNull();
+        expect(r.state.board.layout).toBe('classic56');
+        expect(r.rejected).toBeLessThan(r.steps * 0.02 + 3);
+      });
+    }
+  }
+
   it('higher difficulty wins more often', () => {
     const wins: Record<BotDifficulty, number> = { easy: 0, medium: 0, hard: 0 };
     const lineup: BotDifficulty[] = ['easy', 'medium', 'hard'];

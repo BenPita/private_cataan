@@ -16,8 +16,8 @@ describe('mods registry', () => {
     expect(isModId(42)).toBe(false);
   });
   it('a game without a mod (old save) is the base game', () => {
-    expect(modFor({ config: {} })).toBe(BASE_MOD);
-    expect(modFor({ config: { mod: 'base' } })).toBe(BASE_MOD);
+    expect(modFor({ config: {}, players: [] })).toBe(BASE_MOD);
+    expect(modFor({ config: { mod: 'base' }, players: [] })).toBe(BASE_MOD);
   });
 });
 
@@ -30,18 +30,20 @@ describe('games record their mod', () => {
     expect(s.board.layout).toBe('classic');
   });
   it('player range comes from the mod', () => {
-    expect(() => createGame([two[0]], 1)).toThrow(/2-4/);
-    expect(() => createGame(Array(5).fill(two[0]), 1)).toThrow(/2-4/);
+    expect(() => createGame([two[0]], 1)).toThrow(/2-6/);
+    expect(() => createGame(Array(7).fill(two[0]), 1)).toThrow(/2-6/);
   });
 });
 
 describe('mod safety', () => {
   it('every mod has a colour per seat', () => {
-    for (const mod of Object.values(MODS)) expect(mod.colors.length).toBeGreaterThanOrEqual(mod.maxPlayers);
+    for (const base of Object.values(MODS)) {
+      for (const mod of [base, base.large ?? base]) expect(mod.colors.length).toBeGreaterThanOrEqual(mod.maxPlayers);
+    }
   });
   it('an unknown mod is a clear error, not a crash', () => {
     const two = [{ name: 'A', kind: 'human' as const }, { name: 'B', kind: 'human' as const }];
     expect(() => createGame(two, 1, { mod: 'toString' as never })).toThrow('Unknown mod');
-    expect(() => modFor({ config: { mod: 'nope' as never } })).toThrow(/Unknown mod/);
+    expect(() => modFor({ config: { mod: 'nope' as never }, players: [] })).toThrow(/Unknown mod/);
   });
 });

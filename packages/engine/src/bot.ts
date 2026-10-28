@@ -575,7 +575,8 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
     const bank = bankTrade(c, goal);
     if (bank) return bank;
     const humansExist = v.players.some((p, i) => i !== me && p.kind === 'human');
-    if (memory.proposedOnTurn !== v.turn && (c.level !== 'easy' || humansExist) && totalRes(c.res) >= 3) {
+    // Player 2 of a 5–6 player turn may not trade with other players.
+    if (!v.paired && memory.proposedOnTurn !== v.turn && (c.level !== 'easy' || humansExist) && totalRes(c.res) >= 3) {
       const offer = proposeTrade(c, goal);
       if (offer) {
         memory.proposedOnTurn = v.turn;

@@ -42,6 +42,7 @@ export const LOG_EN = {
   longestRoad: '{p} takes Longest Road ({n}).',
   longestRoadLost: 'Longest Road is no longer held by anyone.',
   largestArmy: '{p} takes Largest Army ({n}).',
+  pairedTurn: '{p} — Player 2: build & bank trade',
   win: '{p} wins with {n} points!',
 } as const;
 

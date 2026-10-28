@@ -160,6 +160,11 @@ export interface GameState {
   stealCandidates: number[];
   freeRoads: number;
   trade: TradeOffer | null;
+  /**
+   * 5–6 players: set while Player 2 takes their Action phase after Player 1
+   * (`first`). Missing on older saves → null.
+   */
+  paired: { first: number } | null;
   nextTradeId: number;
   longestRoad: { holder: number | null; lengths: number[] };
   largestArmy: number | null;

@@ -583,6 +583,7 @@ const LOG_HE: Record<keyof typeof LOG_EN, string> = {
   longestRoad: '{p} לוקח/ת את הדרך הארוכה ({n}).',
   longestRoadLost: 'אף אחד לא מחזיק כרגע בדרך הארוכה.',
   largestArmy: '{p} לוקח/ת את הצבא הגדול ({n}).',
+  pairedTurn: '{p} — שחקן 2: בנייה וסחר עם הבנק',
   win: '{p} ניצח/ה עם {n} נקודות!',
 };
 

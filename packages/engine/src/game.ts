@@ -1,5 +1,5 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { isModId, modFor } from './mods';
+import { isModId, modFor, modPlayerRange } from './mods';
 import { boardGraph } from './geometry';
 import {
   isRoadConnected,
@@ -69,10 +69,11 @@ export function createGame(
   config: Partial<GameConfig> = {},
 ): GameState {
   if (config.mod !== undefined && !isModId(config.mod)) throw new GameError('Unknown mod');
-  const mod = modFor({ config });
-  if (players.length < mod.minPlayers || players.length > mod.maxPlayers) {
-    throw new GameError(`A game needs ${mod.minPlayers}-${mod.maxPlayers} participants`);
+  const range = modPlayerRange(modFor({ config, players: [] }));
+  if (players.length < range.min || players.length > range.max) {
+    throw new GameError(`A game needs ${range.min}-${range.max} participants`);
   }
+  const mod = modFor({ config, players });
   const fullConfig: GameConfig = { victoryTarget: 10, boardType: 'random', ...config, mod: mod.id, modVersion: mod.version };
   const rng = new Rng(seed);
   const board = fullConfig.boardType === 'beginner' ? generateBeginnerBoard(mod) : generateRandomBoard(rng, mod);
@@ -120,6 +121,7 @@ export function createGame(
     stealCandidates: [],
     freeRoads: 0,
     trade: null,
+    paired: null,
     nextTradeId: 1,
     longestRoad: { holder: null, lengths: players.map(() => 0) },
     largestArmy: null,
@@ -320,6 +322,29 @@ function startTurn(state: GameState, player: number): void {
   state.trade = null;
   for (const p of state.players) p.playedDevThisTurn = false;
   checkVictory(state);
+}
+
+/**
+ * 5–6 players: Player 1's turn is followed by an Action phase of Player 2,
+ * the third player after them. Player 2 builds, trades with the bank and may
+ * play one development card, without rolling and without player trades.
+ */
+function startPairedPhase(state: GameState, first: number): void {
+  const idx = state.turnOrder.indexOf(first);
+  const second = state.turnOrder[(idx + 3) % state.turnOrder.length];
+  state.paired = { first };
+  state.currentPlayer = second;
+  state.turn++;
+  state.phase = 'MAIN_ACTIONS';
+  state.freeRoads = 0;
+  state.trade = null;
+  state.players[second].playedDevThisTurn = false;
+  say(state, 'pairedTurn', { p: second });
+  checkVictory(state);
+}
+
+function requireNotPaired(state: GameState): void {
+  if (state.paired) fail('Player 2 may not trade with other players');
 }
 
 function playableCard(state: GameState, player: number, type: DevCardType): number {
@@ -689,6 +714,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
     case 'proposeTrade': {
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
+      requireNotPaired(state);
       requireNoFreeRoads(state);
       validateTradeSides(action.give, action.get);
       if (!hasRes(me.resources, action.give)) fail('You do not have the resources you are offering');
@@ -710,6 +736,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
     }
 
     case 'respondTrade': {
+      requireNotPaired(state);
       const t = state.trade;
       if (!t || t.id !== action.tradeId) fail('That trade offer is no longer available');
       if (!t!.to.includes(player)) fail('That offer was not sent to you');
@@ -732,6 +759,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
     }
 
     case 'counterTrade': {
+      requireNotPaired(state);
       const t = state.trade;
       if (!t || t.id !== action.tradeId) fail('That trade offer is no longer available');
       if (!t!.to.includes(player)) fail('That offer was not sent to you');
@@ -747,6 +775,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
     case 'confirmTrade': {
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
+      requireNotPaired(state);
       const t = state.trade;
       if (!t || t.id !== action.tradeId) fail('That trade offer is no longer available');
       const response = t!.responses[action.with];
@@ -773,7 +802,16 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
-      startTurn(state, nextInTurnOrder(state, player));
+      if (state.paired) {
+        // Player 2 is done: the dice pass to the player after Player 1.
+        const first = state.paired.first;
+        state.paired = null;
+        startTurn(state, nextInTurnOrder(state, first));
+      } else if (mod.pairedPlayers) {
+        startPairedPhase(state, player);
+      } else {
+        startTurn(state, nextInTurnOrder(state, player));
+      }
       return;
     }
 
