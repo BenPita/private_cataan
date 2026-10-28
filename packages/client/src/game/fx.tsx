@@ -5,7 +5,7 @@
  * stolen card is shown face-up only to the thief and the victim.
  */
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { GRAPH, RESOURCES, type DevCardType, type LogItem, type PlayerView, type ResMap, type Resource } from '@hex/engine';
+import { boardGraph, RESOURCES, type DevCardType, type LogItem, type PlayerView, type ResMap, type Resource } from '@hex/engine';
 import { DevCardFace } from '../art';
 import { devInfo, logText, t } from '../i18n';
 import { sfx } from '../sound';
@@ -180,16 +180,17 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
     const before = prevBoard.current;
     prevBoard.current = { buildings: view.buildings, roads: view.roads };
     let sound: 'build' | 'city' | 'road' | null = null;
+    const G = boardGraph(view.board);
     for (const [vertex, b] of Object.entries(view.buildings)) {
       const old = before.buildings[vertex];
       if (old && old.type === b.type) continue;
-      const v = GRAPH.vertices[vertex];
+      const v = G.vertices[vertex];
       setTimeout(() => puff(boardPoint(v.x * S, v.y * S), b.type === 'city'), 300);
       sound = b.type === 'city' ? 'city' : 'build';
     }
     for (const edge of Object.keys(view.roads)) {
       if (before.roads[edge] !== undefined) continue;
-      const e = GRAPH.edges[edge];
+      const e = G.edges[edge];
       setTimeout(() => puff(boardPoint(e.x * S, e.y * S), false), 300);
       sound ??= 'road';
     }

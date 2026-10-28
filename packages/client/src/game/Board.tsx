@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
-import { GRAPH, type PlayerView } from '@hex/engine';
+import { boardGraph, type Board as BoardData, type PlayerView } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
 
 /** SVG units per hex radius. Must match art-src/extras.py (sea frame). */
@@ -209,11 +209,12 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
     };
   }, [apiRef]);
   const colors = view.players.map((p) => p.color);
+  const G = boardGraph(view.board);
   const vSet = useMemo(() => new Set(targets.vertices ?? []), [targets.vertices]);
   const eSet = useMemo(() => new Set(targets.edges ?? []), [targets.edges]);
   const hSet = useMemo(() => new Set(targets.hexes ?? []), [targets.hexes]);
   const myColor = colors[view.me ?? 0];
-  const robber = GRAPH.hexes[view.board.robberHex];
+  const robber = G.hexes[view.board.robberHex];
 
   return (
     <PanZoom svgRef={svgRef}>
@@ -222,8 +223,8 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Harbors: wooden pier and a parchment flag */}
       {view.board.harbors.map((h) => {
-        const e = GRAPH.edges[h.edge];
-        const hex = GRAPH.hexes[e.hexes[0]];
+        const e = G.edges[h.edge];
+        const hex = G.hexes[e.hexes[0]];
         const dx = e.x - hex.x;
         const dy = e.y - hex.y;
         const len = Math.hypot(dx, dy);
@@ -231,7 +232,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         const uy = dy / len;
         const px = (e.x + ux * 0.62) * S;
         const py = (e.y + uy * 0.62) * S;
-        const [a, b] = e.vertices.map((v) => GRAPH.vertices[v]);
+        const [a, b] = e.vertices.map((v) => G.vertices[v]);
         return (
           <g key={h.edge} className="harbor" pointerEvents="none">
             {[a, b].map((v, i) => {
@@ -269,7 +270,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Land tiles */}
       {view.board.hexes.map((tile) => {
-        const g = GRAPH.hexes[tile.id];
+        const g = G.hexes[tile.id];
         const cx = g.x * S;
         const cy = g.y * S;
         const targetable = hSet.has(tile.id);
@@ -297,7 +298,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
       {/* Number discs */}
       {view.board.hexes.map((tile) => {
         if (tile.number === null) return null;
-        const g = GRAPH.hexes[tile.id];
+        const g = G.hexes[tile.id];
         const cx = g.x * S;
         const cy = g.y * S;
         const red = tile.number === 6 || tile.number === 8;
@@ -318,7 +319,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Roads: wooden bars with a cast shadow */}
       {Object.entries(view.roads).map(([edge, owner]) => {
-        const [a, b] = GRAPH.edges[edge].vertices.map((v) => GRAPH.vertices[v]);
+        const [a, b] = G.edges[edge].vertices.map((v) => G.vertices[v]);
         const sx = (a.x + (b.x - a.x) * 0.17) * S;
         const sy = (a.y + (b.y - a.y) * 0.17) * S;
         const ex = (a.x + (b.x - a.x) * 0.83) * S;
@@ -346,7 +347,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Edge targets */}
       {[...eSet].map((edge) => {
-        const [a, b] = GRAPH.edges[edge].vertices.map((v) => GRAPH.vertices[v]);
+        const [a, b] = G.edges[edge].vertices.map((v) => G.vertices[v]);
         const selected = selection?.kind === 'edge' && selection.id === edge;
         return (
           <g key={edge} onClick={() => onSelect({ kind: 'edge', id: edge })} className="target">
@@ -365,7 +366,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Buildings */}
       {Object.entries(view.buildings).map(([vertex, b]) => {
-        const v = GRAPH.vertices[vertex];
+        const v = G.vertices[vertex];
         return b.type === 'city' ? (
           <City key={`${vertex}-c`} x={v.x * S} y={v.y * S} color={colors[b.owner]} />
         ) : (
@@ -383,7 +384,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Vertex targets */}
       {[...vSet].map((vertex) => {
-        const v = GRAPH.vertices[vertex];
+        const v = G.vertices[vertex];
         const selected = selection?.kind === 'vertex' && selection.id === vertex;
         return (
           <g key={vertex} onClick={() => onSelect({ kind: 'vertex', id: vertex })} className="target">
@@ -403,7 +404,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 }
 
 /** Centre of a hex in board units (for animations). */
-export function hexCenter(hex: number): { x: number; y: number } {
-  const g = GRAPH.hexes[hex];
+export function hexCenter(board: BoardData, hex: number): { x: number; y: number } {
+  const g = boardGraph(board).hexes[hex];
   return { x: g.x * S, y: g.y * S };
 }

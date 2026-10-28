@@ -10,7 +10,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GRAPH, type PlayerView } from '@hex/engine';
+import { boardGraph, type PlayerView } from '@hex/engine';
 import { S, type BoardProps } from './Board';
 import { createDice } from './dice3d';
 import { diag } from '../diag';
@@ -222,6 +222,8 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
 type Hit = { kind: 'vertex' | 'edge' | 'hex'; id: string | number };
 
 function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) {
+  /** Graph of the board on the table; set by setBoard, used by every other method. */
+  let G = boardGraph({ layout: 'classic' } as Parameters<typeof boardGraph>[0]);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -486,6 +488,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   }
 
   function setBoard(view: PlayerView) {
+    G = boardGraph(view.board);
     clear(tilesGroup);
     clear(discsGroup);
     clear(harborsGroup);
@@ -494,7 +497,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     const discSide = new THREE.MeshStandardMaterial({ color: '#d9c08a', roughness: 0.6 });
     const discTop = new Map<number, THREE.MeshStandardMaterial>();
     for (const tile of view.board.hexes) {
-      const g = GRAPH.hexes[tile.id];
+      const g = G.hexes[tile.id];
       const mat = new THREE.MeshStandardMaterial({ map: cachedTex(`/art/hex-${tile.terrain}-${tile.id % 2}.webp`), roughness: 0.85 });
       tileMats.set(tile.id, mat);
       const top = new THREE.Mesh(tileGeo, mat);
@@ -527,15 +530,15 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     const plankMat = new THREE.MeshStandardMaterial({ color: '#9b6a38', roughness: 0.85 });
     const poleMat = new THREE.MeshStandardMaterial({ color: '#4a2c12', roughness: 0.8 });
     for (const h of view.board.harbors) {
-      const e = GRAPH.edges[h.edge];
-      const hex = GRAPH.hexes[e.hexes[0]];
+      const e = G.edges[h.edge];
+      const hex = G.hexes[e.hexes[0]];
       const dx = e.x - hex.x;
       const dy = e.y - hex.y;
       const len = Math.hypot(dx, dy);
       const px = e.x + (dx / len) * 0.62;
       const py = e.y + (dy / len) * 0.62;
       for (const vid of e.vertices) {
-        const v = GRAPH.vertices[vid];
+        const v = G.vertices[vid];
         const l = Math.hypot(px - v.x, py - v.y);
         const pier = new THREE.Mesh(new THREE.BoxGeometry(l, 0.04, 0.12), plankMat);
         pier.position.set((v.x + px) / 2, 0.03, (v.y + py) / 2);
@@ -560,7 +563,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     const wanted = new Map<string, { make: () => THREE.Mesh }>();
     const colors = view.players.map((p) => p.color);
     for (const [vertex, b] of Object.entries(view.buildings)) {
-      const v = GRAPH.vertices[vertex];
+      const v = G.vertices[vertex];
       wanted.set(`b:${vertex}:${b.type}:${b.owner}`, {
         make: () => {
           const m = new THREE.Mesh(b.type === 'city' ? cityGeo : houseGeo, pieceMat(colors[b.owner]));
@@ -572,8 +575,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       });
     }
     for (const [edge, owner] of Object.entries(view.roads)) {
-      const e = GRAPH.edges[edge];
-      const [a, b] = e.vertices.map((id) => GRAPH.vertices[id]);
+      const e = G.edges[edge];
+      const [a, b] = e.vertices.map((id) => G.vertices[id]);
       wanted.set(`r:${edge}:${owner}`, {
         make: () => {
           const m = new THREE.Mesh(roadGeo, pieceMat(colors[owner]));
@@ -613,7 +616,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   let robberHex = -1;
   function setRobber(hex: number) {
-    const g = GRAPH.hexes[hex];
+    const g = G.hexes[hex];
     const to = new THREE.Vector3(g.x + 0.42, TILE_H, g.y - 0.2);
     if (robberHex < 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       robber.position.copy(to);
@@ -651,7 +654,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     selMat.color.set(myColor);
     const marks: THREE.Mesh[] = [];
     for (const vid of targets.vertices ?? []) {
-      const v = GRAPH.vertices[vid];
+      const v = G.vertices[vid];
       const hit = new THREE.Mesh(vertexHitGeo, hitMat);
       hit.position.set(v.x, TILE_H + 0.05, v.y);
       hit.userData.pick = { kind: 'vertex', id: vid };
@@ -670,8 +673,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       marks.push(mark);
     }
     for (const eid of targets.edges ?? []) {
-      const e = GRAPH.edges[eid];
-      const [a, b] = e.vertices.map((id) => GRAPH.vertices[id]);
+      const e = G.edges[eid];
+      const [a, b] = e.vertices.map((id) => G.vertices[id]);
       const angle = -Math.atan2(b.y - a.y, b.x - a.x);
       const hit = new THREE.Mesh(edgeHitGeo, hitMat);
       hit.position.set(e.x, TILE_H + 0.05, e.y);
@@ -691,7 +694,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       marks.push(mark);
     }
     for (const hid of targets.hexes ?? []) {
-      const g = GRAPH.hexes[hid];
+      const g = G.hexes[hid];
       const selected = selection?.kind === 'hex' && selection.id === hid;
       const ring = new THREE.Mesh(hexRingGeo, selected ? selMat : markMat);
       ring.rotation.x = -Math.PI / 2;

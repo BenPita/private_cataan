@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  COSTS,
-  PIECE_LIMITS,
   RESOURCES,
+  modFor,
   devCardReady,
   emptyRes,
   hasRes,
@@ -185,22 +184,23 @@ export function BuildSheet({
   const res = p.resources!;
   const canAct = view.currentPlayer === me && view.phase === 'MAIN_ACTIONS' && view.freeRoads === 0;
   const [confirmDev, setConfirmDev] = useState(false);
+  const { costs, pieceLimits } = modFor(view);
 
   const items: Array<{ key: BuildMode | 'devCard'; left: string; leftN: number; spots: number; reason: string | null }> = [
-    { key: 'road', leftN: PIECE_LIMITS.roads - p.roadsBuilt, left: '', spots: legalRoads(view, me).length, reason: null },
+    { key: 'road', leftN: pieceLimits.roads - p.roadsBuilt, left: '', spots: legalRoads(view, me).length, reason: null },
     {
       key: 'settlement',
-      leftN: PIECE_LIMITS.settlements - (p.settlementsBuilt - p.citiesBuilt),
+      leftN: pieceLimits.settlements - (p.settlementsBuilt - p.citiesBuilt),
       left: '',
       spots: legalSettlements(view, me).length,
       reason: null,
     },
-    { key: 'city', leftN: PIECE_LIMITS.cities - p.citiesBuilt, left: '', spots: legalCities(view, me).length, reason: null },
+    { key: 'city', leftN: pieceLimits.cities - p.citiesBuilt, left: '', spots: legalCities(view, me).length, reason: null },
     { key: 'devCard', leftN: view.devDeckCount, left: '', spots: view.devDeckCount, reason: null },
   ];
   for (const it of items) {
     it.left = it.key === 'devCard' ? t('inDeck', { n: it.leftN }) : t('left', { n: it.leftN });
-    const cost = COSTS[it.key];
+    const cost = costs[it.key];
     if (!canAct) it.reason = view.currentPlayer !== me ? t('reasonNotTurn') : view.phase === 'PRE_ROLL' ? t('reasonRollFirst') : t('reasonNotNow');
     else if (it.leftN <= 0) it.reason = it.key === 'devCard' ? t('reasonDeckEmpty') : t('reasonNoPieces');
     else if (it.spots === 0) it.reason = t('reasonNoSpot');
@@ -227,7 +227,7 @@ export function BuildSheet({
               <b>{t(it.key)}</b>
               <span className="muted">{it.left}</span>
             </div>
-            <ResList res={COSTS[it.key]} />
+            <ResList res={costs[it.key]} />
             {it.reason && <span className="reason">{it.reason}</span>}
           </button>
         ))}
@@ -235,7 +235,7 @@ export function BuildSheet({
       {confirmDev && (
         <div className="confirm-inline">
           <span>
-            {t('buyDevConfirm')} <ResList res={COSTS.devCard} />?
+            {t('buyDevConfirm')} <ResList res={costs.devCard} />?
           </span>
           <div className="row">
             <button className="btn ghost" onClick={() => setConfirmDev(false)}>

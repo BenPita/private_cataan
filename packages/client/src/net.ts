@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { Action, BotDifficulty, PlayerView } from '@hex/engine';
+import type { Action, BotDifficulty, ModId, PlayerView } from '@hex/engine';
 
 export interface RoomConfig {
+  mod?: ModId;
   humans: number;
   bots: number;
   difficulty: BotDifficulty;

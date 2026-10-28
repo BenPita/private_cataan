@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  COSTS,
   RESOURCES,
+  modFor,
   legalCities,
   legalRoads,
   legalSettlements,
@@ -116,7 +116,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     const api = boardApi.current;
     if (!api || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const toScreen = (hex: number) => {
-      const c = hexCenter(hex);
+      const c = hexCenter(view.board, hex);
       return api.project(c.x, c.y) ?? { x: 0, y: 0 };
     };
     const center = (el: Element | null) => {
@@ -260,6 +260,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
 
   const confirmFor = (sel: Selection): { label: ReactNode; action: Action } | null => {
     if (!sel) return null;
+    const costs = modFor(view).costs;
     if (view.phase === 'INITIAL_PLACEMENT') {
       if (sel.kind === 'vertex') return { label: t('confirmSetupSettlement'), action: { type: 'placeSetupSettlement', vertex: sel.id } };
       if (sel.kind === 'edge') return { label: t('confirmSetupRoad'), action: { type: 'placeSetupRoad', edge: sel.id } };
@@ -272,13 +273,13 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     }
     if (view.freeRoads > 0 && sel.kind === 'edge') return { label: t('confirmFreeRoad'), action: { type: 'placeFreeRoad', edge: sel.id } };
     if (mode === 'road' && sel.kind === 'edge') {
-      return { label: <>{t('confirmRoad')} <ResList res={COSTS.road} />?</>, action: { type: 'buildRoad', edge: sel.id } };
+      return { label: <>{t('confirmRoad')} <ResList res={costs.road} />?</>, action: { type: 'buildRoad', edge: sel.id } };
     }
     if (mode === 'settlement' && sel.kind === 'vertex') {
-      return { label: <>{t('confirmSettlement')} <ResList res={COSTS.settlement} />?</>, action: { type: 'buildSettlement', vertex: sel.id } };
+      return { label: <>{t('confirmSettlement')} <ResList res={costs.settlement} />?</>, action: { type: 'buildSettlement', vertex: sel.id } };
     }
     if (mode === 'city' && sel.kind === 'vertex') {
-      return { label: <>{t('confirmCity')} <ResList res={COSTS.city} />?</>, action: { type: 'buildCity', vertex: sel.id } };
+      return { label: <>{t('confirmCity')} <ResList res={costs.city} />?</>, action: { type: 'buildCity', vertex: sel.id } };
     }
     return null;
   };
