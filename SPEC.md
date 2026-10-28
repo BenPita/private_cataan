@@ -194,6 +194,19 @@ Build order
   bottom faces); never put `mix-blend-mode`/`filter` on `.box-3d` itself — it flattens the 3D.
 - Stage 2: 5–6 players for the base game, from official rules the owner sends (larger board,
   bank, deck, extra colours, the official extra-build rule).
+  Engine + server DONE 2026-10-29 (plan `docs/superpowers/plans/2026-10-29-base-5-6-players.md`,
+  rules from the owner's 2025 5–6 rulebook): `BASE_MOD.large` (layout `classic56`, 30 hexes, 2
+  deserts, 28 numbers, 11 harbors with gaps 3,4,3,4,…,3 on the 38-edge coast, bank 24, deck 34,
+  + green `#3d9a3f` / purple `#7d4fb8`); `modFor({ config, players })` picks it for >4 players;
+  `modPlayerRange` = 2–6. Paired players: `GameState.paired = { first }` while Player 2 (third
+  after Player 1 in turn order) has a build/bank-trade/one-dev-card phase with no roll and no
+  player trades (engine error "Player 2 may not trade with other players"); the phase counts as
+  its own `turn` (so cards bought in it are playable on the owner's next turn, and vice versa);
+  log key `pairedTurn`. Interpretations: robber on the first desert; turn order from the
+  opening roll; normal snake setup; 5 players use 5 colours (no neutral settlements); P2 may
+  also win at the start of their phase (e.g. after gaining Longest Road during P1's turn).
+  Beginner 5–6 harbors: coast index 0 onward, generic, wool, generic, ore, generic, grain,
+  brick, generic, lumber, generic, wool. Client part still to do.
 - Then one expansion at a time, each with its own spec section, tests, 100-game bot run,
   and owner check on localhost.
 
