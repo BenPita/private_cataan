@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { boardGraph, graphFor, type PlayerView } from '@hex/engine';
-import { S, boardFrame, type BoardProps } from './Board';
+import { S, bonusMarkers, boardFrame, type BoardProps } from './Board';
 import { createDice } from './dice3d';
 import { diag } from '../diag';
 
@@ -101,6 +101,31 @@ function pawnGeometry(): THREE.BufferGeometry {
   return new THREE.LatheGeometry(pts, 24);
 }
 
+/**
+ * Seafarers ship, lying along +X: hull (group 0, player colour) and mast +
+ * sail (group 1). The pirate uses the same shape, bigger and dark.
+ */
+function shipGeometry(): THREE.BufferGeometry {
+  const hullShape = new THREE.Shape(
+    [
+      [-0.21, 0],
+      [0.17, 0],
+      [0.29, 0.1],
+      [0.04, 0.085],
+      [-0.27, 0.1],
+    ].map(([x, y]) => new THREE.Vector2(x, y)),
+  );
+  const hull = new THREE.ExtrudeGeometry(hullShape, { depth: 0.15, bevelEnabled: false });
+  hull.translate(0, 0, -0.075);
+  const sailShape = new THREE.Shape([new THREE.Vector2(0.01, 0.13), new THREE.Vector2(0.01, 0.44), new THREE.Vector2(0.2, 0.15)]);
+  const sail = new THREE.ExtrudeGeometry(sailShape, { depth: 0.014, bevelEnabled: false });
+  sail.translate(0, 0, -0.007);
+  const mast = new THREE.CylinderGeometry(0.012, 0.014, 0.4, 6);
+  mast.translate(0, 0.27, 0);
+  const rig = mergeGeometries([sail, mast.toNonIndexed()]);
+  return mergeGeometries([hull, rig], true);
+}
+
 // ---------------------------------------------------------------------------
 // Canvas textures (number discs and harbor flags)
 
@@ -136,6 +161,37 @@ function discTexture(n: number): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
+  return t;
+}
+
+/** Gold "+n" coin with a laurel: the Seafarers island bonus marker. */
+function bonusTexture(n: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.strokeStyle = '#3f7a2a';
+  g.lineWidth = 12;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.arc(64, 60, 50, Math.PI * 0.55, Math.PI * 1.15);
+  g.stroke();
+  g.beginPath();
+  g.arc(64, 60, 50, Math.PI * 1.85, Math.PI * 0.45);
+  g.stroke();
+  g.fillStyle = '#f2c94c';
+  g.strokeStyle = '#7a5a12';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(64, 60, 38, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#3b2a06';
+  g.font = '900 44px "Frank Ruhl Libre", Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(`+${n}`, 64, 63);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -199,7 +255,8 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
     const e = createEngine(mountRef.current!, (hit) => {
       const { onSelect: select, onInspectHex: inspect, targets: tg } = propsRef.current;
       if (!hit) return;
-      if (hit.kind === 'hex' && !(tg.hexes ?? []).includes(hit.id as number)) inspect?.(hit.id as number);
+      const hexTargets = [...(tg.hexes ?? []), ...(tg.pirateHexes ?? [])];
+      if (hit.kind === 'hex' && !hexTargets.includes(hit.id as number)) inspect?.(hit.id as number);
       else select(hit as never);
     });
     engine.current = e;
@@ -211,8 +268,9 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
   }, []);
 
   useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
-  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.players.length]);
+  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.ships, view.players.length]);
   useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
+  useEffect(() => engine.current?.setPirate(view.board.pirateHex), [view.board.pirateHex]);
   useEffect(() => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'), [targets, selection]);
   useEffect(() => engine.current?.setHighlight(highlightHexes), [highlightHexes]);
 
@@ -320,10 +378,11 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     const h = view / 2;
     return fanGeometry([[h, h], [-h, h], [-h, -h], [h, -h]], view, view);
   };
+  let frameSea: string | null = '/art/sea.webp';
   const frameTop = new THREE.Mesh(
     frameGeometry(frameView),
     new THREE.MeshStandardMaterial({
-      map: cachedTex('/art/sea.webp'),
+      map: cachedTex(frameSea),
       transparent: true,
       depthWrite: false,
       roughness: 0.55,
@@ -339,7 +398,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const harborsGroup = new THREE.Group();
   const piecesGroup = new THREE.Group();
   const targetsGroup = new THREE.Group();
-  scene.add(tilesGroup, discsGroup, harborsGroup, piecesGroup, targetsGroup);
+  const markersGroup = new THREE.Group();
+  scene.add(tilesGroup, discsGroup, harborsGroup, piecesGroup, targetsGroup, markersGroup);
 
   const tileGeo = fanGeometry(hexPoints(TILE_R), Math.sqrt(3) * TILE_R, 2 * TILE_R);
   const tileSideGeo = new THREE.CylinderGeometry(TILE_R, TILE_R, TILE_H, 6, 1, true);
@@ -361,6 +421,24 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   robber.castShadow = true;
   robber.scale.setScalar(1.3);
   scene.add(robber);
+
+  // Seafarers: ships share one geometry and a sail material; the pirate is a big dark ship.
+  const shipGeo = shipGeometry();
+  const sailMat = new THREE.MeshStandardMaterial({ color: '#f4ead0', roughness: 0.8 });
+  const pirate = new THREE.Mesh(shipGeo, [
+    new THREE.MeshStandardMaterial({ color: '#2b1d14', roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: '#1b1b1f', roughness: 0.75 }),
+  ]);
+  pirate.castShadow = true;
+  pirate.scale.setScalar(1.9);
+  pirate.rotation.y = 0.5;
+  pirate.visible = false;
+  scene.add(pirate);
+  const bonusMats = new Map<number, THREE.SpriteMaterial>();
+  const bonusMat = (n: number) => {
+    if (!bonusMats.has(n)) bonusMats.set(n, new THREE.SpriteMaterial({ map: bonusTexture(n), transparent: true }));
+    return bonusMats.get(n)!;
+  };
 
   // --- Render loop (on demand) --------------------------------------------------
   // Phones heat up and slow down when the GPU draws 60 full frames a second for
@@ -479,7 +557,15 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       if (!dispose) continue;
       child.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (m.geometry && m.geometry !== tileGeo && m.geometry !== tileSideGeo && m.geometry !== houseGeo && m.geometry !== cityGeo && m.geometry !== roadGeo) {
+        if (
+          m.geometry &&
+          m.geometry !== tileGeo &&
+          m.geometry !== tileSideGeo &&
+          m.geometry !== houseGeo &&
+          m.geometry !== cityGeo &&
+          m.geometry !== roadGeo &&
+          m.geometry !== shipGeo
+        ) {
           m.geometry.dispose();
         }
         for (const mat of ([] as THREE.Material[]).concat((m.material as THREE.Material | THREE.Material[] | undefined) ?? [])) {
@@ -495,13 +581,18 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   function setBoard(view: PlayerView) {
     G = boardGraph(view.board);
     const frame = boardFrame(view.board);
-    if (frame.view !== frameView) {
+    if (frame.view !== frameView || frame.sea !== frameSea) {
       frameView = frame.view;
+      frameSea = frame.sea;
       frameTop.geometry.dispose();
       frameTop.geometry = frameGeometry(frameView);
-      const mat = frameTop.material as THREE.MeshStandardMaterial;
-      mat.map = cachedTex(frame.sea);
-      mat.needsUpdate = true;
+      // Seafarers maps have their own sea tiles: no painted beach, just open water.
+      frameTop.visible = frame.sea !== null;
+      if (frame.sea) {
+        const mat = frameTop.material as THREE.MeshStandardMaterial;
+        mat.map = cachedTex(frame.sea);
+        mat.needsUpdate = true;
+      }
       framed = false;
       resize();
     }
@@ -603,6 +694,28 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         },
       });
     }
+    for (const [edge, owner] of Object.entries(view.ships ?? {})) {
+      const e = G.edges[edge];
+      const [a, b] = e.vertices.map((id) => G.vertices[id]);
+      wanted.set(`s:${edge}:${owner}`, {
+        make: () => {
+          const m = new THREE.Mesh(shipGeo, [pieceMat(colors[owner]), sailMat]);
+          m.scale.setScalar(1.25);
+          m.position.set(e.x, TILE_H, e.y);
+          m.rotation.y = -Math.atan2(b.y - a.y, b.x - a.x);
+          return m;
+        },
+      });
+    }
+    // Island bonus coins under the settlements that earned them (rebuilt; a handful at most).
+    clear(markersGroup, false);
+    for (const { vertex, n } of bonusMarkers(view)) {
+      const v = G.vertices[vertex];
+      const coin = new THREE.Sprite(bonusMat(n));
+      coin.scale.set(0.26, 0.26, 1);
+      coin.position.set(v.x, TILE_H + 0.06, v.y + 0.3);
+      markersGroup.add(coin);
+    }
     const firstFill = pieceMeshes.size === 0;
     for (const [key, mesh] of pieceMeshes) {
       if (!wanted.has(key)) {
@@ -648,6 +761,31 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     invalidate(true);
   }
 
+  let pirateHex = -1;
+  function setPirate(hex: number | undefined) {
+    if (hex === undefined || !G.hexes[hex]) {
+      pirate.visible = false;
+      pirateHex = -1;
+      invalidate(true);
+      return;
+    }
+    const g = G.hexes[hex];
+    const to = new THREE.Vector3(g.x, TILE_H, g.y);
+    pirate.visible = true;
+    if (pirateHex < 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      pirate.position.copy(to);
+    } else {
+      const from = pirate.position.clone();
+      tween(650, (k) => {
+        const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+        pirate.position.lerpVectors(from, to, e);
+        pirate.position.y = TILE_H + Math.sin(k * Math.PI) * 0.8;
+      });
+    }
+    pirateHex = hex;
+    invalidate(true);
+  }
+
   const vertexHitGeo = new THREE.SphereGeometry(0.2, 12, 8);
   const vertexMarkGeo = new THREE.TorusGeometry(0.15, 0.055, 10, 28);
   const edgeHitGeo = new THREE.BoxGeometry(0.62, 0.2, 0.28);
@@ -661,6 +799,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   const markMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.95, depthTest: false });
   const outlineMat = new THREE.MeshBasicMaterial({ color: '#2a1606', transparent: true, opacity: 0.6, depthTest: false });
   const selMat = new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false });
+  /** Pirate targets (sea hexes) get a dark ring, land targets for the robber the yellow one. */
+  const pirateMarkMat = new THREE.MeshBasicMaterial({ color: '#1b1b1f', transparent: true, opacity: 0.85, depthTest: false });
 
   function setTargets(targets: BoardProps['targets'], selection: BoardProps['selection'], myColor: string) {
     clear(targetsGroup, false);
@@ -709,10 +849,11 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       targetsGroup.add(hit, outline, mark);
       marks.push(mark);
     }
-    for (const hid of targets.hexes ?? []) {
+    const pirateTargets = new Set(targets.pirateHexes ?? []);
+    for (const hid of [...(targets.hexes ?? []), ...pirateTargets]) {
       const g = G.hexes[hid];
       const selected = selection?.kind === 'hex' && selection.id === hid;
-      const ring = new THREE.Mesh(hexRingGeo, selected ? selMat : markMat);
+      const ring = new THREE.Mesh(hexRingGeo, selected ? selMat : pirateTargets.has(hid) ? pirateMarkMat : markMat);
       ring.rotation.x = -Math.PI / 2;
       ring.rotation.z = Math.PI / 2;
       ring.position.set(g.x, TILE_H + 0.02, g.y);
@@ -726,7 +867,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         update(t) {
           const k = 0.5 + 0.5 * Math.sin((t - start) / 220);
           markMat.opacity = 0.7 + 0.3 * k;
-          for (const m of marks) if (m.material === markMat) m.scale.setScalar(1 + 0.18 * k);
+          for (const m of marks) if (m.material === markMat || m.material === pirateMarkMat) m.scale.setScalar(1 + 0.18 * k);
           return true;
         },
       };
@@ -769,6 +910,14 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     clear(tilesGroup);
     clear(discsGroup);
     clear(harborsGroup);
+    clear(markersGroup, false);
+    shipGeo.dispose();
+    sailMat.dispose();
+    for (const m of pirate.material as THREE.Material[]) m.dispose();
+    bonusMats.forEach((m) => {
+      m.map?.dispose();
+      m.dispose();
+    });
     renderer.dispose();
     texCache.forEach((t) => t.dispose());
     // Give the GPU context back now instead of at garbage collection, so a
@@ -777,6 +926,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     mount.removeChild(el);
   }
 
-  return { setBoard, setPieces, setRobber, setTargets, setHighlight, project, dispose, rollDice: dice.roll };
+  return { setBoard, setPieces, setRobber, setPirate, setTargets, setHighlight, project, dispose, rollDice: dice.roll };
+
 }
 

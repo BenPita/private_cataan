@@ -1,17 +1,48 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
-import { boardGraph, graphBounds, type Board as BoardData, type PlayerView } from '@hex/engine';
+import { boardGraph, graphBounds, scenarioFor, vertexRegion, type Board as BoardData, type PlayerView } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
 
 /** SVG units per hex radius. Must match art-src/extras.py (sea frame). */
 export const S = 60;
 
+/** Deep rim colour of the painted sea (sea.webp); Seafarers boards float on it. */
+export const OPEN_SEA = '#2394b0';
+
 /**
  * The square a board is drawn in, in hex radii (10.6 for the classic island),
  * and the painted sea made for that island shape by art-src/extras.py.
+ * Seafarers maps draw their own sea tiles on open water: `sea` is null.
  */
-export function boardFrame(board: Pick<BoardData, 'layout'>): { view: number; sea: string } {
+export function boardFrame(board: Pick<BoardData, 'layout'>): { view: number; sea: string | null } {
   const { maxX, maxY } = graphBounds(boardGraph(board));
-  return { view: 2 * (Math.max(maxX, maxY) + 0.97), sea: board.layout === 'classic56' ? '/art/sea-56.webp' : '/art/sea.webp' };
+  const sea = board.layout?.startsWith('sf-') ? null : board.layout === 'classic56' ? '/art/sea-56.webp' : '/art/sea.webp';
+  return { view: 2 * (Math.max(maxX, maxY) + 0.97), sea };
+}
+
+/**
+ * Seafarers: settlements that earned an island bonus, with the points earned.
+ * The engine records the regions, not the spot, so the player's first
+ * building found in that region carries the marker.
+ */
+export function bonusMarkers(view: PlayerView): Array<{ vertex: string; n: number }> {
+  const n = scenarioFor(view)?.regionBonus;
+  if (!n) return [];
+  const out: Array<{ vertex: string; n: number }> = [];
+  view.players.forEach((p, owner) => {
+    for (const region of p.bonusRegions ?? []) {
+      const vertex = Object.keys(view.buildings).find((v) => view.buildings[v].owner === owner && vertexRegion(view, v) === region);
+      if (vertex) out.push({ vertex, n });
+    }
+  });
+  return out;
+}
+
+/** Angle (degrees) to draw a piece along an edge, never upside down. */
+export function edgeAngle(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  let deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  if (deg > 90) deg -= 180;
+  if (deg <= -90) deg += 180;
+  return deg;
 }
 const TILE_R = S * 0.965; // a little smaller than the grid, so sandy seams show between tiles
 const TILE_W = Math.sqrt(3) * TILE_R;
@@ -27,6 +58,8 @@ export interface BoardTargets {
   vertices?: string[];
   edges?: string[];
   hexes?: number[];
+  /** Seafarers: sea hexes the pirate may move to (drawn in another colour; picked as a hex). */
+  pirateHexes?: number[];
 }
 
 /** Lets effects find where a board point (in SVG board units) is on screen. */
@@ -115,6 +148,60 @@ function City({ x, y, color }: { x: number; y: number; color: string }) {
         <line x1="-14" y1="-8.5" x2="-10" y2="-15" stroke="rgba(255,255,255,0.45)" strokeWidth="1.6" strokeLinecap="round" />
         <rect x={-10} y={4} width={4} height={7} fill="rgba(0,0,0,0.3)" />
       </g>
+    </g>
+  );
+}
+
+/** Ship: a hull seen from above, lying along its edge, with an upright sail. */
+function Ship({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
+  const side = shade(color);
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none">
+      <ellipse cx={3} cy={4} rx={19} ry={7} fill="rgba(10,40,60,0.38)" transform={`rotate(${angle} 3 4)`} />
+      <g className="piece-drop">
+        <g transform={`rotate(${angle})`}>
+          <path
+            d="M-17,-5.5 L9,-5.5 Q19,-4.5 21,0 Q19,4.5 9,5.5 L-17,5.5 Q-19.5,0 -17,-5.5 Z"
+            fill={color}
+            stroke="#1d150d"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+          <path d="M-14,-2.6 L8,-2.6 Q14,-2 15.5,0 Q14,2 8,2.6 L-14,2.6 Z" fill={side} />
+        </g>
+        <line x1={0} y1={0} x2={0} y2={-22} stroke="#3b2412" strokeWidth="2" strokeLinecap="round" />
+        <path d="M1.2,-20.5 Q13,-12 1.2,-3 Z" fill="url(#flag)" stroke="#6b5530" strokeWidth="1" strokeLinejoin="round" />
+        <path d="M0,-22 L-8,-19.5 L0,-17 Z" fill={color} stroke="#1d150d" strokeWidth="0.8" />
+      </g>
+    </g>
+  );
+}
+
+/** Pirate ship: dark hull and black sails. */
+function PirateShip() {
+  return (
+    <g pointerEvents="none">
+      <ellipse cx={4} cy={9} rx={24} ry={7} fill="rgba(5,20,30,0.45)" />
+      <path d="M-22,0 L18,0 Q24,1 26,-4 L22,8 Q0,12 -18,8 Z" fill="#2b1d14" stroke="#0d0905" strokeWidth="1.4" strokeLinejoin="round" />
+      <line x1={-18} y1={4} x2={20} y2={4} stroke="#6b4a2a" strokeWidth="1.2" />
+      <line x1={-2} y1={0} x2={-2} y2={-34} stroke="#1a110a" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M-1,-31 Q14,-23 -1,-8 Z" fill="#1b1b1f" stroke="#000" strokeWidth="1" strokeLinejoin="round" />
+      <path d="M-3,-28 Q-15,-21 -3,-10 Z" fill="#26262b" stroke="#000" strokeWidth="1" strokeLinejoin="round" />
+      <circle cx={4} cy={-20} r={2.6} fill="#f2efe6" />
+      <path d="M-2,-34 L8,-36.5 L-2,-39 Z" fill="#b3261a" />
+    </g>
+  );
+}
+
+/** Laurel with "+n" under a settlement that earned a Seafarers island bonus. */
+function BonusMarker({ x, y, n }: { x: number; y: number; n: number }) {
+  return (
+    <g transform={`translate(${x},${y + 19})`} pointerEvents="none">
+      <path d="M-11,-3 Q-12,5 -3,7 M11,-3 Q12,5 3,7" fill="none" stroke="#3f7a2a" strokeWidth="2.6" strokeLinecap="round" />
+      <circle r={7.5} fill="#f2c94c" stroke="#7a5a12" strokeWidth="1.2" />
+      <text y={3.4} className="bonus-num">
+        +{n}
+      </text>
     </g>
   );
 }
@@ -221,15 +308,21 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
   const vSet = useMemo(() => new Set(targets.vertices ?? []), [targets.vertices]);
   const eSet = useMemo(() => new Set(targets.edges ?? []), [targets.edges]);
   const hSet = useMemo(() => new Set(targets.hexes ?? []), [targets.hexes]);
+  const pSet = useMemo(() => new Set(targets.pirateHexes ?? []), [targets.pirateHexes]);
   const myColor = colors[view.me ?? 0];
   const robber = G.hexes[view.board.robberHex];
+  const pirate = view.board.pirateHex !== undefined ? G.hexes[view.board.pirateHex] : null;
   const frame = boardFrame(view.board);
   const VIEW = frame.view * S;
 
   return (
     <PanZoom svgRef={svgRef} view={VIEW}>
-      {/* Sea frame and beach (pre-painted) */}
-      <image href={frame.sea} x={-VIEW / 2} y={-VIEW / 2} width={VIEW} height={VIEW} preserveAspectRatio="none" />
+      {/* Sea frame and beach (pre-painted); Seafarers maps lie on open water */}
+      {frame.sea ? (
+        <image href={frame.sea} x={-VIEW / 2} y={-VIEW / 2} width={VIEW} height={VIEW} preserveAspectRatio="none" />
+      ) : (
+        <rect x={-VIEW * 3} y={-VIEW * 3} width={VIEW * 6} height={VIEW * 6} fill={OPEN_SEA} />
+      )}
 
       {/* Harbors: wooden pier and a parchment flag */}
       {view.board.harbors.map((h) => {
@@ -283,7 +376,8 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         const g = G.hexes[tile.id];
         const cx = g.x * S;
         const cy = g.y * S;
-        const targetable = hSet.has(tile.id);
+        const pirateTarget = pSet.has(tile.id);
+        const targetable = hSet.has(tile.id) || pirateTarget;
         const selected = selection?.kind === 'hex' && selection.id === tile.id;
         return (
           <g
@@ -300,7 +394,9 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
               height={TILE_H}
             />
             {highlightHexes.includes(tile.id) && <polygon points={hexPoints(cx, cy, TILE_R)} className="hex-glow" />}
-            {(targetable || selected) && <polygon points={hexPoints(cx, cy, S - 6)} className={`hex-target ${selected ? 'selected' : ''}`} />}
+            {(targetable || selected) && (
+              <polygon points={hexPoints(cx, cy, S - 6)} className={`hex-target ${pirateTarget ? 'pirate' : ''} ${selected ? 'selected' : ''}`} />
+            )}
           </g>
         );
       })}
@@ -355,6 +451,13 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         );
       })}
 
+      {/* Ships (Seafarers) */}
+      {Object.entries(view.ships ?? {}).map(([edge, owner]) => {
+        const e = G.edges[edge];
+        const [a, b] = e.vertices.map((v) => G.vertices[v]);
+        return <Ship key={`${edge}-${owner}`} x={e.x * S} y={e.y * S} angle={edgeAngle(a, b)} color={colors[owner]} />;
+      })}
+
       {/* Edge targets */}
       {[...eSet].map((edge) => {
         const [a, b] = G.edges[edge].vertices.map((v) => G.vertices[v]);
@@ -384,7 +487,21 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         );
       })}
 
+      {/* Island bonus markers (Seafarers) */}
+      {bonusMarkers(view).map(({ vertex, n }) => {
+        const v = G.vertices[vertex];
+        return <BonusMarker key={`bonus-${vertex}`} x={v.x * S} y={v.y * S} n={n} />;
+      })}
+
+      {/* Pirate (Seafarers): sails between sea hexes like the robber */}
+      {pirate && (
+        <g className="robber pirate" style={{ transform: `translate(${pirate.x * S}px, ${pirate.y * S + 6}px)` }}>
+          <PirateShip />
+        </g>
+      )}
+
       {/* Robber: grey pawn that slides between lands */}
+
       <g className="robber" style={{ transform: `translate(${robber.x * S + 22}px, ${robber.y * S - 14}px)` }} pointerEvents="none">
         <ellipse cx={4} cy={19} rx={13} ry={4.5} fill="rgba(20,12,4,0.42)" />
         <path d="M-10,18 Q-12,4 -6,-1 Q-11,-9 -4,-14 L4,-14 Q11,-9 6,-1 Q12,4 10,18 Z" fill="url(#pawn)" stroke="#50565c" strokeWidth="1.3" />
