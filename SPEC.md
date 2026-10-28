@@ -138,6 +138,62 @@ Read this file instead of the originals; consult them only for fine detail.
   ruleset (same rules, A→B→B→A setup, no neutral players), modular in
   `engine/src/rulesets.ts`.
 
+## Mods / expansions — infrastructure design (owner-approved 2026-10-28, NOT built yet)
+Goal: a solid base for every official CATAN expansion, added one at a time later. The owner
+supplies the official rules (catan.com) for each expansion before it is built; nothing is
+implemented from memory. Any interpretation is written here and confirmed with the owner.
+
+Decisions
+- One mod per game (no combining expansions). Combinations only if the owner asks later.
+- 5–6 players is not a mod and not a toggle: choosing 5 or 6 participants switches the chosen
+  mod to its 5–6 rules. Each mod declares whether it supports 5–6; base gets it first.
+- Approach "mod = package": each mod is one self-describing definition the engine consults
+  instead of hard-coded constants (rejected: one engine copy per expansion; `if expansion`
+  checks scattered through the code).
+
+Player flow
+- Home (screen 1): name, humans, bots + levels; up to 6 participants (bots ≤ 5). The
+  "Create game" button becomes "Choose mod →".
+- Mod screen (screen 2, new): large illustrated card per mod. "Base game" is active; future
+  expansions show as greyed "Coming soon" cards. With 5–6 participants each card shows a
+  "5–6 players" tag; a mod without 5–6 support is greyed with an explanation. The chosen
+  mod's settings appear under it (victory target, board type, house rules — moved here from
+  Home). Buttons: back, "Create game".
+- Lobby shows the mod name (+ 5–6 tag). The host may change settings but not the mod; a
+  different mod means a new game.
+- Games saved before this change load as Base game, version 1.
+
+Engine architecture
+- `engine/src/mods/<id>.ts`, one per mod: id, name/art key, rules version, participant range
+  (normal and 5–6), board generator, bank size, dev deck, costs, piece limits, player colours
+  (5–6 adds green and brown), settings shown on screen 2, and hooks for extra actions/phases.
+  A single registry (`mods/index.ts`) is read by server (validation) and client (cards).
+- The board graph moves into the game state (today `GRAPH` in geometry.ts is one global
+  map used by rules, queries, bots, 2D and 3D boards). Everything reads the game's own graph.
+- `GameState` records `mod` and `modVersion`; a game keeps the rules version it started with.
+- Client receiving an unknown mod id asks to reload the page instead of drawing a broken board.
+
+Build order
+- Stage 0: move the base game into the mod structure with zero visible change. All existing
+  tests and seeded bot simulations must produce identical results to before.
+- Stage 1: mod-selection screen (screen 2) and lobby display.
+- Stage 2: 5–6 players for the base game, from official rules the owner sends (larger board,
+  bank, deck, extra colours, the official extra-build rule).
+- Then one expansion at a time, each with its own spec section, tests, 100-game bot run,
+  and owner check on localhost.
+
+Known risks and how they are handled
+- Breaking the base game → stage 0 identical-seed regression check.
+- 6 players on a phone (player chips, trade panel, log) → redesigned chip row, checked at
+  phone size before owner review.
+- Bigger 3D board on phones → measure frame rate on the 5–6 board; keep "no drawing when
+  nothing moves".
+- Bots assume the classic board → bots read the game's graph; each mod ships a bot
+  self-play test (100 games finish without getting stuck).
+- Lowering the player count below already-joined humans → same refusal as today.
+- Old cached client vs new mod → unknown-mod reload prompt (see above).
+- Unclear expansion rules → only from owner-supplied official material; ask, then record here.
+
 ## Game screen look (2026-10-28)
 
 - Bots get random names from a pool of 25 men + 25 women (server stores `Bot#<index>`,
