@@ -129,7 +129,11 @@ function regionBonusAt(c: Ctx, vertex: string): number {
   const scenario = scenarioFor(c.v);
   if (!scenario?.regionBonus) return 0;
   const region = vertexRegion(c.v, vertex);
-  if (!region || (scenario.homeRegions ?? []).includes(region)) return 0;
+  if (!region) return 0;
+  if (scenario.homeRegions === 'starting') {
+    // Starting settlements make their islands home instead of earning a bonus.
+    if (c.v.phase === 'INITIAL_PLACEMENT' || c.v.players[c.me].homeRegions.includes(region)) return 0;
+  } else if ((scenario.homeRegions ?? []).includes(region)) return 0;
   return (c.v.players[c.me].bonusRegions ?? []).includes(region) ? 0 : scenario.regionBonus;
 }
 

@@ -23,6 +23,7 @@ export interface PublicPlayer {
   shipsBuilt: number;
   vpTokens: number;
   bonusRegions: string[];
+  homeRegions: string[];
 }
 
 /**
@@ -72,6 +73,7 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
         shipsBuilt: p.shipsBuilt ?? 0,
         vpTokens: p.vpTokens ?? 0,
         bonusRegions: p.bonusRegions ?? [],
+        homeRegions: p.homeRegions ?? [],
       };
     }),
     log: log.map((entry: LogEntry): LogItem => {

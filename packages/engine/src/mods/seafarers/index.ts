@@ -7,8 +7,8 @@ import type { ModDef, ScenarioDef } from '../types';
 export type { ScenarioMap, MapHex, MapPort, MapTerrain } from './mapTypes';
 export { MAP_DIRS, boardHexes } from './mapTypes';
 import { boardHexes } from './mapTypes';
-import { NEW_SHORES_3P, NEW_SHORES_4P } from './maps';
-export { NEW_SHORES_3P, NEW_SHORES_4P } from './maps';
+import { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
+export { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 
 /** Map size a game uses: 2–3 participants play the 3-player map, 4 the 4-player map. */
 export function scenarioMapSize(participants: number): 3 | 4 {
@@ -71,6 +71,33 @@ addScenario({
   id: 'newShores',
   victoryTarget: 14,
   maps: { 3: NEW_SHORES_3P, 4: NEW_SHORES_4P },
+  startRegions: ['main'],
+  homeRegions: ['main'],
+  regionBonus: 2,
+});
+
+/**
+ * Scenario 2, The Four Islands (rulebook p. 6): starting settlements on one or
+ * two islands, which become that player's home islands; +2 VP for the first
+ * settlement on each other island; 13 VP wins.
+ */
+addScenario({
+  id: 'fourIslands',
+  victoryTarget: 13,
+  maps: { 3: FOUR_ISLANDS_3P, 4: FOUR_ISLANDS_4P },
+  homeRegions: 'starting',
+  regionBonus: 2,
+});
+
+/**
+ * Scenario 4, Through the Desert (rulebook p. 10): starting settlements on the
+ * main island; the land strip beyond the desert and the small islands are
+ * unexplored regions, +2 VP for the first settlement in each; 14 VP wins.
+ */
+addScenario({
+  id: 'throughDesert',
+  victoryTarget: 14,
+  maps: { 3: THROUGH_DESERT_3P, 4: THROUGH_DESERT_4P },
   startRegions: ['main'],
   homeRegions: ['main'],
   regionBonus: 2,

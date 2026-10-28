@@ -275,13 +275,25 @@ function canPlaceFreePiece(state: GameState, player: number): boolean {
   return hasShips(mod) && (me.shipsBuilt ?? 0) < (mod.pieceLimits.ships ?? 0) && legalShips(state, player).length > 0;
 }
 
-/** Scenario bonus: VP tokens for a player's first settlement in a region other than their home. */
-function awardRegionBonus(state: GameState, player: number, vertex: string): void {
+/**
+ * Scenario bonus: VP tokens for a player's first settlement in a region other
+ * than their home. With `homeRegions: 'starting'` (The Four Islands) the
+ * regions of a player's starting settlements are that player's home.
+ */
+function awardRegionBonus(state: GameState, player: number, vertex: string, setup = false): void {
   const scenario = scenarioFor(state);
   if (!scenario?.regionBonus) return;
   const region = vertexRegion(state, vertex);
   const me = state.players[player];
-  if (!region || (scenario.homeRegions ?? []).includes(region) || (me.bonusRegions ?? []).includes(region)) return;
+  if (!region) return;
+  if (scenario.homeRegions === 'starting') {
+    if (setup) {
+      if (!(me.homeRegions ?? []).includes(region)) me.homeRegions = [...(me.homeRegions ?? []), region];
+      return;
+    }
+    if ((me.homeRegions ?? []).includes(region)) return;
+  } else if ((scenario.homeRegions ?? []).includes(region)) return;
+  if ((me.bonusRegions ?? []).includes(region)) return;
   me.bonusRegions = [...(me.bonusRegions ?? []), region];
   me.vpTokens = (me.vpTokens ?? 0) + scenario.regionBonus;
   say(state, 'regionBonus', { p: player, n: scenario.regionBonus });
@@ -569,7 +581,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       } else {
         say(state, 'setupSettlement', { p: player });
       }
-      awardRegionBonus(state, player, action.vertex);
+      awardRegionBonus(state, player, action.vertex, true);
       if (gold > 0) {
         // A gold field next to the settlement: 1 resource of choice each, chosen before the road.
         state.pendingGold = { [player]: gold };

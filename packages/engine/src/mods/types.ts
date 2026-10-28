@@ -11,7 +11,7 @@ export interface ScenarioDef {
   /** Starting settlements only on hexes of these regions (missing = anywhere). */
   startRegions?: string[];
   /** Regions where a first settlement earns no bonus (home islands). */
-  homeRegions?: string[];
+  homeRegions?: string[] | 'starting';
   /** VP tokens for a player's first settlement in each other region (0/missing = none). */
   regionBonus?: number;
 }

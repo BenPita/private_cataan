@@ -290,6 +290,13 @@ Interpretations (Seafarers S1):
 - Fixed setup only (variable setup is a later stage); `boardType` is ignored for Seafarers.
 - Settlement error in Seafarers: "Settlement must connect to one of your roads or ships".
 
+Scenarios wired (2026-10-29): `newShores` (1), `fourIslands` (2: `homeRegions: 'starting'` — the
+regions of a player's starting settlements are their home islands, stored as `PlayerState.homeRegions`;
+13 VP), `throughDesert` (4: start on 'main'; the land strip beyond the desert ('strip') and the isles give
++2 VP; deserts belong to 'main'; 14 VP). Map notes from transcription: Four Islands 4p uses the
+3-player-size frame (35 tiles); pirate starts printed on the frame are `frameSea` spaces (Through the
+Desert's touches only land).
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

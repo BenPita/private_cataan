@@ -92,6 +92,8 @@ export interface PlayerState extends PlayerSetup {
   vpTokens?: number;
   /** Seafarers: regions in which this player already received the first-settlement bonus. */
   bonusRegions?: string[];
+  /** Regions of the player's starting settlements, when the scenario makes those their home. */
+  homeRegions?: string[];
 }
 
 export interface TradeOffer {
