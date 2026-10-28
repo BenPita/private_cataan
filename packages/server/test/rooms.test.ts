@@ -243,3 +243,49 @@ describe('mods in rooms', () => {
     expect(loaded.game!.paired).toBeNull();
   });
 });
+
+describe('seafarers rooms', () => {
+  it('validates the scenario against the mod', () => {
+    expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers' })).toMatchObject({ ok: true, config: { mod: 'seafarers', scenario: 'newShores' } });
+    expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers', scenario: 'newShores' }).ok).toBe(true);
+    expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers', scenario: 'nope' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
+    expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers', scenario: 'toString' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
+    expect(validateConfig({ humans: 1, bots: 2, scenario: 'newShores' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
+    expect(validateConfig({ humans: 2, bots: 3, mod: 'seafarers' })).toMatchObject({ ok: false, error: 'A game needs 2-4 participants' });
+    expect('scenario' in (validateConfig({ humans: 2, bots: 0 }) as { config: object }).config).toBe(false);
+  });
+
+  it('starts the scenario game; mod and scenario are fixed in the lobby', async () => {
+    const m = new RoomManager(new MemoryStore(), () => {}, () => 7);
+    const created = await m.create('Roy', { humans: 1, bots: 2, mod: 'seafarers', scenario: 'newShores', victoryTarget: 10 });
+    if (!created.ok) throw new Error(created.error);
+    const room = (await m.get(created.roomId))!;
+    expect(await m.updateConfig(room, 0, { scenario: 'other' })).toMatchObject({ ok: false, error: 'The scenario cannot be changed' });
+    expect(await m.updateConfig(room, 0, { mod: 'base' })).toMatchObject({ ok: false, error: 'The mod cannot be changed' });
+    expect((await m.updateConfig(room, 0, { bots: 3 })).ok).toBe(true);
+    expect(room.config.scenario).toBe('newShores');
+    await m.start(room, 0);
+    expect(room.game!.config).toMatchObject({ mod: 'seafarers', scenario: 'newShores', victoryTarget: 14 });
+    expect(room.game!.board.layout).toBe('sf-newShores-4p');
+    expect(room.game!.ships).toEqual({});
+  });
+
+  it('an older seafarers save gets the ship fields defaulted', async () => {
+    const store = new MemoryStore();
+    const m = new RoomManager(store, () => {}, () => 7);
+    const created = await m.create('Roy', { humans: 1, bots: 2, mod: 'seafarers' });
+    if (!created.ok) throw new Error(created.error);
+    const room = (await m.get(created.roomId))!;
+    await m.start(room, 0);
+    await m.flush(room.id);
+    const saved = (await store.load(room.id))!;
+    delete saved.game!.ships;
+    delete saved.game!.pendingGold;
+    delete saved.game!.players[0].shipsBuilt;
+    await store.save(saved);
+    const loaded = (await new RoomManager(store).get(room.id))!;
+    expect(loaded.game!.ships).toEqual({});
+    expect(loaded.game!.pendingGold).toEqual({});
+    expect(loaded.game!.players[0].shipsBuilt).toBe(0);
+  });
+});

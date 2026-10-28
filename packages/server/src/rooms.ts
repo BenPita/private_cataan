@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import {
   MODS,
+  hasShips,
   isModId,
+  modFor,
   modPlayerRange,
   applyAction,
   createGame,
@@ -32,6 +34,8 @@ export interface RoomConfig {
   devSameTurn?: boolean;
   /** Bot names the host already saw on the home screen (`Bot#<pool index>`). */
   botNames?: string[];
+  /** Scenario of a scenario-based mod (Seafarers); fixed once the room exists. */
+  scenario?: string;
 }
 
 export interface Seat {
@@ -112,6 +116,16 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   if (!Number.isInteger(c.bots) || c.bots < 0 || c.bots > max - 1) return { ok: false, error: `Bots must be 0-${max - 1}` };
   const total = c.humans + c.bots;
   if (total < min || total > max) return { ok: false, error: `A game needs ${min}-${max} participants` };
+  const def = MODS[modId];
+  let scenario: string | undefined;
+  if (def.scenarios) {
+    scenario = c.scenario ?? def.defaultScenario;
+    if (typeof scenario !== 'string' || !Object.prototype.hasOwnProperty.call(def.scenarios, scenario)) {
+      return { ok: false, error: 'Unknown scenario' };
+    }
+  } else if (c.scenario !== undefined) {
+    return { ok: false, error: 'Unknown scenario' };
+  }
   const LEVELS = ['easy', 'medium', 'hard'];
   if (!LEVELS.includes(c.difficulty)) return { ok: false, error: 'Invalid difficulty' };
   const given = Array.isArray(c.botDifficulties) ? c.botDifficulties : [];
@@ -138,6 +152,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
       startResBoth: c.startResBoth === true,
       devSameTurn: c.devSameTurn === true,
       ...(botNames.length ? { botNames: botNames.slice(0, c.bots) } : {}),
+      ...(scenario ? { scenario } : {}),
     },
   };
 }
@@ -184,6 +199,18 @@ function migrate(room: Room): Room {
     g.config.modVersion ??= 1;
     g.board.layout ??= 'classic';
     g.paired ??= null;
+    if (hasShips(modFor(g))) {
+      // Seafarers fields (games saved before a field existed).
+      g.ships ??= {};
+      g.pendingGold ??= {};
+      g.newShips ??= [];
+      g.shipMoved ??= false;
+      for (const p of g.players) {
+        p.shipsBuilt ??= 0;
+        p.vpTokens ??= 0;
+        p.bonusRegions ??= [];
+      }
+    }
   }
   return room;
 }
@@ -365,6 +392,7 @@ export class RoomManager {
     if (seat !== 0) return { ok: false, error: 'Only the host can change settings' };
     if (room.status !== 'lobby') return { ok: false, error: 'Settings are locked once the game starts' };
     if (raw && 'mod' in raw && raw.mod !== (room.config.mod ?? 'base')) return { ok: false, error: 'The mod cannot be changed' };
+    if (raw && 'scenario' in raw && raw.scenario !== room.config.scenario) return { ok: false, error: 'The scenario cannot be changed' };
     const v = validateConfig({ ...room.config, ...raw });
     if (!v.ok) return v;
     const claimedHumans = room.seats.filter((s) => s.kind === 'human' && s.tokenHash).length;
@@ -401,6 +429,7 @@ export class RoomManager {
       this.seedSource(),
       { mod: room.config.mod ?? 'base', victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true,
         devCardsSameTurn: room.config.devSameTurn === true,
+        ...(room.config.scenario ? { scenario: room.config.scenario } : {}),
       },
     );
     room.status = 'playing';
@@ -427,7 +456,8 @@ export class RoomManager {
     const action = payload.action as Action;
     if (!action || typeof action !== 'object' || typeof action.type !== 'string') return { ok: false, error: 'Invalid action' };
 
-    const parallelSafe = action.type === 'discard' || action.type === 'respondTrade' || action.type === 'counterTrade';
+    const parallelSafe =
+      action.type === 'discard' || action.type === 'chooseGold' || action.type === 'respondTrade' || action.type === 'counterTrade';
     if (!parallelSafe && payload.expectedRevision !== room.revision) {
       return { ok: false, error: 'Your game was out of date — please try again' };
     }

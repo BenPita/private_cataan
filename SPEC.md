@@ -241,6 +241,55 @@ should also depend on `board.layout`.
 Roadmap and rules summary: `docs/superpowers/plans/2026-10-29-seafarers.md` (stages S1–S7).
 2 participants play the official 3-player map; 5–6 use the Seafarers 5–6 maps with paired turns.
 
+Stage S1 engine + server DONE 2026-10-29 (no client UI yet):
+- Mod `seafarers` (`SEAFARERS_MOD`, 2–4 participants for now; 5–6 is stage S7). Ships cost
+  lumber + wool, 15 per player (`pieceLimits.ships`, `costs.ship`; their presence = `hasShips(mod)`
+  turns on ships, pirate and gold). Scenarios in `mod.scenarios` (`ScenarioDef`: victory target,
+  maps per size, start regions, home regions, region bonus); `config.scenario` (default
+  `newShores`), `scenarioFor(state)`. 2–3 participants → 3-player map, 4 → 4-player map.
+- Maps (`mods/seafarers/maps.ts`, `ScenarioMap`) become layouts `sf-<scenario>-<3|4>p`
+  (`registerLayout`), hexes in map order then the frame-printed sea spaces (`frameSea`); ports
+  from hex sides (`hexSideEdge`); `board.pirateHex`, `board.startRegions`, `hex.region`.
+- Terrain gains `sea` and `gold`. A vertex is buildable only if it touches land; roads need a
+  land side; ships need a sea side (outside the map counts as sea); a road and a ship never share
+  an edge. Heading for New Shores: start on `main`, +2 VP tokens (`player.vpTokens`, public) for
+  a player's first settlement on each other region (`player.bonusRegions`), win at 14 (the room's
+  target is ignored).
+- Actions: `buildShip {edge}`, `moveShip {from, to}`, `movePirate {hex}` (ROBBER_MOVE),
+  `chooseGold {resources}` (phase `GOLD_CHOICE`, `pendingGold`, `goldReturnPhase`),
+  `placeSetupRoad {edge, ship: true}`, `placeFreeRoad {edge, ship: true}`. State: `ships`,
+  `shipMoved`, `newShips`, `player.shipsBuilt`. Log keys: builtShip, movedShip, placedFreeShip,
+  pirateMoved, goldOwed, goldChosen, regionBonus. Server: `RoomConfig.scenario` validated
+  ("Unknown scenario"), fixed after creation ("The scenario cannot be changed"); `chooseGold` is
+  parallel-safe like discards; `migrate()` defaults the ship fields of Seafarers saves.
+
+Interpretations (Seafarers S1):
+- Pirate "to the frame": there is no separate frame spot — the player moves the pirate to any
+  other sea hex; choosing one without ships = nobody to rob. Frame-printed sea spaces (the pirate's
+  start) are ordinary sea hexes of the board.
+- Robber stays on land; pirate on sea. Pirate steal candidates = players (not you, with cards)
+  with a ship on any edge of that sea hex; one candidate is robbed automatically.
+- Gold: normal production is paid first (base shortage rules), then each owed player chooses
+  (simultaneously, any order). With a short bank a player must take min(owed, cards left in the
+  bank) and only what the bank has; once the bank is empty the remaining choices are skipped.
+  Gold choices are added to `lastRoll.gains`. Starting resources: 1 of choice per gold hex at the
+  second settlement (or both with the house rule), chosen before that settlement's road/ship.
+- Ships connect only to the owner's ships or buildings, never through an opponent's building;
+  no ship may be placed on, or moved to/from, any edge of the pirate's hex (this also applies to
+  the setup ship and Road Building ships).
+- Moving: once per turn in the Action phase (after rolling), not a ship built this turn (incl.
+  Road Building ships), needs an open end (an end vertex with neither another own ship nor an own
+  building), and not on a line of own ships linking two own buildings (opponent buildings on the
+  line ignored). The ship is lifted first, so it cannot connect through its own old spot.
+- Longest Route counts roads and ships; they join only at a vertex holding the player's own
+  building. Base-game results are unchanged.
+- Road Building gives 2 free pieces, each a road or a ship (`placeFreeRoad` with `ship: true`);
+  it ends early when neither a road nor a ship can be placed.
+- Region bonus uses the region of the land hexes at the vertex; a bonus is per player per region
+  (others settling first does not matter). Settlements in `homeRegions` (`main`) never earn one.
+- Fixed setup only (variable setup is a later stage); `boardType` is ignored for Seafarers.
+- Settlement error in Seafarers: "Settlement must connect to one of your roads or ships".
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be
