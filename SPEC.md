@@ -138,7 +138,7 @@ Read this file instead of the originals; consult them only for fine detail.
   ruleset (same rules, A→B→B→A setup, no neutral players), modular in
   `engine/src/rulesets.ts`.
 
-## Mods / expansions — infrastructure design (owner-approved 2026-10-28, NOT built yet)
+## Mods / expansions — infrastructure design (owner-approved 2026-10-28; stage 0 built on branch `mods-stage0`)
 Goal: a solid base for every official CATAN expansion, added one at a time later. The owner
 supplies the official rules (catan.com) for each expansion before it is built; nothing is
 implemented from memory. Any interpretation is written here and confirmed with the owner.
@@ -174,7 +174,12 @@ Engine architecture
 - Client receiving an unknown mod id asks to reload the page instead of drawing a broken board.
 
 Build order
-- Stage 0: move the base game into the mod structure with zero visible change. All existing
+- Stage 0 — DONE 2026-10-28 (branch `mods-stage0`, not yet merged/deployed): the mod and its rules
+  version live in `GameState.config.mod` / `config.modVersion`, the island shape in
+  `board.layout`; server `migrate()` fills them for older saves. Guarded by
+  `engine/test/regression.test.ts` (seeded full games recorded before the refactor; never update
+  that snapshot to make a change pass).
+  Original plan: move the base game into the mod structure with zero visible change. All existing
   tests and seeded bot simulations must produce identical results to before.
 - Stage 1: mod-selection screen (screen 2) and lobby display.
 - Stage 2: 5–6 players for the base game, from official rules the owner sends (larger board,
@@ -284,6 +289,8 @@ order, RNG seed.
 - `packages/engine/src/game.ts` — createGame, applyAction (all rules), scoring
 - `packages/engine/src/queries.ts` — legal spots, harbor rates, longest road (shared by UI/bots)
 - `packages/engine/src/view.ts` — per-player view (hidden info stripped)
+- `packages/engine/src/mods/` — mod definitions (`base.ts`) and registry (`MODS`, `modFor`)
+- `packages/engine/src/geometry.ts` — board graph per layout: `boardGraph(board)` / `graphFor(layout)`
 - `packages/server/src/rooms.ts` — RoomManager (lobby, tokens, revision/dedupe, act)
 - `packages/server/scripts/autoplay.ts` — dev tool to fast-forward a live room
 - `packages/client/src/game/GameScreen.tsx` + `Panels.tsx` + `Board.tsx` — game UI
