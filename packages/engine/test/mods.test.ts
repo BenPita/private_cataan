@@ -34,3 +34,14 @@ describe('games record their mod', () => {
     expect(() => createGame(Array(5).fill(two[0]), 1)).toThrow(/2-4/);
   });
 });
+
+describe('mod safety', () => {
+  it('every mod has a colour per seat', () => {
+    for (const mod of Object.values(MODS)) expect(mod.colors.length).toBeGreaterThanOrEqual(mod.maxPlayers);
+  });
+  it('an unknown mod is a clear error, not a crash', () => {
+    const two = [{ name: 'A', kind: 'human' as const }, { name: 'B', kind: 'human' as const }];
+    expect(() => createGame(two, 1, { mod: 'toString' as never })).toThrow('Unknown mod');
+    expect(() => modFor({ config: { mod: 'nope' as never } })).toThrow(/Unknown mod/);
+  });
+});

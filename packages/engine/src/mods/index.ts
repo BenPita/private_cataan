@@ -16,5 +16,7 @@ export function isModId(id: unknown): id is ModId {
 
 /** The mod a game (state or view) is played with; old saves without one are base. */
 export function modFor(s: { config: Pick<GameConfig, 'mod'> }): ModDef {
-  return MODS[s.config.mod ?? 'base'];
+  const id = s.config.mod ?? 'base';
+  if (!isModId(id)) throw new Error(`Unknown mod: ${String(id)}`);
+  return MODS[id];
 }

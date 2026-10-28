@@ -1,5 +1,5 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { BASE_MOD, modFor } from './mods';
+import { isModId, modFor } from './mods';
 import { boardGraph } from './geometry';
 import {
   isRoadConnected,
@@ -63,15 +63,12 @@ function fail(msg: string): never {
 /** Game state is plain JSON, so a JSON round-trip is a safe deep copy. */
 export const cloneState = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-/** Participant range of the base game (server validation for base rooms). */
-export const MIN_PLAYERS = BASE_MOD.minPlayers;
-export const MAX_PLAYERS = BASE_MOD.maxPlayers;
-
 export function createGame(
   players: PlayerSetup[],
   seed: number,
   config: Partial<GameConfig> = {},
 ): GameState {
+  if (config.mod !== undefined && !isModId(config.mod)) throw new GameError('Unknown mod');
   const mod = modFor({ config });
   if (players.length < mod.minPlayers || players.length > mod.maxPlayers) {
     throw new GameError(`A game needs ${mod.minPlayers}-${mod.maxPlayers} participants`);
