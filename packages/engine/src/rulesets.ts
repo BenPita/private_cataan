@@ -40,6 +40,7 @@ export const TERRAIN_RESOURCE: Record<Terrain, Resource | null> = {
   sea: null,
   /** Gold produces a resource of the owner's choice (GOLD_CHOICE), never a fixed one. */
   gold: null,
+  fog: null,
 };
 
 export const NUMBER_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];

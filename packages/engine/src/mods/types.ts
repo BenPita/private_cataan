@@ -14,6 +14,13 @@ export interface ScenarioDef {
   homeRegions?: string[] | 'starting';
   /** VP tokens for a player's first settlement in each other region (0/missing = none). */
   regionBonus?: number;
+  /** The Fog Islands: face-down hexes and number discs for the empty (`fog`) spaces, per map. */
+  fog?: { 3: FogStack; 4: FogStack };
+}
+
+export interface FogStack {
+  hexes: Partial<Record<Terrain, number>>;
+  numbers: number[];
 }
 
 /**

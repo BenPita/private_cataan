@@ -30,8 +30,10 @@ export interface PublicPlayer {
  * What one participant is allowed to know. Contains no other player's
  * resources or dev cards, no deck order and no RNG seed.
  */
-export interface PlayerView extends Omit<GameState, 'players' | 'devDeck' | 'rng' | 'log'> {
+export interface PlayerView extends Omit<GameState, 'players' | 'devDeck' | 'rng' | 'log' | 'fogStack'> {
   me: number | null;
+  /** The Fog Islands: face-down hexes left to discover (their kinds stay hidden). */
+  fogLeft?: number;
   players: PublicPlayer[];
   devDeckCount: number;
   log: LogItem[];
@@ -47,10 +49,11 @@ export interface LogItem {
 
 export function getPlayerView(state: GameState, viewer: number | null): PlayerView {
   const reveal = state.phase === 'GAME_OVER';
-  const { devDeck, rng, players, log, ...rest } = cloneState(state);
+  const { devDeck, rng, players, log, fogStack, ...rest } = cloneState(state);
   void rng;
   return {
     ...rest,
+    ...(fogStack ? { fogLeft: fogStack.hexes.length } : {}),
     me: viewer,
     devDeckCount: devDeck.length,
     players: players.map((p, i): PublicPlayer => {

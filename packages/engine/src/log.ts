@@ -50,6 +50,9 @@ export const LOG_EN = {
   goldOwed: '{p} may take {n} resources of their choice from a gold field.',
   goldChosen: '{p} took {res} from a gold field.',
   regionBonus: '{p} settled a new island: +{n} VP.',
+  discoveredSea: '{p} discovered open sea.',
+  discoveredLand: '{p} discovered land ({n}) and took {res}.',
+  discoveredGold: '{p} discovered a gold field ({n}).',
   win: '{p} wins with {n} points!',
 } as const;
 

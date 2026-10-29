@@ -12,16 +12,22 @@ export interface BoardState {
 
 const isSeaHex = (board: Board, hex: number) => board.hexes[hex].terrain === 'sea';
 
+/** Land hex: not sea and not an undiscovered (fog) space. */
+export function isLandHex(board: Board, hex: number): boolean {
+  const t = board.hexes[hex].terrain;
+  return t !== 'sea' && t !== 'fog';
+}
+
 /** Does the vertex touch at least one land hex? (Always true on base boards.) */
 export function vertexOnLand(s: BoardState, vertex: string): boolean {
   const v = boardGraph(s.board).vertices[vertex];
-  return !!v && v.hexes.some((h) => !isSeaHex(s.board, h));
+  return !!v && v.hexes.some((h) => isLandHex(s.board, h));
 }
 
 /** Roads need at least one adjacent land hex. */
 export function isRoadEdge(s: BoardState, edge: string): boolean {
   const e = boardGraph(s.board).edges[edge];
-  return !!e && e.hexes.some((h) => !isSeaHex(s.board, h));
+  return !!e && e.hexes.some((h) => isLandHex(s.board, h));
 }
 
 /** Ships need a sea hex on at least one side; outside the map (the frame) counts as sea. */
@@ -42,7 +48,7 @@ export function vertexRegion(s: BoardState, vertex: string): string | null {
   if (!v) return null;
   for (const h of v.hexes) {
     const region = s.board.hexes[h].region;
-    if (region && !isSeaHex(s.board, h)) return region;
+    if (region && isLandHex(s.board, h)) return region;
   }
   return null;
 }
@@ -52,7 +58,7 @@ export function satisfiesDistanceRule(s: BoardState, vertex: string): boolean {
   const G = boardGraph(s.board);
   const v = G.vertices[vertex];
   if (!v || s.buildings[vertex]) return false;
-  if (!v.hexes.some((h) => !isSeaHex(s.board, h))) return false;
+  if (!v.hexes.some((h) => isLandHex(s.board, h))) return false;
   return v.neighbors.every((n) => !s.buildings[n]);
 }
 
@@ -62,7 +68,7 @@ export function inStartRegion(s: BoardState, vertex: string): boolean {
   if (!allowed) return true;
   const v = boardGraph(s.board).vertices[vertex];
   if (!v) return false;
-  const land = v.hexes.filter((h) => !isSeaHex(s.board, h));
+  const land = v.hexes.filter((h) => isLandHex(s.board, h));
   return land.length > 0 && land.every((h) => allowed.includes(s.board.hexes[h].region ?? ''));
 }
 

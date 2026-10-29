@@ -7,6 +7,7 @@ import {
   THROUGH_DESERT_3P,
   THROUGH_DESERT_4P,
 } from '../src/mods/seafarers/maps';
+import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from '../src/mods/seafarers/fogMaps';
 import { MAP_DIRS, type MapHex, type ScenarioMap } from '../src/mods/seafarers/mapTypes';
 
 /** Component tables printed next to each map (rulebook pp. 4-7, 10-11). */
@@ -59,6 +60,21 @@ const TABLE_DESERT_4P: Table = {
   ports3to1: 4,
 };
 
+/** The Fog Islands (pp. 8-9): face-up hexes and discs; the 12 empty spaces are `fog`. */
+const TABLE_FOG_3P: Table = {
+  terrain: { sea: 16, gold: 0, hills: 2, forest: 4, pasture: 4, fields: 2, mountains: 2, desert: 0, fog: 12 },
+  discs: { 3: 1, 4: 1, 5: 2, 6: 2, 8: 2, 9: 2, 10: 1, 11: 2, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 3,
+};
+
+const TABLE_FOG_4P: Table = {
+  terrain: { sea: 13, gold: 0, hills: 3, forest: 4, pasture: 4, fields: 3, mountains: 3, desert: 0, fog: 12 },
+  discs: { 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 1, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 4,
+};
+
 /** Per-scenario region expectations. */
 interface RegionSpec {
   /** Non-island regions that must exist (islands 'isle1'.. are counted separately). */
@@ -73,7 +89,7 @@ interface RegionSpec {
 }
 
 const key = (q: number, r: number) => `${q},${r}`;
-const isLand = (h: MapHex | undefined) => h !== undefined && h.t !== 'sea';
+const isLand = (h: MapHex | undefined) => h !== undefined && h.t !== 'sea' && h.t !== 'fog';
 
 /** The 6 corners of hex (q, r) as integer keys (pointy-top, hex 4 units wide, rows 6 units apart). */
 function corners(q: number, r: number): string[] {
@@ -130,7 +146,7 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
     it('number discs match the component table; only producing land carries one', () => {
       const counts: Record<number, number> = {};
       for (const h of map.hexes) {
-        if (h.t === 'sea' || h.t === 'desert') expect(h.n).toBeNull();
+        if (h.t === 'sea' || h.t === 'desert' || h.t === 'fog') expect(h.n).toBeNull();
         else expect(h.n).not.toBeNull();
         if (h.n !== null) counts[h.n] = (counts[h.n] ?? 0) + 1;
       }
@@ -188,7 +204,7 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
     it('every land hex has a region, sea has none, and each region is connected', () => {
       const regions = new Map<string, MapHex[]>();
       for (const h of map.hexes) {
-        if (h.t === 'sea') {
+        if (h.t === 'sea' || h.t === 'fog') {
           expect(h.region).toBeUndefined();
           continue;
         }
@@ -251,6 +267,8 @@ check('The Four Islands, 3 players', FOUR_ISLANDS_3P, TABLE_FOUR_ISLANDS_3P, FOU
 check('The Four Islands, 4 players', FOUR_ISLANDS_4P, TABLE_FOUR_ISLANDS_4P, FOUR_ISLANDS_REGIONS);
 check('Through the Desert, 3 players', THROUGH_DESERT_3P, TABLE_DESERT_3P, DESERT_REGIONS);
 check('Through the Desert, 4 players', THROUGH_DESERT_4P, TABLE_DESERT_4P, DESERT_REGIONS);
+check('The Fog Islands, 3 players', FOG_ISLANDS_3P, TABLE_FOG_3P, { named: ['east', 'west'], isles: 0 });
+check('The Fog Islands, 4 players', FOG_ISLANDS_4P, TABLE_FOG_4P, { named: ['east', 'west'], isles: 0 });
 
 describe('Through the Desert: the deserts split the large island', () => {
   for (const [name, map] of [

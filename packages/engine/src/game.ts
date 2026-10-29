@@ -1,9 +1,10 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor } from './mods';
+import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor, scenarioMapSize } from './mods';
 import { boardGraph } from './geometry';
 import {
   canPlaceShip,
   inStartRegion,
+  isLandHex,
   isRoadConnected,
   isRoadEdge,
   isShipConnected,
@@ -44,6 +45,7 @@ import {
   type PlayerState,
   type ResMap,
   type Resource,
+  type Terrain,
 } from './types';
 
 export class GameError extends Error {}
@@ -101,6 +103,7 @@ export function createGame(
       ? generateBeginnerBoard(mod)
       : generateRandomBoard(rng, mod);
   const ships = hasShips(mod);
+  const fog = scenario?.fog?.[scenarioMapSize(players.length)];
 
   const deck: DevCardType[] = [];
   (Object.keys(mod.devDeck) as DevCardType[]).forEach((t) => {
@@ -146,6 +149,7 @@ export function createGame(
     robberReturnPhase: 'MAIN_ACTIONS',
     stealCandidates: [],
     ...(ships ? { pendingGold: {}, shipMoved: false, newShips: [] } : {}),
+    ...(fog ? { fogStack: { hexes: (Object.keys(fog.hexes) as Terrain[]).flatMap((t) => Array<Terrain>(fog.hexes[t]!).fill(t)), numbers: [...fog.numbers] } } : {}),
     freeRoads: 0,
     trade: null,
     paired: null,
@@ -312,9 +316,57 @@ function settleGold(state: GameState): void {
   if (Object.keys(pending).length === 0) {
     state.phase = state.goldReturnPhase ?? 'MAIN_ACTIONS';
     delete state.goldReturnPhase;
+    delete state.goldDiscovered;
   } else {
     state.phase = 'GOLD_CHOICE';
   }
+}
+
+/**
+ * The Fog Islands: a road or ship next to an intersection that touches an empty
+ * space discovers it. A random face-down hex is turned up there; on land it also
+ * gets a random number disc and the player takes 1 resource of its type (a gold
+ * field: 1 of their choice). Every empty space at both ends of `edge` is discovered.
+ */
+function discover(state: GameState, rng: Rng, player: number, edge: string): void {
+  const stack = state.fogStack;
+  if (!stack) return;
+  const G = boardGraph(state.board);
+  const spaces = new Set<number>();
+  for (const v of G.edges[edge].vertices) {
+    for (const h of G.vertices[v].hexes) if (state.board.hexes[h].terrain === 'fog') spaces.add(h);
+  }
+  for (const h of [...spaces].sort((a, b) => a - b)) {
+    if (stack.hexes.length === 0) return;
+    const tile = state.board.hexes[h];
+    const terrain = stack.hexes.splice(rng.int(stack.hexes.length), 1)[0];
+    tile.terrain = terrain;
+    if (terrain === 'sea') {
+      say(state, 'discoveredSea', { p: player });
+      continue;
+    }
+    if (terrain !== 'desert' && stack.numbers.length > 0) tile.number = stack.numbers.splice(rng.int(stack.numbers.length), 1)[0];
+    if (terrain === 'gold') {
+      state.pendingGold = { ...(state.pendingGold ?? {}), [player]: (state.pendingGold?.[player] ?? 0) + 1 };
+      state.goldDiscovered = true;
+      say(state, 'discoveredGold', { p: player, n: tile.number ?? 0 });
+      continue;
+    }
+    const r = TERRAIN_RESOURCE[terrain];
+    const gained = emptyRes();
+    if (r && state.bank[r] > 0) gained[r] = 1;
+    addRes(state.players[player].resources, gained, 1);
+    addRes(state.bank, gained, -1);
+    say(state, 'discoveredLand', { p: player, n: tile.number ?? 0, res: gained });
+  }
+}
+
+/** A discovered gold field: the player chooses the resource now, then play returns to the current phase. */
+function settleDiscoveredGold(state: GameState): void {
+  if (!state.goldDiscovered || state.phase === 'GOLD_CHOICE' || state.phase === 'GAME_OVER') return;
+  state.goldReturnPhase = state.phase as 'INITIAL_PLACEMENT' | 'PRE_ROLL' | 'MAIN_ACTIONS';
+  settleGold(state);
+  for (const [p, n] of Object.entries(state.pendingGold ?? {})) say(state, 'goldOwed', { p: Number(p), n });
 }
 
 function produce(state: GameState, roll: number): { producing: number[]; gains: ResMap[] } {
@@ -611,6 +663,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         state.roads[action.edge] = player;
         me.roadsBuilt++;
       }
+      discover(state, rng, player, action.edge);
       setup.lastSettlement = null;
       setup.step++;
       if (setup.step >= setup.order.length) {
@@ -621,6 +674,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       } else {
         state.currentPlayer = setup.order[setup.step];
       }
+      settleDiscoveredGold(state);
       return;
     }
 
@@ -669,7 +723,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (!hasRes(state.bank, action.resources)) fail('The bank does not have those resources');
       addRes(state.bank, action.resources, -1);
       addRes(me.resources, action.resources, 1);
-      if (state.goldReturnPhase === 'MAIN_ACTIONS' && state.lastRoll) addRes(state.lastRoll.gains[player], action.resources, 1);
+      if (state.goldReturnPhase === 'MAIN_ACTIONS' && !state.goldDiscovered && state.lastRoll) addRes(state.lastRoll.gains[player], action.resources, 1);
       delete state.pendingGold![player];
       say(state, 'goldChosen', { p: player, res: resOf(action.resources) });
       settleGold(state);
@@ -696,7 +750,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (action.hex === state.board.robberHex) fail('The robber must move to a different hex');
-      if (state.board.hexes[action.hex].terrain === 'sea') fail('The robber must stay on land');
+      if (!isLandHex(state.board, action.hex)) fail('The robber must stay on land');
       state.board.robberHex = action.hex;
       say(state, 'robberMoved', { p: player });
       afterRobberMove(state, rng, player, playersOnHex(state, action.hex));
@@ -734,8 +788,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       placeRoad(state, player, action.edge);
       pay(state, player, mod.costs.road, 'a road');
       say(state, 'builtRoad', { p: player });
+      discover(state, rng, player, action.edge);
       updateLongestRoad(state);
       checkVictory(state);
+      settleDiscoveredGold(state);
       return;
     }
 
@@ -750,8 +806,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, mod.costs.ship!, 'a ship');
       state.newShips = [...(state.newShips ?? []), action.edge];
       say(state, 'builtShip', { p: player });
+      discover(state, rng, player, action.edge);
       updateLongestRoad(state);
       checkVictory(state);
+      settleDiscoveredGold(state);
       return;
     }
 
@@ -772,8 +830,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       placeShip(state, player, action.to);
       state.shipMoved = true;
       say(state, 'movedShip', { p: player });
+      discover(state, rng, player, action.to);
       updateLongestRoad(state);
       checkVictory(state);
+      settleDiscoveredGold(state);
       return;
     }
 
@@ -873,8 +933,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         if (state.freeRoads > 0 && !canPlaceFreePiece(state, player)) state.freeRoads = 0;
       } else if (state.freeRoads > 0 && legalRoads(state, player).length === 0) state.freeRoads = 0;
       say(state, action.ship ? 'placedFreeShip' : 'placedFreeRoad', { p: player });
+      discover(state, rng, player, action.edge);
       updateLongestRoad(state);
       checkVictory(state);
+      settleDiscoveredGold(state);
       return;
     }
 

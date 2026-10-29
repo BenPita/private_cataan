@@ -15,6 +15,7 @@ import { boardGraph, type BoardGraph } from './geometry';
 import { hasShips, modFor, scenarioFor, type ModDef } from './mods';
 import {
   isRoadEdge,
+  isLandHex,
   isShipEdge,
   legalCities,
   legalRoads,
@@ -100,6 +101,11 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
   const gained = new Set<Resource>();
   for (const h of c.g.vertices[vertex].hexes) {
     const tile = v.board.hexes[h];
+    if (tile.terrain === 'fog') {
+      // An undiscovered space: probably land with an unknown number.
+      value += 1;
+      continue;
+    }
     if (tile.terrain === 'gold') {
       // Gold: any resource, worth a little more than a normal field.
       value += pips(tile.number) * (h === v.board.robberHex ? 0.4 : 1) * 1.3;
@@ -122,6 +128,12 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
   }
   if (c.ships) value += regionBonusAt(c, vertex) * (level === 'easy' ? 2 : 4);
   return value;
+}
+
+/** The Fog Islands: worth of reaching `vertex` with a road or ship — each empty space there gets discovered. */
+function fogBonus(c: Ctx, vertex: string): number {
+  const spaces = c.g.vertices[vertex].hexes.filter((h) => c.v.board.hexes[h].terrain === 'fog').length;
+  return spaces * (c.level === 'easy' ? 2.5 : c.level === 'hard' ? 6 : 4.5);
 }
 
 /** Scenario VP tokens this bot would earn for a first settlement at `vertex`. */
@@ -181,8 +193,11 @@ function shipTargets(c: Ctx, maxDepth: number, ignore?: string): Array<{ vertex:
   }
   const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number }> = [];
   for (const [vertex, { dist, firstEdge }] of seen) {
-    if (dist === 0 || !firstEdge || !satisfiesDistanceRule(v, vertex)) continue;
-    out.push({ vertex, dist, firstEdge, value: vertexValue(c, vertex, owned) / (1 + 0.35 * dist) });
+    if (dist === 0 || !firstEdge) continue;
+    const spot = satisfiesDistanceRule(v, vertex);
+    const fog = fogBonus(c, vertex);
+    if (!spot && fog === 0) continue;
+    out.push({ vertex, dist, firstEdge, value: ((spot ? vertexValue(c, vertex, owned) : 0) + fog) / (1 + 0.35 * dist) });
   }
   return out.sort((a, b) => b.value - a.value);
 }
@@ -222,8 +237,11 @@ function expansionTargets(c: Ctx, maxDepth: number): Array<{ vertex: string; dis
 
   const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number }> = [];
   for (const [vertex, { dist, firstEdge }] of seen) {
-    if (dist === 0 || !firstEdge || !satisfiesDistanceRule(v, vertex)) continue;
-    out.push({ vertex, dist, firstEdge, value: vertexValue(c, vertex, owned) / (1 + 0.45 * dist) });
+    if (dist === 0 || !firstEdge) continue;
+    const spot = satisfiesDistanceRule(v, vertex);
+    const fog = fogBonus(c, vertex);
+    if (!spot && fog === 0) continue;
+    out.push({ vertex, dist, firstEdge, value: ((spot ? vertexValue(c, vertex, owned) : 0) + fog) / (1 + 0.45 * dist) });
   }
   return out.sort((a, b) => b.value - a.value);
 }
@@ -383,7 +401,7 @@ function robberHex(c: Ctx): number {
   const { v, me } = c;
   const lead = leader(c);
   const candidates = v.board.hexes
-    .filter((h) => h.id !== v.board.robberHex && h.terrain !== 'sea')
+    .filter((h) => h.id !== v.board.robberHex && isLandHex(v.board, h.id))
     .map((h) => {
       const owners = playersOnHex(v, h.id);
       if (owners.includes(me)) return { id: h.id, score: -100 };

@@ -6,8 +6,11 @@ export type ResMap = Record<Resource, number>;
 
 /** Land terrains of the base game. */
 export type BaseTerrain = 'forest' | 'hills' | 'pasture' | 'fields' | 'mountains' | 'desert';
-/** Every hex terrain. Seafarers adds sea hexes and gold fields (1 resource of choice). */
-export type Terrain = BaseTerrain | 'sea' | 'gold';
+/**
+ * Every hex terrain. Seafarers adds sea hexes, gold fields (1 resource of
+ * choice) and, in The Fog Islands, `fog`: an empty space not yet discovered.
+ */
+export type Terrain = BaseTerrain | 'sea' | 'gold' | 'fog';
 
 export type DevCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly';
 
@@ -189,7 +192,14 @@ export interface GameState {
    */
   pendingGold?: Record<number, number>;
   /** Phase to return to once every gold choice is made. */
-  goldReturnPhase?: 'INITIAL_PLACEMENT' | 'MAIN_ACTIONS';
+  goldReturnPhase?: 'INITIAL_PLACEMENT' | 'PRE_ROLL' | 'MAIN_ACTIONS';
+  /** The pending gold comes from a discovered gold field, not from the dice. */
+  goldDiscovered?: boolean;
+  /**
+   * The Fog Islands: face-down hexes and number discs not yet discovered
+   * (unordered; each discovery draws one at random). Hidden from player views.
+   */
+  fogStack?: { hexes: Terrain[]; numbers: number[] };
   /** Seafarers: the active player already moved a ship this turn. */
   shipMoved?: boolean;
   /** Seafarers: edges of ships built this turn (they may not be moved this turn). */

@@ -7,7 +7,9 @@ import type { ModDef, ScenarioDef } from '../types';
 export type { ScenarioMap, MapHex, MapPort, MapTerrain } from './mapTypes';
 export { MAP_DIRS, boardHexes } from './mapTypes';
 import { boardHexes } from './mapTypes';
+import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
 import { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
+export { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
 export { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 
 /** Map size a game uses: 2–3 participants play the 3-player map, 4 the 4-player map. */
@@ -87,6 +89,27 @@ addScenario({
   maps: { 3: FOUR_ISLANDS_3P, 4: FOUR_ISLANDS_4P },
   homeRegions: 'starting',
   regionBonus: 2,
+});
+
+/**
+ * Scenario 3, The Fog Islands (rulebook p. 8): starting settlements anywhere;
+ * a road or ship touching an empty space discovers it from the face-down stack
+ * (land: random number disc + 1 resource of its type); 12 VP wins.
+ */
+addScenario({
+  id: 'fogIslands',
+  victoryTarget: 12,
+  maps: { 3: FOG_ISLANDS_3P, 4: FOG_ISLANDS_4P },
+  fog: {
+    3: {
+      hexes: { sea: 2, gold: 2, hills: 2, forest: 1, pasture: 1, fields: 2, mountains: 2 },
+      numbers: [3, 3, 4, 5, 6, 8, 9, 10, 11, 12],
+    },
+    4: {
+      hexes: { sea: 2, gold: 2, hills: 2, forest: 1, pasture: 1, fields: 2, mountains: 2 },
+      numbers: [3, 4, 5, 6, 8, 9, 10, 11, 11, 12],
+    },
+  },
 });
 
 /**
