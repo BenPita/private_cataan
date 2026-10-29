@@ -9,6 +9,7 @@ import {
 } from '../src/mods/seafarers/maps';
 import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from '../src/mods/seafarers/fogMaps';
 import { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from '../src/mods/seafarers/tribeClothMaps';
+import { PIRATE_ISLANDS, WONDERS_OF_CATAN } from '../src/mods/seafarers/pirateWonderMaps';
 import { MAP_DIRS, type MapHex, type ScenarioMap } from '../src/mods/seafarers/mapTypes';
 
 /** Component tables printed next to each map (rulebook pp. 4-7, 10-11). */
@@ -97,6 +98,23 @@ const TABLE_CLOTH: Table = {
   ports2to1: 5,
   ports3to1: 4,
   unnumbered: true,
+};
+
+/** The Pirate Islands (p. 17): 6 land hexes without a disc (3 deserts, 2 hills, 1 pasture). */
+const TABLE_PIRATE: Table = {
+  terrain: { sea: 19, gold: 2, hills: 5, forest: 5, pasture: 5, fields: 5, mountains: 5, desert: 3 },
+  discs: { 2: 1, 3: 2, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 2, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 3,
+  unnumbered: true,
+};
+
+/** The Wonders of Catan (p. 19). */
+const TABLE_WONDERS: Table = {
+  terrain: { sea: 19, gold: 2, hills: 5, forest: 5, pasture: 5, fields: 5, mountains: 5, desert: 3 },
+  discs: { 2: 2, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 4,
 };
 
 /** Per-scenario region expectations. */
@@ -224,7 +242,8 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
     });
 
     it('robber starts on land; pirate starts on a sea tile or a frame-printed sea space', () => {
-      expect(isLand(byKey.get(key(...map.robber)))).toBe(true);
+      if (map.robber) expect(isLand(byKey.get(key(...map.robber)))).toBe(true);
+      if (!map.pirate) return;
       const [pq, pr] = map.pirate;
       const at = byKey.get(key(pq, pr));
       if (at) expect(at.t).toBe('sea');
@@ -301,6 +320,53 @@ check('The Fog Islands, 3 players', FOG_ISLANDS_3P, TABLE_FOG_3P, { named: ['eas
 check('The Fog Islands, 4 players', FOG_ISLANDS_4P, TABLE_FOG_4P, { named: ['east', 'west'], isles: 0 });
 check('The Forgotten Tribe', FORGOTTEN_TRIBE, TABLE_TRIBE, { named: ['main'], isles: 6 });
 check('Cloth for Catan', CLOTH_FOR_CATAN, TABLE_CLOTH, { named: ['north', 'south'], isles: 4 });
+check('The Pirate Islands', PIRATE_ISLANDS, TABLE_PIRATE, { named: ['main'], isles: 5 });
+check('The Wonders of Catan', WONDERS_OF_CATAN, TABLE_WONDERS, { named: ['main'], isles: 2 });
+
+describe('The Pirate Islands: path, slots and fortresses', () => {
+  const byKey = new Map(PIRATE_ISLANDS.hexes.map((h) => [key(h.q, h.r), h]));
+  const pi = PIRATE_ISLANDS.pirateIslands!;
+  const cornerKey = (c: { q: number; r: number; c: number }) => {
+    // corners() starts at upper-right; MapCorner starts at the top (0 top, 1 NE, ... 5 NW)
+    const order = [1, 0, 5, 4, 3, 2];
+    return corners(c.q, c.r)[order[c.c]];
+  };
+  it('6 land hexes carry no number disc', () => {
+    expect(PIRATE_ISLANDS.hexes.filter((h) => h.t !== 'sea' && h.n === null)).toHaveLength(6);
+  });
+  it('the fleet sails a closed loop of 14 sea hexes, starting where the pirate is printed', () => {
+    expect(pi.path).toHaveLength(14);
+    expect(pi.path[0]).toEqual(PIRATE_ISLANDS.pirate);
+    expect(new Set(pi.path.map(([q, r]) => key(q, r))).size).toBe(14);
+    pi.path.forEach(([q, r], i) => {
+      expect(byKey.get(key(q, r))?.t, `${q},${r}`).toBe('sea');
+      const [nq, nr] = pi.path[(i + 1) % pi.path.length];
+      expect(MAP_DIRS.some(([dq, dr]) => q + dq === nq && r + dr === nr), `${q},${r} -> ${nq},${nr}`).toBe(true);
+    });
+  });
+  it('each slot: start on the main island, ship on its sea side, beachhead and fortress on pirate islands', () => {
+    expect(pi.slots).toHaveLength(4);
+    expect(pi.slots3).toEqual([0, 1, 3]);
+    for (const slot of pi.slots) {
+      expect(byKey.get(key(slot.start.q, slot.start.r))?.region).toBe('main');
+      expect(sideCorners(slot.ship.q, slot.ship.r, slot.ship.dir)).toContain(cornerKey(slot.start));
+      const [dq, dr] = MAP_DIRS[slot.ship.dir];
+      const n = byKey.get(key(slot.ship.q + dq, slot.ship.r + dr));
+      expect(n === undefined || n.t === 'sea').toBe(true);
+      expect(byKey.get(key(slot.beachhead.q, slot.beachhead.r))?.region).toMatch(/^isle/);
+      expect(byKey.get(key(slot.fortress.q, slot.fortress.r))?.region).toMatch(/^isle/);
+    }
+  });
+});
+
+describe('The Wonders of Catan: markers', () => {
+  it('5 Great Wall, 2 Great Bridge and 4 "X" markers, all on the large island', () => {
+    const spots = WONDERS_OF_CATAN.wonderSpots!;
+    expect([spots.wall.length, spots.bridge.length, spots.blocked.length]).toEqual([5, 2, 4]);
+    const byKey = new Map(WONDERS_OF_CATAN.hexes.map((h) => [key(h.q, h.r), h]));
+    for (const c of [...spots.wall, ...spots.bridge, ...spots.blocked]) expect(byKey.get(key(c.q, c.r))?.region).toBe('main');
+  });
+});
 
 describe('The Forgotten Tribe: gifts on the small islands', () => {
   const byKey = new Map(FORGOTTEN_TRIBE.hexes.map((h) => [key(h.q, h.r), h]));

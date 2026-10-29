@@ -12,8 +12,12 @@
  */
 import { TERRAIN_RESOURCE, devCardReady } from './rulesets';
 import { boardGraph, type BoardGraph } from './geometry';
-import { hasShips, modFor, scenarioFor, type ModDef } from './mods';
+import { WONDERS, WONDER_IDS, WONDER_LEVELS, hasShips, modFor, scenarioFor, type ModDef } from './mods';
 import {
+  fortressOf,
+  pirateRoute,
+  warshipCount,
+  wonderBlock,
   isRoadEdge,
   isShipEdge,
   legalPortEdges,
@@ -41,7 +45,7 @@ import type { PlayerView } from './view';
 
 export type Random = () => number;
 
-type Goal = 'city' | 'settlement' | 'road' | 'devCard' | 'ship';
+type Goal = 'city' | 'settlement' | 'road' | 'devCard' | 'ship' | 'wonder';
 
 const pips = (n: number | null) => (n === null ? 0 : 6 - Math.abs(7 - n));
 
@@ -128,6 +132,9 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
     else value += Math.min(owned[harbor.type] / 3, 2.5) + (level === 'hard' ? 0.5 : 0);
   }
   if (c.ships) value += regionBonusAt(c, vertex) * (level === 'easy' ? 2 : 4);
+  // The Wonders of Catan: a building at a Great Wall / Great Bridge marker opens that wonder.
+  const spots = v.board.wonderSpots;
+  if (spots && !v.players[c.me].wonder && v.phase !== 'INITIAL_PLACEMENT' && [...spots.wall, ...spots.bridge].includes(vertex)) value += 3;
   // The Fog Islands: ships (the way into the fog) can only start from a coastal building.
   if (sailingPays(v) && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
   return value;
@@ -303,12 +310,50 @@ function leader(c: Ctx): number {
 
 function piecesLeft(c: Ctx) {
   const p = c.v.players[c.me];
+  // The Pirate Islands: the settlement under the bot's fortress is not available until captured.
+  const fortress = fortressOf(c.v, c.me);
+  const reserved = fortress && fortress.lairs > 0 ? 1 : 0;
   return {
     roads: c.mod.pieceLimits.roads - p.roadsBuilt,
-    settlements: c.mod.pieceLimits.settlements - (p.settlementsBuilt - p.citiesBuilt),
+    settlements: c.mod.pieceLimits.settlements - reserved - (p.settlementsBuilt - p.citiesBuilt),
     cities: c.mod.pieceLimits.cities - p.citiesBuilt,
     ships: (c.mod.pieceLimits.ships ?? 0) - (p.shipsBuilt ?? 0),
   };
+}
+
+/** Warships a bot wants before it attacks its fortress (each attack must beat a die). */
+function warshipsWanted(c: Ctx): number {
+  return c.level === 'easy' ? 3 : c.level === 'medium' ? 4 : 5;
+}
+
+/**
+ * The Pirate Islands: the next ship of the line, or null — the ship that would reach
+ * the fortress (and start the attacks) waits until the bot has enough warships.
+ */
+function pirateShip(c: Ctx): string | null {
+  const next = legalShips(c.v, c.me)[0];
+  const f = fortressOf(c.v, c.me);
+  if (!next || !f) return null;
+  if (c.g.edges[next].vertices.includes(f.vertex) && warshipCount(c.v, c.me) < warshipsWanted(c)) return null;
+  return next;
+}
+
+/** The Pirate Islands: the goal while the bot's fortress still stands (null once captured). */
+function pirateGoal(c: Ctx): Goal | null {
+  const f = fortressOf(c.v, c.me);
+  if (!f || f.lairs === 0) return null;
+  if (piecesLeft(c).ships > 0 && pirateShip(c)) return 'ship';
+  // Line waiting at the fortress (or attacking it): Knights make warships.
+  return c.v.devDeckCount > 0 ? 'devCard' : null;
+}
+
+/** The Wonders of Catan: build levels once claimed, when nothing else is close. */
+function wonderGoal(c: Ctx, canSettle: boolean, canCity: boolean): Goal | null {
+  const w = c.v.players[c.me].wonder;
+  if (!w || w.level >= WONDER_LEVELS) return null;
+  const vp = c.v.players[c.me].victoryPoints;
+  if (vp >= 7 || w.level >= 2 || (!canSettle && !canCity)) return 'wonder';
+  return null;
 }
 
 function chooseGoal(c: Ctx): Goal | null {
@@ -317,6 +362,13 @@ function chooseGoal(c: Ctx): Goal | null {
   const canCity = left.cities > 0 && legalCities(c.v, c.me).length > 0;
   const prod = production(c.v, c.me);
   const oreGrain = prod.ore + prod.grain;
+  if (c.v.board.fortresses) {
+    if (canCity && c.res.ore >= 2 && c.res.grain >= 1) return 'city';
+    const pirate = pirateGoal(c);
+    if (pirate) return pirate;
+  }
+  const wonder = wonderGoal(c, canSettle, canCity);
+  if (wonder) return wonder;
 
   if (canSettle && canCity && c.level !== 'easy') {
     // Prefer cities once ore/grain flow is decent, settlements otherwise.
@@ -336,6 +388,10 @@ function chooseGoal(c: Ctx): Goal | null {
 }
 
 function goalCost(c: Ctx, goal: Goal): Partial<ResMap> {
+  if (goal === 'wonder') {
+    const w = c.v.players[c.me].wonder;
+    return w ? WONDERS[w.id].cost : {};
+  }
   return goal === 'ship' ? (c.mod.costs.ship ?? {}) : c.mod.costs[goal];
 }
 
@@ -514,6 +570,10 @@ function playableDev(c: Ctx, type: string): boolean {
 
 function shouldPlayKnight(c: Ctx): boolean {
   if (!playableDev(c, 'knight')) return false;
+  // The Pirate Islands: a Knight turns the next normal ship of the line into a warship.
+  if (c.v.board.fortresses) {
+    return !!pirateRoute(c.v, c.me)?.edges.some((e) => !(c.v.warships ?? []).includes(e));
+  }
   if (robberOnMe(c)) return true;
   if (c.level === 'easy') return false;
   const mine = c.v.players[c.me].knightsPlayed;
@@ -585,6 +645,7 @@ function bestRoad(c: Ctx): string | null {
 
 /** Seafarers: the next ship toward the best spot by sea. */
 function bestShip(c: Ctx): string | null {
+  if (c.v.board.fortresses) return pirateShip(c);
   const legal = new Set(legalShips(c.v, c.me));
   if (!legal.size) return null;
   const target = shipTargets(c, 6).find((t) => legal.has(t.firstEdge));
@@ -801,10 +862,22 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
     if (spots.length > 0) return { type: 'placePort', edge: spots[Math.floor(c.rand() * spots.length)], port: held[0] };
   }
 
+  // The Wonders of Catan: claim a wonder as soon as one's requirement is met.
+  if (v.board.wonderSpots && !v.players[me].wonder) {
+    const vp = v.players[me].victoryPoints;
+    const open = WONDER_IDS.filter((id) => wonderBlock(v, me, id, vp) === null);
+    if (open.length > 0) return { type: 'claimWonder', wonder: open[Math.floor(c.rand() * open.length)] };
+  }
+
   const goal = chooseGoal(c);
 
   const dev = mainPhaseDev(c, goal);
   if (dev) return dev;
+
+  const wonder = v.players[me].wonder;
+  if (wonder && wonder.level < WONDER_LEVELS && hasRes(c.res, WONDERS[wonder.id].cost) && (goal === 'wonder' || wonder.level === WONDER_LEVELS - 1)) {
+    return { type: 'buildWonder' };
+  }
 
   // Build whatever we can afford, best first.
   const left = piecesLeft(c);

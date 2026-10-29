@@ -1,4 +1,4 @@
-import { RESOURCES, type ResMap, type Resource } from './types';
+import { RESOURCES, type ResMap, type Resource, type WonderId } from './types';
 
 /**
  * Game log entries are stored as a key plus parameters so each client can
@@ -62,6 +62,18 @@ export const LOG_EN = {
   clothReceived: '{p} received {n} cloth.',
   stoleCloth: '{p} took a cloth token from {q}.',
   villagesEmpty: '{n} villages have run out of cloth: the game ends.',
+  pirateFleet: 'The pirate fleet sails {n} with strength {n}.',
+  fleetRaid: 'The pirates raid {p}: {p} loses {n} cards.',
+  fleetRepelled: '{p} beats off the pirates and takes a resource of their choice.',
+  fleetTie: '{p} holds off the pirates.',
+  warship: '{p} turned a ship into a warship.',
+  fortressAttack: '{p} attacks their pirate fortress; the pirates roll {n}.',
+  fortressHit: '{p} wins the battle: {n} pirate lairs left.',
+  fortressCaptured: '{p} captured their pirate fortress!',
+  fortressRepelled: '{p} loses the battle and {n} ships.',
+  pirateGone: 'Every fortress is captured: the pirate fleet is gone.',
+  claimedWonder: '{p} claimed the {w}.',
+  builtWonder: '{p} built level {n} of the {w}.',
   win: '{p} wins with {n} points!',
 } as const;
 
@@ -77,6 +89,8 @@ export type LogParams = Partial<{
   get: Partial<ResMap>;
   players: number[];
   order: number[];
+  /** The Wonders of Catan: wonder id. */
+  w: WonderId;
 }>;
 
 export interface LogFormatter {

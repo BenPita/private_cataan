@@ -1,9 +1,26 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor, scenarioMapSize, type ScenarioDef } from './mods';
+import {
+  WONDERS,
+  WONDER_LEVELS,
+  hasShips,
+  isModId,
+  modFor,
+  modPlayerRange,
+  scenarioBoard,
+  scenarioFor,
+  scenarioMapSize,
+  type ScenarioDef,
+} from './mods';
 import { boardGraph } from './geometry';
 import {
-  canPlaceShip,
+  cityCount,
+  fortressOf,
+  inBuildRegion,
   inStartRegion,
+  pirateRoute,
+  pirateRouteNext,
+  warshipCount,
+  wonderBlock,
   isLandHex,
   isRoadConnected,
   legalPortEdges,
@@ -110,8 +127,9 @@ export function createGame(
   const fog = scenario?.fog?.[scenarioMapSize(players.length)];
 
   const deck: DevCardType[] = [];
-  (Object.keys(mod.devDeck) as DevCardType[]).forEach((t) => {
-    for (let i = 0; i < mod.devDeck[t]; i++) deck.push(t);
+  const deckCounts = scenario?.devDeck?.[scenarioMapSize(players.length)] ?? mod.devDeck;
+  (Object.keys(deckCounts) as DevCardType[]).forEach((t) => {
+    for (let i = 0; i < deckCounts[t]; i++) deck.push(t);
   });
 
   const devDeck = rng.shuffle(deck);
@@ -196,6 +214,143 @@ function setUpScenarioExtras(state: GameState, scenario: ScenarioDef, rng: Rng):
     }
   }
   if (scenario.cloth) state.clothSupply = scenario.cloth.supply;
+  if (board.fortresses) {
+    // The Pirate Islands: each colour's settlement and ship printed on the main island's coast.
+    state.warships = [];
+    for (const f of board.fortresses) {
+      state.buildings[f.start] = { owner: f.owner, type: 'settlement' };
+      state.ships = { ...(state.ships ?? {}), [f.startShip]: f.owner };
+      state.players[f.owner].settlementsBuilt++;
+      state.players[f.owner].shipsBuilt = (state.players[f.owner].shipsBuilt ?? 0) + 1;
+    }
+  }
+}
+
+/**
+ * Settlement pieces a player still has. The Pirate Islands: the settlement under
+ * a player's pirate fortress is theirs, so it is not available until captured.
+ */
+function settlementsLeft(state: GameState, player: number): number {
+  const me = state.players[player];
+  const f = fortressOf(state, player);
+  const reserved = f && f.lairs > 0 ? 1 : 0;
+  return modFor(state).pieceLimits.settlements - reserved - (me.settlementsBuilt - me.citiesBuilt);
+}
+
+/** Takes up to `n` random resource cards from `player` back to the bank; returns how many. */
+function loseRandomCards(state: GameState, rng: Rng, player: number, n: number): number {
+  const me = state.players[player];
+  let lost = 0;
+  for (; lost < n; lost++) {
+    const pool: Resource[] = [];
+    for (const r of RESOURCES) for (let i = 0; i < me.resources[r]; i++) pool.push(r);
+    if (pool.length === 0) break;
+    const r = pool[rng.int(pool.length)];
+    me.resources[r]--;
+    state.bank[r]++;
+  }
+  return lost;
+}
+
+/**
+ * The Pirate Islands: after a roll the pirate fleet sails `steps` hexes (the lower
+ * die) along its path, with that strength, and attacks every player with a building
+ * next to the hex it stops on: stronger than the player's warships → they lose 1
+ * random card + 1 per city; weaker → they take 1 resource of their choice; a tie
+ * does nothing. Returns the players owed a resource.
+ */
+function sailPirateFleet(state: GameState, rng: Rng, steps: number): Record<number, number> {
+  const path = state.board.pirateFleet;
+  const at = state.board.pirateHex;
+  const rewards: Record<number, number> = {};
+  if (!path || at === undefined) return rewards;
+  const hex = path[(path.indexOf(at) + steps) % path.length];
+  state.board.pirateHex = hex;
+  say(state, 'pirateFleet', { n: steps });
+  const G = boardGraph(state.board);
+  const attacked = [...new Set(G.hexes[hex].vertices.map((v) => state.buildings[v]?.owner).filter((o) => o !== undefined))];
+  for (const p of attacked.sort((a, b) => a - b)) {
+    const warships = warshipCount(state, p);
+    if (steps > warships) {
+      const lost = loseRandomCards(state, rng, p, 1 + cityCount(state, p));
+      say(state, 'fleetRaid', { p, n: lost });
+    } else if (warships > steps) {
+      rewards[p] = 1;
+      say(state, 'fleetRepelled', { p });
+    } else {
+      say(state, 'fleetTie', { p });
+    }
+  }
+  return rewards;
+}
+
+/**
+ * The Pirate Islands, end of the Action phase: a line of ships that reaches the
+ * player's fortress attacks it. A die gives the pirates' strength; more warships
+ * than that removes a lair (the third one captures the fortress), fewer loses the
+ * 2 ships nearest the fortress, a tie the nearest one.
+ */
+function attackFortress(state: GameState, rng: Rng, player: number): void {
+  const f = fortressOf(state, player);
+  const route = pirateRoute(state, player);
+  if (!f || f.lairs === 0 || !route?.complete) return;
+  const die = rng.int(6) + 1;
+  const warships = route.edges.filter((e) => (state.warships ?? []).includes(e)).length;
+  say(state, 'fortressAttack', { p: player, n: die });
+  if (warships > die) {
+    f.lairs--;
+    if (f.lairs > 0) {
+      say(state, 'fortressHit', { p: player, n: f.lairs });
+      return;
+    }
+    state.buildings[f.vertex] = { owner: player, type: 'settlement' };
+    state.players[player].settlementsBuilt++;
+    say(state, 'fortressCaptured', { p: player });
+    if (state.board.fortresses!.every((x) => x.lairs === 0)) {
+      delete state.board.pirateHex;
+      say(state, 'pirateGone');
+    }
+    return;
+  }
+  const remove = warships < die ? 2 : 1;
+  const gone = route.edges.slice(-remove);
+  const ships = { ...state.ships };
+  for (const e of gone) delete ships[e];
+  state.ships = ships;
+  state.warships = (state.warships ?? []).filter((e) => !gone.includes(e));
+  state.players[player].shipsBuilt = (state.players[player].shipsBuilt ?? 0) - gone.length;
+  say(state, 'fortressRepelled', { p: player, n: gone.length });
+}
+
+/** A 7: players above the limit discard, then the robber (or, without one, the steal). */
+function startSeven(state: GameState): void {
+  state.pendingDiscards = {};
+  state.players.forEach((p, i) => {
+    const n = totalRes(p.resources);
+    if (n > DISCARD_THRESHOLD) state.pendingDiscards[i] = Math.floor(n / 2);
+  });
+  state.robberReturnPhase = 'MAIN_ACTIONS';
+  if (Object.keys(state.pendingDiscards).length > 0) state.phase = 'ROBBER_DISCARD';
+  else afterDiscards(state);
+}
+
+/**
+ * After the discards of a 7: move the robber, or — in a game without a robber (The
+ * Pirate Islands) — steal 1 card from any other player.
+ */
+function afterDiscards(state: GameState): void {
+  if (!state.board.noRobber) {
+    state.phase = 'ROBBER_MOVE';
+    return;
+  }
+  const p = state.currentPlayer;
+  const candidates = state.players.map((_, i) => i).filter((i) => i !== p && totalRes(state.players[i].resources) > 0);
+  if (candidates.length === 0) {
+    finishRobber(state);
+  } else {
+    state.stealCandidates = candidates;
+    state.phase = 'ROBBER_STEAL';
+  }
 }
 
 /**
@@ -314,6 +469,7 @@ function updateLongestRoad(state: GameState): void {
 }
 
 function updateLargestArmy(state: GameState, player: number): void {
+  if (scenarioFor(state)?.noLargestArmy) return;
   const knights = state.players[player].knightsPlayed;
   if (knights < LARGEST_ARMY_MIN || state.largestArmy === player) return;
   const holder = state.largestArmy;
@@ -326,11 +482,22 @@ function updateLargestArmy(state: GameState, player: number): void {
 function checkVictory(state: GameState): void {
   if (state.phase === 'ORDER_ROLL' || state.phase === 'INITIAL_PLACEMENT' || state.winner !== null) return;
   const p = state.currentPlayer;
-  if (victoryPoints(state, p) >= state.config.victoryTarget) {
+  const vp = victoryPoints(state, p);
+  let won = vp >= state.config.victoryTarget;
+  // The Pirate Islands: the player's fortress must be captured too.
+  const fortress = fortressOf(state, p);
+  if (fortress && fortress.lairs > 0) won = false;
+  if (scenarioFor(state)?.wonders) {
+    // The Wonders of Catan: a finished wonder, or 10 VP and the highest wonder level.
+    const level = state.players[p].wonder?.level ?? 0;
+    const highest = level > 0 && state.players.every((o, i) => i === p || (o.wonder?.level ?? 0) < level);
+    won = level >= WONDER_LEVELS || (won && highest);
+  }
+  if (won) {
     state.winner = p;
     state.phase = 'GAME_OVER';
     state.trade = null;
-    say(state, 'win', { p, n: victoryPoints(state, p) });
+    say(state, 'win', { p, n: vp });
   }
 }
 
@@ -378,7 +545,9 @@ function placeShip(state: GameState, player: number, edge: string): void {
   if (!isShipEdge(state, edge)) fail('Ships must be placed next to the sea');
   if (pirateEdges(state).includes(edge)) fail('No ship may be placed next to the pirate');
   if ((state.players[player].shipsBuilt ?? 0) >= (mod.pieceLimits.ships ?? 0)) fail('No ships left');
-  if (!isShipConnected(state, player, edge)) fail('Ship must connect to your ship or building');
+  if (state.board.fortresses) {
+    if (!pirateRouteNext(state, player).includes(edge)) fail('Ships must extend your one line to your fortress by the shortest way');
+  } else if (!isShipConnected(state, player, edge)) fail('Ship must connect to your ship or building');
   state.ships = { ...(state.ships ?? {}), [edge]: player };
   state.players[player].shipsBuilt = (state.players[player].shipsBuilt ?? 0) + 1;
 }
@@ -426,9 +595,11 @@ function settleGold(state: GameState): void {
   }
   state.pendingGold = pending;
   if (Object.keys(pending).length === 0) {
-    state.phase = state.goldReturnPhase ?? 'MAIN_ACTIONS';
+    const back = state.goldReturnPhase ?? 'MAIN_ACTIONS';
     delete state.goldReturnPhase;
     delete state.goldDiscovered;
+    if (back === 'ROLLED_SEVEN') startSeven(state);
+    else state.phase = back;
   } else {
     state.phase = 'GOLD_CHOICE';
   }
@@ -518,7 +689,9 @@ function produce(state: GameState, roll: number): { producing: number[]; gains: 
       if (b) gold[b.owner] = (gold[b.owner] ?? 0) + (b.type === 'city' ? 2 : 1);
     }
   }
-  if (Object.keys(gold).length > 0) state.pendingGold = gold;
+  for (const [p, n] of Object.entries(gold)) {
+    state.pendingGold = { ...(state.pendingGold ?? {}), [p]: (state.pendingGold?.[Number(p)] ?? 0) + n };
+  }
   produceCloth(state, roll);
   return { producing, gains };
 }
@@ -810,15 +983,17 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       state.hasRolled = true;
       const rollId = (state.lastRoll?.id ?? 0) + 1;
       say(state, 'rolled', { p: player, n: sum });
+      // The Pirate Islands: the fleet sails and attacks before production or the 7.
+      const rewards = sailPirateFleet(state, rng, Math.min(dice[0], dice[1]));
+      if (Object.keys(rewards).length > 0) state.pendingGold = { ...rewards };
       if (sum === 7) {
         state.lastRoll = { id: rollId, dice, player, producingHexes: [], gains: state.players.map(() => emptyRes()) };
-        state.pendingDiscards = {};
-        state.players.forEach((p, i) => {
-          const n = totalRes(p.resources);
-          if (n > DISCARD_THRESHOLD) state.pendingDiscards[i] = Math.floor(n / 2);
-        });
-        state.robberReturnPhase = 'MAIN_ACTIONS';
-        state.phase = Object.keys(state.pendingDiscards).length > 0 ? 'ROBBER_DISCARD' : 'ROBBER_MOVE';
+        if (Object.keys(rewards).length > 0) {
+          state.goldReturnPhase = 'ROLLED_SEVEN';
+          settleGold(state);
+        } else {
+          startSeven(state);
+        }
       } else {
         const { producing, gains } = produce(state, sum);
         state.lastRoll = { id: rollId, dice, player, producingHexes: producing, gains };
@@ -829,7 +1004,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         if (state.pendingGold && Object.keys(state.pendingGold).length > 0) {
           state.goldReturnPhase = 'MAIN_ACTIONS';
           settleGold(state);
-          for (const [p, n] of Object.entries(state.pendingGold)) say(state, 'goldOwed', { p: Number(p), n });
+          for (const [p, n] of Object.entries(state.pendingGold)) {
+            const gold = n - (rewards[Number(p)] ?? 0);
+            if (gold > 0) say(state, 'goldOwed', { p: Number(p), n: gold });
+          }
         }
       }
       return;
@@ -864,13 +1042,14 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       addRes(state.bank, action.resources, 1);
       delete state.pendingDiscards[player];
       say(state, 'discarded', { p: player, n: required });
-      if (Object.keys(state.pendingDiscards).length === 0) state.phase = 'ROBBER_MOVE';
+      if (Object.keys(state.pendingDiscards).length === 0) afterDiscards(state);
       return;
     }
 
     case 'moveRobber': {
       requirePhase(state, 'ROBBER_MOVE');
       requireActive(state, player);
+      if (state.board.noRobber) fail('There is no robber in this game');
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (action.hex === state.board.robberHex) fail('The robber must move to a different hex');
       if (!isLandHex(state.board, action.hex)) fail('The robber must stay on land');
@@ -885,6 +1064,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'ROBBER_MOVE');
       requireActive(state, player);
       if (state.board.pirateHex === undefined) fail('There is no pirate in this game');
+      if (state.board.pirateFleet) fail('The pirate fleet sails on its own');
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (state.board.hexes[action.hex].terrain !== 'sea') fail('The pirate must move to a sea hex');
       if (action.hex === state.board.pirateHex) fail('The pirate must move to a different hex');
@@ -982,9 +1162,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
-      if (me.settlementsBuilt - me.citiesBuilt >= mod.pieceLimits.settlements) fail('No settlements left');
+      if (settlementsLeft(state, player) <= 0) fail('No settlements left');
       if (!G.vertices[action.vertex]) fail('Unknown spot');
       if (!satisfiesDistanceRule(state, action.vertex)) fail('Settlement must be on an empty spot at least two roads from others');
+      if (!inBuildRegion(state, player, action.vertex)) fail('Settlements only on the main island or your beachhead');
       if (!G.vertices[action.vertex].edges.some((e) => state.roads[e] === player || state.ships?.[e] === player)) {
         fail(hasShips(mod) ? 'Settlement must connect to one of your roads or ships' : 'Settlement must connect to one of your roads');
       }
@@ -1031,6 +1212,15 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requireActive(state, player);
       requireNoFreeRoads(state);
       const idx = playableCard(state, player, 'knight');
+      if (state.board.fortresses) {
+        // The Pirate Islands: a Knight only turns the normal ship nearest the start into a warship.
+        const ship = pirateRoute(state, player)?.edges.find((e) => !(state.warships ?? []).includes(e));
+        if (!ship) fail('You have no ship to turn into a warship');
+        useCard(state, player, idx);
+        state.warships = [...(state.warships ?? []), ship!];
+        say(state, 'warship', { p: player });
+        return;
+      }
       useCard(state, player, idx);
       me.knightsPlayed++;
       state.robberReturnPhase = state.phase === 'PRE_ROLL' ? 'PRE_ROLL' : 'MAIN_ACTIONS';
@@ -1245,11 +1435,39 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       return;
     }
 
+    case 'claimWonder': {
+      requirePhase(state, 'MAIN_ACTIONS');
+      requireActive(state, player);
+      requireNoFreeRoads(state);
+      if (!scenarioFor(state)?.wonders || !Object.prototype.hasOwnProperty.call(WONDERS, action.wonder)) fail('Unknown wonder');
+      const block = wonderBlock(state, player, action.wonder, victoryPoints(state, player));
+      if (block) fail(block);
+      me.wonder = { id: action.wonder, level: 0 };
+      say(state, 'claimedWonder', { p: player, w: action.wonder });
+      return;
+    }
+
+    case 'buildWonder': {
+      requirePhase(state, 'MAIN_ACTIONS');
+      requireActive(state, player);
+      requireNoFreeRoads(state);
+      if (!me.wonder) fail('Claim a wonder first');
+      if (me.wonder!.level >= WONDER_LEVELS) fail('Your wonder is finished');
+      pay(state, player, WONDERS[me.wonder!.id].cost, 'this level');
+      me.wonder!.level++;
+      say(state, 'builtWonder', { p: player, w: me.wonder!.id, n: me.wonder!.level });
+      checkVictory(state);
+      return;
+    }
+
     case 'endTurn': {
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
       if ((me.heldPorts ?? []).length > 0 && legalPortEdges(state, player).length > 0) fail('Place your port first');
+      attackFortress(state, rng, player);
+      checkVictory(state);
+      if (state.winner !== null) return;
       checkClothEnd(state);
       if (state.winner !== null) return;
       if (state.paired) {

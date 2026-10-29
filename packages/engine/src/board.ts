@@ -1,5 +1,5 @@
 import { graphFor, hexSideEdge, registerLayout, type BoardGraph } from './geometry';
-import { boardHexes, type ScenarioMap } from './mods/seafarers/mapTypes';
+import { boardHexes, type MapCorner, type ScenarioMap } from './mods/seafarers/mapTypes';
 import type { ModDef } from './mods/types';
 import { Rng } from './rng';
 import type { Board, Harbor, HexTile, LayoutId, Terrain } from './types';
@@ -92,7 +92,7 @@ export function validateBoard(board: Board, mod: ModDef): void {
 export function boardFromMap(
   map: ScenarioMap,
   layout: LayoutId,
-  opts: { startRegions?: string[]; numberedOnly?: boolean; clothPerVillage?: number } = {},
+  opts: { startRegions?: string[]; numberedOnly?: boolean; clothPerVillage?: number; buildRegions?: string[]; participants?: number } = {},
 ): Board {
   const { startRegions } = opts;
   const all = boardHexes(map);
@@ -110,12 +110,42 @@ export function boardFromMap(
     ...(h.region && h.t !== 'sea' ? { region: h.region } : {}),
   }));
   const harbors: Harbor[] = map.ports.map((p) => ({ edge: hexSideEdge(graph, index(p.q, p.r, 'Port'), p.dir), type: p.type }));
-  const robberHex = index(map.robber[0], map.robber[1], 'Robber');
-  const pirateHex = index(map.pirate[0], map.pirate[1], 'Pirate');
+  // Without a robber, `robberHex` points at a desert so production code needs no special case.
+  const robberHex = map.robber ? index(map.robber[0], map.robber[1], 'Robber') : hexes.findIndex((h) => h.terrain === 'desert');
   if (hexes[robberHex].terrain === 'sea') throw new Error('The robber must start on land');
-  if (hexes[pirateHex].terrain !== 'sea') throw new Error('The pirate must start on the sea');
-  const board: Board = { layout, hexes, harbors, robberHex, pirateHex, ...(startRegions ? { startRegions: [...startRegions] } : {}) };
+  const board: Board = { layout, hexes, harbors, robberHex, ...(startRegions ? { startRegions: [...startRegions] } : {}) };
+  if (!map.robber) board.noRobber = true;
+  if (map.pirate) {
+    board.pirateHex = index(map.pirate[0], map.pirate[1], 'Pirate');
+    if (hexes[board.pirateHex].terrain !== 'sea') throw new Error('The pirate must start on the sea');
+  }
   if (opts.numberedOnly) board.numberedOnly = true;
+  if (opts.buildRegions) board.buildRegions = [...opts.buildRegions];
+  const corner = (c: MapCorner) => graph.hexes[index(c.q, c.r, 'Corner')].vertices[c.c];
+  if (map.pirateIslands) {
+    const pi = map.pirateIslands;
+    board.pirateFleet = pi.path.map(([q, r]) => index(q, r, 'Pirate path'));
+    const players = opts.participants ?? 4;
+    const slots = players <= 3 ? pi.slots3.slice(0, players) : pi.slots.map((_, i) => i);
+    board.fortresses = slots.map((slot, owner) => {
+      const s = pi.slots[slot];
+      return {
+        owner,
+        start: corner(s.start),
+        startShip: hexSideEdge(graph, index(s.ship.q, s.ship.r, 'Ship'), s.ship.dir),
+        beachhead: corner(s.beachhead),
+        vertex: corner(s.fortress),
+        lairs: 3,
+      };
+    });
+  }
+  if (map.wonderSpots) {
+    board.wonderSpots = {
+      wall: map.wonderSpots.wall.map(corner),
+      bridge: map.wonderSpots.bridge.map(corner),
+      blocked: map.wonderSpots.blocked.map(corner),
+    };
+  }
   if (map.edgeItems) {
     // Port types are dealt by createGame (shuffled); 'generic' is a placeholder.
     board.edgeItems = {};

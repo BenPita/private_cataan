@@ -64,6 +64,7 @@ function expand(res: Partial<ResMap> | undefined, max = 4): Resource[] {
 export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRefObject<BoardApi | null>) {
   const me = view.me!;
   const sea = hasShips(modFor(view));
+  const devSea = view.board.fortresses ? ('pirate' as const) : sea;
 
   const [flights, setFlights] = useState<Flight[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -185,6 +186,26 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
         banner({ kind: 'bonus', title: t('bonusTitle', { n: p.n ?? 2 }), caption });
         setTimeout(() => sfx.award(), delay);
         break;
+      // The Pirate Islands
+      case 'pirateFleet':
+        setTimeout(() => sfx.robber(), delay + 250);
+        break;
+      case 'fleetRaid':
+        for (let k = 0; k < Math.min(p.n ?? 0, 4); k++) fly('/art/back-resource.webp', playerAt(p.p!), bank(), delay + 500 + k * 80);
+        setTimeout(() => sfx.discard(), delay + 500);
+        break;
+      case 'warship':
+        banner({ kind: 'card', card: 'knight', caption });
+        setTimeout(() => sfx.playCard(), delay);
+        break;
+      case 'fortressCaptured':
+        banner({ kind: 'bonus', title: logText(item, names), caption });
+        setTimeout(() => sfx.award(), delay);
+        break;
+      // The Wonders of Catan
+      case 'builtWonder':
+        setTimeout(() => sfx.award(), delay);
+        break;
       case 'discoveredLand':
         // The Fog Islands: the discovery pays one card from the bank.
         expand(p.res).forEach((r, k) => fly(`/art/card-${r}.webp`, bank(), playerAt(p.p!, r), delay + 300 + k * 110));
@@ -277,7 +298,7 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
           {current.kind === 'card' && (
             <div className="fx-card-show">
               <div className="fx-card-face">
-                <DevCardFace type={current.card} title={devInfo(current.card, sea).name} text={devInfo(current.card, sea).text} />
+                <DevCardFace type={current.card} title={devInfo(current.card, devSea).name} text={devInfo(current.card, devSea).text} />
               </div>
               <p>{current.caption}</p>
             </div>

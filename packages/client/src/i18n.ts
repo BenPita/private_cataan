@@ -7,6 +7,7 @@ import {
   type ResMap,
   type Resource,
   type Terrain,
+  type WonderId,
 } from '@hex/engine';
 
 export type Lang = 'he' | 'en';
@@ -242,9 +243,9 @@ const en = {
   scenario_clothForCatan: 'Cloth for Catan',
   scenario_clothForCatan_goal: 'Sail to the villages for cloth: every 2 cloth = 1 point.',
   scenario_pirateIslands: 'The Pirate Islands',
-  scenario_pirateIslands_goal: 'Sail your warships to capture a pirate fortress.',
+  scenario_pirateIslands_goal: 'Sail one line of ships to your pirate fortress, capture it with warships, and reach 10 points.',
   scenario_wondersOfCatan: 'The Wonders of Catan',
-  scenario_wondersOfCatan_goal: 'Be the first to complete your wonder.',
+  scenario_wondersOfCatan_goal: 'Claim a wonder and finish its 4 levels — or reach 10 points with the highest wonder.',
   scenario_newWorld: 'New World',
   scenario_newWorld_goal: 'A new random archipelago every game.',
   // Seafarers: game
@@ -282,6 +283,36 @@ const en = {
   goldText: 'Your gold field produced. Choose {n} resources of your choice from the bank.',
   goldBtn: 'Take {k}/{n}',
   bonusTitle: '+{n} points: new island!',
+  // Seafarers: The Pirate Islands
+  warships: 'Warships',
+  lairsLeft: 'Pirate lairs left at your fortress',
+  fortressTitle: 'Pirate fortress of {name}: {n} lairs left',
+  beachheadTitle: 'Beachhead of {name}',
+  fleetTitle: 'The pirate fleet sails this way after every roll',
+  goldTitleAny: 'Choose {n}',
+  goldTextAny: 'You beat off the pirates or a gold field produced. Choose {n} resources of your choice from the bank.',
+  hintStealAny: 'Steal 1 card from any player',
+  // Seafarers: The Wonders of Catan
+  wonders: 'Wonders',
+  wonderClaim: 'Claim',
+  wonderBuild: 'Build level {n}',
+  wonderLevel: 'Level {n}/4',
+  wonderFree: 'Not claimed',
+  wonderDone: 'Finished!',
+  wonderInfo: 'Claim one wonder whose requirement you meet; each of its 4 levels costs:',
+  wonder_castle: 'Grand Castle',
+  wonder_castle_req: '1 city and 6+ points',
+  wonder_monument: 'Grand Monument',
+  wonder_monument_req: 'A city at a port and a route of 5+ roads/ships',
+  wonder_bridge: 'Great Bridge',
+  wonder_bridge_req: 'A building at a Great Bridge marker',
+  wonder_theater: 'Grand Theater',
+  wonder_theater_req: '2 cities',
+  wonder_wall: 'Great Wall',
+  wonder_wall_req: 'A building at a Great Wall marker',
+  wallTitle: 'Great Wall marker',
+  bridgeTitle: 'Great Bridge marker',
+  blockedTitle: 'No starting settlement here',
 };
 
 type Dict = typeof en;
@@ -507,9 +538,9 @@ const he: Dict = {
   scenario_clothForCatan: 'בדים לאי',
   scenario_clothForCatan_goal: 'הפליגו לכפרים בשביל בדים: כל 2 בדים = נקודה.',
   scenario_pirateIslands: 'איי הפיראטים',
-  scenario_pirateIslands_goal: 'שלחו ספינות מלחמה לכבוש מבצר פיראטים.',
+  scenario_pirateIslands_goal: 'בנו קו ספינות אחד למבצר הפיראטים שלכם, כבשו אותו עם ספינות מלחמה והגיעו ל-10 נקודות.',
   scenario_wondersOfCatan: 'פלאי האי',
-  scenario_wondersOfCatan_goal: 'היו הראשונים להשלים את פלא העולם שלכם.',
+  scenario_wondersOfCatan_goal: 'קחו פלא והשלימו את 4 השלבים שלו — או הגיעו ל-10 נקודות עם הפלא הגבוה ביותר.',
   scenario_newWorld: 'עולם חדש',
   scenario_newWorld_goal: 'ארכיפלג אקראי חדש בכל משחק.',
   // Seafarers: game
@@ -547,6 +578,36 @@ const he: Dict = {
   goldText: 'שדה הזהב שלך הניב. בחר/י {n} משאבים לבחירתך מהבנק.',
   goldBtn: 'לקחת {k}/{n}',
   bonusTitle: '+{n} נקודות: אי חדש!',
+  // יורדי הים: איי הפיראטים
+  warships: 'ספינות מלחמה',
+  lairsLeft: 'מאורות פיראטים שנותרו במבצר שלך',
+  fortressTitle: 'מבצר הפיראטים של {name}: נותרו {n} מאורות',
+  beachheadTitle: 'ראש החוף של {name}',
+  fleetTitle: 'צי הפיראטים שט בדרך הזו אחרי כל הטלה',
+  goldTitleAny: 'בחר/י {n}',
+  goldTextAny: 'הדפת את הפיראטים או ששדה זהב הניב. בחר/י {n} משאבים לבחירתך מהבנק.',
+  hintStealAny: 'גנוב/י קלף אחד מכל שחקן שתבחר/י',
+  // יורדי הים: פלאי האי
+  wonders: 'פלאים',
+  wonderClaim: 'לקחת',
+  wonderBuild: 'בניית שלב {n}',
+  wonderLevel: 'שלב {n}/4',
+  wonderFree: 'פנוי',
+  wonderDone: 'הושלם!',
+  wonderInfo: 'לוקחים פלא אחד שעומדים בדרישה שלו; כל אחד מ-4 השלבים עולה:',
+  wonder_castle: 'הטירה הגדולה',
+  wonder_castle_req: 'עיר אחת ו-6 נקודות לפחות',
+  wonder_monument: 'האנדרטה הגדולה',
+  wonder_monument_req: 'עיר ליד נמל ונתיב של 5 דרכים/ספינות לפחות',
+  wonder_bridge: 'הגשר הגדול',
+  wonder_bridge_req: 'מבנה על סימן של הגשר הגדול',
+  wonder_theater: 'התיאטרון הגדול',
+  wonder_theater_req: '2 ערים',
+  wonder_wall: 'החומה הגדולה',
+  wonder_wall_req: 'מבנה על סימן של החומה הגדולה',
+  wallTitle: 'סימן החומה הגדולה',
+  bridgeTitle: 'סימן הגשר הגדול',
+  blockedTitle: 'אסור להניח כאן יישוב פתיחה',
 };
 
 export type Key = keyof Dict;
@@ -629,7 +690,20 @@ const DEV_SEA: Record<Lang, Partial<Record<DevCardType, { name: string; text: st
     roadBuilding: { name: 'בניית דרכים', text: 'בנה/י בחינם 2 דרכים, 2 ספינות, או אחת מכל סוג.' },
   },
 };
-export const devInfo = (d: DevCardType, sea = false) => (sea && DEV_SEA[lang][d]) || DEV[lang][d];
+/** The Pirate Islands: Knights only make warships, Road Building builds roads or ships. */
+const DEV_PIRATE: Record<Lang, Partial<Record<DevCardType, { name: string; text: string }>>> = {
+  en: {
+    knight: { name: 'Knight', text: 'Turn the normal ship nearest the start of your line into a warship. Warships fight the pirates.' },
+  },
+  he: {
+    knight: { name: 'אביר', text: 'הופך את הספינה הרגילה הקרובה ביותר לתחילת הקו שלך לספינת מלחמה. ספינות מלחמה נלחמות בפיראטים.' },
+  },
+};
+/** Card name and text; `sea` = Seafarers wording, 'pirate' = The Pirate Islands. */
+export const devInfo = (d: DevCardType, sea: boolean | 'pirate' = false) =>
+  (sea === 'pirate' && DEV_PIRATE[lang][d]) || (sea && DEV_SEA[lang][d]) || DEV[lang][d];
+/** Display name of a wonder tile. */
+export const wonderName = (w: WonderId) => t(`wonder_${w}` as Key);
 export const difficultyName = (d: 'easy' | 'medium' | 'hard') => t(d);
 
 export function resourcesText(res: Partial<ResMap>): string {
@@ -734,13 +808,27 @@ const LOG_HE: Record<keyof typeof LOG_EN, string> = {
   clothReceived: '{p} קיבל/ה {n} בד.',
   stoleCloth: '{p} לקח/ה אסימון בד מ{q}.',
   villagesEmpty: 'ב-{n} כפרים נגמרו הבדים: המשחק נגמר.',
+  pirateFleet: 'צי הפיראטים שט {n} משושים, בעוצמה {n}.',
+  fleetRaid: 'הפיראטים פשטו על {p}: {p} מאבד/ת {n} קלפים.',
+  fleetRepelled: '{p} הדף/ה את הפיראטים ולוקח/ת משאב לבחירה.',
+  fleetTie: '{p} עמד/ה מול הפיראטים בתיקו.',
+  warship: '{p} הפך/ה ספינה לספינת מלחמה.',
+  fortressAttack: '{p} תוקף/ת את מבצר הפיראטים; הפיראטים הטילו {n}.',
+  fortressHit: '{p} ניצח/ה בקרב: נותרו {n} מאורות פיראטים.',
+  fortressCaptured: '{p} כבש/ה את מבצר הפיראטים!',
+  fortressRepelled: '{p} הפסיד/ה בקרב ואיבד/ה {n} ספינות.',
+  pirateGone: 'כל המבצרים נכבשו: צי הפיראטים נעלם.',
+  claimedWonder: '{p} לקח/ה את {w}.',
+  builtWonder: '{p} בנה/תה את שלב {n} של {w}.',
   win: '{p} ניצח/ה עם {n} נקודות!',
 };
 
 export function logText(item: LogItem, names: string[]): string {
   if (!item.key) return item.msg ?? '';
   const template = lang === 'he' ? LOG_HE[item.key] : LOG_EN[item.key];
-  return formatLog(template, item.params ?? {}, {
+  // The Wonders of Catan: the wonder id becomes its translated name.
+  const params = item.params?.w ? { ...item.params, w: wonderName(item.params.w) as WonderId } : (item.params ?? {});
+  return formatLog(template, params, {
     name: (p) => names[p] ?? '?',
     resource: resourceName,
     resources: resourcesText,
@@ -869,6 +957,24 @@ const ERRORS_HE: Record<string, string> = {
   'A port goes on a coastal edge of your settlement, one edge away from other ports': 'נמל מונח על צלע חוף של יישוב שלך, צלע אחת לפחות מנמל אחר',
   'Only the pirate can take cloth': 'רק הפיראט יכול לקחת בד',
   'That player has no cloth': 'לשחקן הזה אין בד',
+  // The Pirate Islands / The Wonders of Catan
+  'Ships must extend your one line to your fortress by the shortest way': 'ספינה חדשה ממשיכה את הקו היחיד שלך למבצר, בדרך הקצרה ביותר',
+  'Ships on the route to the pirate fortress cannot move': 'הספינות בקו למבצר הפיראטים לא זזות',
+  'Settlements only on the main island or your beachhead': 'יישובים רק על האי הראשי או על ראש החוף שלך',
+  'You have no ship to turn into a warship': 'אין לך ספינה להפוך לספינת מלחמה',
+  'There is no robber in this game': 'אין שודד במשחק הזה',
+  'The pirate fleet sails on its own': 'צי הפיראטים שט לבד',
+  'This game has no wonders': 'אין פלאים במשחק הזה',
+  'That wonder is already claimed': 'מישהו כבר לקח את הפלא הזה',
+  'You may only claim one wonder': 'אפשר לקחת רק פלא אחד',
+  'The Grand Castle needs a city and 6 victory points': 'הטירה הגדולה דורשת עיר ו-6 נקודות',
+  'The Grand Monument needs a city at a port and a route of 5 roads or ships': 'האנדרטה הגדולה דורשת עיר ליד נמל ונתיב של 5 דרכים או ספינות',
+  'The Great Bridge needs a building at a Great Bridge marker': 'הגשר הגדול דורש מבנה על סימן של הגשר',
+  'The Grand Theater needs 2 cities': 'התיאטרון הגדול דורש 2 ערים',
+  'The Great Wall needs a building at a Great Wall marker': 'החומה הגדולה דורשת מבנה על סימן של החומה',
+  'Unknown wonder': 'פלא לא ידוע',
+  'Claim a wonder first': 'קודם צריך לקחת פלא',
+  'Your wonder is finished': 'הפלא שלך כבר הושלם',
 };
 
 export function errorText(msg: string): string {

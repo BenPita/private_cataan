@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
 import { boardGraph, graphBounds, scenarioFor, vertexRegion, type Board as BoardData, type EdgeItem, type PlayerView, type Village } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
-import { t } from '../i18n';
+import { displayName, t } from '../i18n';
 
 /** SVG units per hex radius. Must match art-src/extras.py (sea frame). */
 export const S = 60;
@@ -154,7 +154,8 @@ function City({ x, y, color }: { x: number; y: number; color: string }) {
 }
 
 /** Ship: a hull seen from above, lying along its edge, with an upright sail. */
-function Ship({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
+/** A ship; a warship (The Pirate Islands) has gun ports and a battle pennant instead of sails. */
+function Ship({ x, y, angle, color, war = false }: { x: number; y: number; angle: number; color: string; war?: boolean }) {
   const side = shade(color);
   return (
     <g transform={`translate(${x},${y})`} pointerEvents="none">
@@ -169,12 +170,103 @@ function Ship({ x, y, angle, color }: { x: number; y: number; angle: number; col
             strokeLinejoin="round"
           />
           <path d="M-14,-2.6 L8,-2.6 Q14,-2 15.5,0 Q14,2 8,2.6 L-14,2.6 Z" fill={side} />
+          {war && [-10, -3, 4].map((gx) => <circle key={gx} cx={gx} cy={0} r={1.6} fill="#1d150d" />)}
         </g>
+        {war ? (
+          <>
+            <line x1={0} y1={2} x2={0} y2={-17} stroke="#3b2412" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M0,-17 L13,-14 L0,-10 Z" fill="#b3261a" stroke="#1d150d" strokeWidth="0.9" />
+            <path d="M0,-11 L9,-9 L0,-7 Z" fill="#1d150d" />
+          </>
+        ) : (
+          <SailRig color={color} />
+        )}
+      </g>
+    </g>
+  );
+}
+
+function SailRig({ color }: { color: string }) {
+  return (
+    <>
         <line x1={0} y1={2} x2={0} y2={-27} stroke="#3b2412" strokeWidth="2.2" strokeLinecap="round" />
         <path d="M1.5,-25 Q19,-14 1.5,-1 Z" fill="url(#flag)" stroke="#5b4520" strokeWidth="1.2" strokeLinejoin="round" />
         <path d="M-1.5,-23 Q-11,-14 -1.5,-5 Z" fill="url(#flag)" stroke="#5b4520" strokeWidth="1.1" strokeLinejoin="round" />
         <path d="M0,-27 L-10,-24 L0,-21 Z" fill={color} stroke="#1d150d" strokeWidth="0.9" />
-      </g>
+    </>
+  );
+}
+
+/** The Pirate Islands: a dark stone fortress with the owner's flag and the lairs left. */
+function FortressMark({ x, y, color, lairs, title }: { x: number; y: number; color: string; lairs: number; title: string }) {
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none" className="fortress">
+      <title>{title}</title>
+      <ellipse cx={3} cy={12} rx={17} ry={5} fill="rgba(20,12,4,0.42)" />
+      <path d="M-13,12 L-13,-8 L-9,-8 L-9,-4 L-4,-4 L-4,-8 L4,-8 L4,-4 L9,-4 L9,-8 L13,-8 L13,12 Z" fill="#4a4540" stroke="#1d150d" strokeWidth="1.4" />
+      <rect x={-4} y={3} width={8} height={9} rx={4} fill="#1d150d" />
+      <line x1={0} y1={-8} x2={0} y2={-24} stroke="#1d150d" strokeWidth="1.8" />
+      <path d="M0,-24 L12,-21 L0,-17 Z" fill={color} stroke="#1d150d" strokeWidth="0.9" />
+      <circle cx={13} cy={8} r={7} fill="#1d150d" stroke="#f2e2b8" strokeWidth="1.2" />
+      <text x={13} y={11.2} className="fortress-num">{lairs}</text>
+    </g>
+  );
+}
+
+/** The Pirate Islands: a player's beachhead marker (a coloured ring until something is built there). */
+function BeachheadMark({ x, y, color, title }: { x: number; y: number; color: string; title: string }) {
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none">
+      <title>{title}</title>
+      <circle r={9} fill="rgba(255,255,255,0.25)" stroke={color} strokeWidth="4" />
+      <circle r={9} fill="none" stroke="#1d150d" strokeWidth="1" />
+    </g>
+  );
+}
+
+/** The Wonders of Catan: Great Wall, Great Bridge and "X" markers on intersections. */
+function WonderSpotMark({ x, y, kind, title }: { x: number; y: number; kind: 'wall' | 'bridge' | 'blocked'; title: string }) {
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none" className="wonder-spot">
+      <title>{title}</title>
+      {kind === 'blocked' ? (
+        <>
+          <circle r={7.5} fill="#b3261a" stroke="#f2e2b8" strokeWidth="1.3" />
+          <path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#f2e2b8" strokeWidth="2" strokeLinecap="round" />
+        </>
+      ) : kind === 'wall' ? (
+        <>
+          <rect x={-10} y={-7} width={20} height={14} rx={2} fill="#8d8478" stroke="#2b2620" strokeWidth="1.3" />
+          <path d="M-10,0 H10 M-3,-7 V0 M4,0 V7" stroke="#2b2620" strokeWidth="1" />
+        </>
+      ) : (
+        <>
+          <rect x={-11} y={-7} width={22} height={14} rx={2} fill="#c9b38a" stroke="#4a2c12" strokeWidth="1.3" />
+          <path d="M-8,6 Q0,-6 8,6" fill="none" stroke="#4a2c12" strokeWidth="2" />
+        </>
+      )}
+    </g>
+  );
+}
+
+/** The Pirate Islands: the fleet's course around the middle — a dotted loop with arrows. */
+function FleetPath({ points }: { points: Array<{ x: number; y: number }> }) {
+  return (
+    <g pointerEvents="none" className="fleet-path">
+      <title>{t('fleetTitle')}</title>
+      <polygon points={points.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="rgba(20,20,28,0.45)" strokeWidth="3" strokeDasharray="2 9" strokeLinecap="round" />
+      {points.map((p, i) => {
+        const q = points[(i + 1) % points.length];
+        const ang = (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+        return (
+          <path
+            key={i}
+            d="M-6,-5 L6,0 L-6,5 Z"
+            transform={`translate(${(p.x + q.x) / 2},${(p.y + q.y) / 2}) rotate(${ang})`}
+            fill="rgba(20,20,28,0.6)"
+          />
+        );
+      })}
     </g>
   );
 }
@@ -363,7 +455,8 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
   const hSet = useMemo(() => new Set(targets.hexes ?? []), [targets.hexes]);
   const pSet = useMemo(() => new Set(targets.pirateHexes ?? []), [targets.pirateHexes]);
   const myColor = colors[view.me ?? 0];
-  const robber = G.hexes[view.board.robberHex];
+  const robber = view.board.noRobber ? null : G.hexes[view.board.robberHex];
+  const warships = new Set(view.warships ?? []);
   const pirate = view.board.pirateHex !== undefined ? G.hexes[view.board.pirateHex] : null;
   const frame = boardFrame(view.board);
   const VIEW = frame.view * S;
@@ -376,53 +469,6 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
       ) : (
         <rect x={-VIEW * 3} y={-VIEW * 3} width={VIEW * 6} height={VIEW * 6} fill={OPEN_SEA} />
       )}
-
-      {/* Harbors: wooden pier and a parchment flag */}
-      {view.board.harbors.map((h) => {
-        const e = G.edges[h.edge];
-        const hex = G.hexes[e.hexes[0]];
-        const dx = e.x - hex.x;
-        const dy = e.y - hex.y;
-        const len = Math.hypot(dx, dy);
-        const ux = dx / len;
-        const uy = dy / len;
-        const px = (e.x + ux * 0.62) * S;
-        const py = (e.y + uy * 0.62) * S;
-        const [a, b] = e.vertices.map((v) => G.vertices[v]);
-        return (
-          <g key={h.edge} className="harbor" pointerEvents="none">
-            {[a, b].map((v, i) => {
-              const sx = v.x * S;
-              const sy = v.y * S;
-              const ang = (Math.atan2(py - sy, px - sx) * 180) / Math.PI;
-              const l = Math.hypot(px - sx, py - sy);
-              return (
-                <g key={i} transform={`translate(${sx},${sy}) rotate(${ang})`}>
-                  <rect x={2} y={-1} width={l - 6} height={8} fill="rgba(10,40,60,0.35)" />
-                  <rect x={0} y={-4} width={l - 6} height={8} rx={1.5} fill="url(#plank)" stroke="#4a2c12" strokeWidth="1" />
-                  {Array.from({ length: Math.floor(l / 7) }, (_, k) => (
-                    <line key={k} x1={4 + k * 7} y1={-4} x2={4 + k * 7} y2={4} stroke="#5b3a1a" strokeWidth="0.8" />
-                  ))}
-                </g>
-              );
-            })}
-            <g transform={`translate(${px},${py})`}>
-              <ellipse cx={3} cy={17} rx={16} ry={4} fill="rgba(10,40,60,0.35)" />
-              <line x1={0} y1={16} x2={0} y2={-18} stroke="#4a2c12" strokeWidth="2.4" />
-              <path d="M1,-18 L24,-14 L20,-6 L24,2 L1,2 Z" fill="url(#flag)" stroke="#7a5a2a" strokeWidth="1.2" />
-              {h.type === 'generic' ? (
-                <text x={12} y={-4} className="harbor-big">?</text>
-              ) : (
-                <ResourceGlyph r={h.type} size={15} x={4.5} y={-16} />
-              )}
-              <rect x={-14} y={4} width={28} height={13} rx={3} fill="#3b2412" />
-              <text x={0} y={14} className="harbor-rate">
-                {h.type === 'generic' ? '3:1' : '2:1'}
-              </text>
-            </g>
-          </g>
-        );
-      })}
 
       {/* Land tiles */}
       {view.board.hexes.map((tile) => {
@@ -476,6 +522,69 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         );
       })}
 
+      {/* Harbors: wooden pier and a parchment flag (after the tiles: piers may reach over sea tiles) */}
+      {view.board.harbors.map((h) => {
+        const e = G.edges[h.edge];
+        // The pier points away from the land hex (an inner sea tile may be listed first).
+        const hex = G.hexes[e.hexes.find((x) => view.board.hexes[x].terrain !== 'sea') ?? e.hexes[0]];
+        const dx = e.x - hex.x;
+        const dy = e.y - hex.y;
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len;
+        const uy = dy / len;
+        const px = (e.x + ux * 0.62) * S;
+        const py = (e.y + uy * 0.62) * S;
+        const [a, b] = e.vertices.map((v) => G.vertices[v]);
+        return (
+          <g key={h.edge} className="harbor" pointerEvents="none">
+            {[a, b].map((v, i) => {
+              const sx = v.x * S;
+              const sy = v.y * S;
+              const ang = (Math.atan2(py - sy, px - sx) * 180) / Math.PI;
+              const l = Math.hypot(px - sx, py - sy);
+              return (
+                <g key={i} transform={`translate(${sx},${sy}) rotate(${ang})`}>
+                  <rect x={2} y={-1} width={l - 6} height={8} fill="rgba(10,40,60,0.35)" />
+                  <rect x={0} y={-4} width={l - 6} height={8} rx={1.5} fill="url(#plank)" stroke="#4a2c12" strokeWidth="1" />
+                  {Array.from({ length: Math.floor(l / 7) }, (_, k) => (
+                    <line key={k} x1={4 + k * 7} y1={-4} x2={4 + k * 7} y2={4} stroke="#5b3a1a" strokeWidth="0.8" />
+                  ))}
+                </g>
+              );
+            })}
+            <g transform={`translate(${px},${py})`}>
+              <ellipse cx={3} cy={17} rx={16} ry={4} fill="rgba(10,40,60,0.35)" />
+              <line x1={0} y1={16} x2={0} y2={-18} stroke="#4a2c12" strokeWidth="2.4" />
+              <path d="M1,-18 L24,-14 L20,-6 L24,2 L1,2 Z" fill="url(#flag)" stroke="#7a5a2a" strokeWidth="1.2" />
+              {h.type === 'generic' ? (
+                <text x={12} y={-4} className="harbor-big">?</text>
+              ) : (
+                <ResourceGlyph r={h.type} size={15} x={4.5} y={-16} />
+              )}
+              <rect x={-14} y={4} width={28} height={13} rx={3} fill="#3b2412" />
+              <text x={0} y={14} className="harbor-rate">
+                {h.type === 'generic' ? '3:1' : '2:1'}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+
+      {/* The Pirate Islands: the pirate fleet's course */}
+      {view.board.pirateFleet && view.board.pirateHex !== undefined && (
+        <FleetPath points={view.board.pirateFleet.map((h) => ({ x: G.hexes[h].x * S, y: G.hexes[h].y * S }))} />
+      )}
+
+      {/* The Wonders of Catan: marker spots */}
+      {view.board.wonderSpots &&
+        (['wall', 'bridge', 'blocked'] as const).flatMap((kind) =>
+          view.board.wonderSpots![kind].map((vertex) => {
+            const v = G.vertices[vertex];
+            const title = t(kind === 'wall' ? 'wallTitle' : kind === 'bridge' ? 'bridgeTitle' : 'blockedTitle');
+            return <WonderSpotMark key={`ws-${vertex}`} x={v.x * S} y={v.y * S + (view.buildings[vertex] ? 16 : 0)} kind={kind} title={title} />;
+          }),
+        )}
+
       {/* Roads: wooden bars with a cast shadow */}
       {Object.entries(view.roads).map(([edge, owner]) => {
         const [a, b] = G.edges[edge].vertices.map((v) => G.vertices[v]);
@@ -508,7 +617,7 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
       {Object.entries(view.ships ?? {}).map(([edge, owner]) => {
         const e = G.edges[edge];
         const [a, b] = e.vertices.map((v) => G.vertices[v]);
-        return <Ship key={`${edge}-${owner}`} x={e.x * S} y={e.y * S} angle={edgeAngle(a, b)} color={colors[owner]} />;
+        return <Ship key={`${edge}-${owner}`} x={e.x * S} y={e.y * S} angle={edgeAngle(a, b)} color={colors[owner]} war={warships.has(edge)} />;
       })}
 
       {/* Edge targets */}
@@ -540,6 +649,23 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         );
       })}
 
+      {/* The Pirate Islands: beachheads and the pirate fortresses still standing */}
+      {(view.board.fortresses ?? []).map((f) => {
+        const b = G.vertices[f.beachhead];
+        const v = G.vertices[f.vertex];
+        const name = displayName(view.players[f.owner].name, view.players[f.owner].kind);
+        return (
+          <g key={`fort-${f.owner}`}>
+            {!view.buildings[f.beachhead] && (
+              <BeachheadMark x={b.x * S} y={b.y * S} color={colors[f.owner]} title={t('beachheadTitle', { name })} />
+            )}
+            {f.lairs > 0 && (
+              <FortressMark x={v.x * S} y={v.y * S} color={colors[f.owner]} lairs={f.lairs} title={t('fortressTitle', { name, n: f.lairs })} />
+            )}
+          </g>
+        );
+      })}
+
       {/* The Forgotten Tribe: gifts lying on the sea */}
       {Object.entries(view.board.edgeItems ?? {}).map(([edge, item]) => {
         const e = G.edges[edge];
@@ -568,12 +694,14 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* Robber: grey pawn that slides between lands */}
 
+      {robber && (
       <g className="robber" style={{ transform: `translate(${robber.x * S + 22}px, ${robber.y * S - 14}px)` }} pointerEvents="none">
         <ellipse cx={4} cy={19} rx={13} ry={4.5} fill="rgba(20,12,4,0.42)" />
         <path d="M-10,18 Q-12,4 -6,-1 Q-11,-9 -4,-14 L4,-14 Q11,-9 6,-1 Q12,4 10,18 Z" fill="url(#pawn)" stroke="#50565c" strokeWidth="1.3" />
         <circle cx={0} cy={-17} r={6.5} fill="url(#pawn)" stroke="#50565c" strokeWidth="1.3" />
         <ellipse cx={-2.5} cy={-19} rx={2} ry={1.4} fill="rgba(255,255,255,0.7)" />
       </g>
+      )}
 
       {/* Vertex targets */}
       {[...vSet].map((vertex) => {

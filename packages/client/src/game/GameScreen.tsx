@@ -431,7 +431,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       case 'ROBBER_MOVE':
         return view.board.pirateHex !== undefined ? t('hintMoveRobberPirate') : t('hintMoveRobber');
       case 'ROBBER_STEAL':
-        return t('hintSteal');
+        return view.board.noRobber ? t('hintStealAny') : t('hintSteal');
       default:
         if (view.freeRoads > 0) return sea ? t('hintFreePieces', { n: view.freeRoads }) : t('hintFreeRoads', { n: view.freeRoads });
         if (portSpots.length > 0) return t('hintPlacePort', { port: portLabel });

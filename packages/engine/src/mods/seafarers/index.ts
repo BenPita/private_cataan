@@ -9,9 +9,12 @@ export { MAP_DIRS, boardHexes } from './mapTypes';
 import { boardHexes } from './mapTypes';
 import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
 import { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from './tribeClothMaps';
+import { PIRATE_ISLANDS, WONDERS_OF_CATAN } from './pirateWonderMaps';
 import { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 export { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
 export { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from './tribeClothMaps';
+export { PIRATE_ISLANDS, WONDERS_OF_CATAN } from './pirateWonderMaps';
+export { WONDERS, WONDER_IDS, WONDER_LEVELS } from './wonders';
 export { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 
 /** Map size a game uses: 2–3 participants play the 3-player map, 4 the 4-player map. */
@@ -67,6 +70,8 @@ export function scenarioBoard(def: ScenarioDef, participants: number): Board {
     startRegions: def.startRegions,
     numberedOnly: def.numberedOnly,
     clothPerVillage: def.cloth?.perVillage,
+    buildRegions: def.buildRegions,
+    participants,
   });
 }
 
@@ -161,4 +166,45 @@ addScenario({
   setupRounds: 3,
   noLongestRoute: true,
   cloth: { perVillage: 5, supply: 10, endWhenEmpty: 5 },
+});
+
+/**
+ * Scenario 7, The Pirate Islands (rulebook p. 16): build one line of ships from the
+ * main island to your beachhead and your pirate fortress; Knights only turn ships into
+ * warships; the pirate fleet sails around the middle after each roll and attacks
+ * buildings next to it; a 7 steals from anyone (no robber); no Longest Route or
+ * Largest Army. Win with your fortress captured and 10 VP.
+ */
+addScenario({
+  id: 'pirateIslands',
+  victoryTarget: 10,
+  maps: { 3: PIRATE_ISLANDS, 4: PIRATE_ISLANDS },
+  startRegions: ['main'],
+  buildRegions: ['main'],
+  shufflePorts: true,
+  noLongestRoute: true,
+  noLargestArmy: true,
+  devDeck: {
+    // 3 players: the Victory Point cards go back in the box.
+    3: { knight: 14, victoryPoint: 0, roadBuilding: 2, yearOfPlenty: 2, monopoly: 2 },
+    // 4 players: the Victory Point cards count as Knights.
+    4: { knight: 19, victoryPoint: 0, roadBuilding: 2, yearOfPlenty: 2, monopoly: 2 },
+  },
+});
+
+/**
+ * Scenario 8, The Wonders of Catan (rulebook p. 18): starting settlements on the
+ * large island, not on a Great Wall / Great Bridge / "X" marker; +1 VP for the first
+ * settlement on each small island; claim one wonder and build its 4 levels. Win by
+ * finishing it, or with 10 VP and the highest wonder level. No pirate.
+ */
+addScenario({
+  id: 'wondersOfCatan',
+  victoryTarget: 10,
+  maps: { 3: WONDERS_OF_CATAN, 4: WONDERS_OF_CATAN },
+  startRegions: ['main'],
+  homeRegions: ['main'],
+  regionBonus: 1,
+  shufflePorts: true,
+  wonders: true,
 });

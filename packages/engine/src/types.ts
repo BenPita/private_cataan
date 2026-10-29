@@ -70,7 +70,33 @@ export interface Board {
   edgeItems?: Record<string, EdgeItem>;
   /** Cloth for Catan: villages on the small islands (a corner with a number disc) and their cloth. */
   villages?: Village[];
+  /** No robber in this scenario (The Pirate Islands); `robberHex` is then only a placeholder. */
+  noRobber?: boolean;
+  /** Settlements and roads only on hexes of these regions (a player's own beachhead aside). */
+  buildRegions?: string[];
+  /** The Pirate Islands: hexes the pirate fleet sails along, in order (it moves after each roll). */
+  pirateFleet?: number[];
+  /** The Pirate Islands: one pirate fortress per player. */
+  fortresses?: Fortress[];
+  /** The Wonders of Catan: Great Wall / Great Bridge marker spots and "X" spots (no starting settlement). */
+  wonderSpots?: { wall: string[]; bridge: string[]; blocked: string[] };
 }
+
+/**
+ * The Pirate Islands: a player's printed starting settlement and ship, their
+ * beachhead and the pirate fortress in their colour (captured when no lair is left).
+ */
+export interface Fortress {
+  owner: number;
+  start: string;
+  startShip: string;
+  beachhead: string;
+  vertex: string;
+  lairs: number;
+}
+
+/** The Wonders of Catan: the five wonder tiles. */
+export type WonderId = 'castle' | 'monument' | 'bridge' | 'theater' | 'wall';
 
 export type EdgeItem = { kind: 'vp' } | { kind: 'dev' } | { kind: 'port'; type: HarborType };
 
@@ -120,6 +146,8 @@ export interface PlayerState extends PlayerSetup {
   /** Cloth for Catan: cloth tokens (2 = 1 VP) and the villages (indices) the player trades with. */
   cloth?: number;
   villages?: number[];
+  /** The Wonders of Catan: the claimed wonder and its completed level (0 = claimed, 4 = finished). */
+  wonder?: { id: WonderId; level: number };
 }
 
 export interface TradeOffer {
@@ -217,7 +245,7 @@ export interface GameState {
    */
   pendingGold?: Record<number, number>;
   /** Phase to return to once every gold choice is made. */
-  goldReturnPhase?: 'INITIAL_PLACEMENT' | 'PRE_ROLL' | 'MAIN_ACTIONS';
+  goldReturnPhase?: 'INITIAL_PLACEMENT' | 'PRE_ROLL' | 'MAIN_ACTIONS' | 'ROLLED_SEVEN';
   /** The pending gold comes from a discovered gold field, not from the dice. */
   goldDiscovered?: boolean;
   /**
@@ -229,6 +257,8 @@ export interface GameState {
   edgeDevs?: Record<string, DevCardType>;
   /** Cloth for Catan: cloth tokens in the general supply. */
   clothSupply?: number;
+  /** The Pirate Islands: ships turned into warships (edge ids). */
+  warships?: string[];
   /** Seafarers: the active player already moved a ship this turn. */
   shipMoved?: boolean;
   /** Seafarers: edges of ships built this turn (they may not be moved this turn). */
@@ -283,6 +313,10 @@ export type Action =
   | { type: 'counterTrade'; tradeId: number; give: ResMap; get: ResMap }
   | { type: 'confirmTrade'; tradeId: number; with: number }
   | { type: 'cancelTrade' }
+  /** The Wonders of Catan: take a wonder tile whose requirement you meet. */
+  | { type: 'claimWonder'; wonder: WonderId }
+  /** The Wonders of Catan: pay for the next level of your wonder. */
+  | { type: 'buildWonder' }
   | { type: 'endTurn' };
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: string };

@@ -5,7 +5,7 @@ import type { ModDef, ScenarioDef } from './types';
 
 export type { ModDef, ScenarioDef } from './types';
 export { BASE_MOD } from './base';
-export { SEAFARERS_MOD, addScenario, scenarioBoard, scenarioLayoutId, scenarioMapSize } from './seafarers';
+export { SEAFARERS_MOD, WONDERS, WONDER_IDS, WONDER_LEVELS, addScenario, scenarioBoard, scenarioLayoutId, scenarioMapSize } from './seafarers';
 export type { ScenarioMap, MapHex, MapPort, MapTerrain } from './seafarers';
 
 /** Every installed mod. Server validation and the client's mod cards both read this. */

@@ -235,6 +235,81 @@ function itemTexture(kind: 'vp' | 'dev'): THREE.CanvasTexture {
   return t;
 }
 
+/**
+ * Round markers drawn on a canvas: a pirate fortress (dark disc, owner's ring, lairs
+ * left), a beachhead (owner's ring), and the Wonders of Catan spots (wall, bridge, "X").
+ */
+function markTexture(kind: 'fortress' | 'beachhead' | 'wall' | 'bridge' | 'blocked', color = '#000', n = 0): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.lineJoin = 'round';
+  if (kind === 'fortress') {
+    g.fillStyle = '#1d150d';
+    g.strokeStyle = color;
+    g.lineWidth = 12;
+    g.beginPath();
+    g.arc(64, 64, 50, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#f2e2b8';
+    g.font = '900 64px "Frank Ruhl Libre", Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(String(n), 64, 70);
+  } else if (kind === 'beachhead') {
+    g.strokeStyle = '#1d150d';
+    g.lineWidth = 22;
+    g.beginPath();
+    g.arc(64, 64, 44, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = color;
+    g.lineWidth = 15;
+    g.stroke();
+  } else if (kind === 'blocked') {
+    g.fillStyle = '#b3261a';
+    g.strokeStyle = '#f2e2b8';
+    g.lineWidth = 8;
+    g.beginPath();
+    g.arc(64, 64, 46, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.lineWidth = 12;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(44, 44);
+    g.lineTo(84, 84);
+    g.moveTo(84, 44);
+    g.lineTo(44, 84);
+    g.stroke();
+  } else {
+    g.fillStyle = kind === 'wall' ? '#8d8478' : '#c9b38a';
+    g.strokeStyle = kind === 'wall' ? '#2b2620' : '#4a2c12';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.roundRect(16, 34, 96, 60, 8);
+    g.fill();
+    g.stroke();
+    g.beginPath();
+    if (kind === 'wall') {
+      g.moveTo(16, 64);
+      g.lineTo(112, 64);
+      g.moveTo(52, 34);
+      g.lineTo(52, 64);
+      g.moveTo(80, 64);
+      g.lineTo(80, 94);
+    } else {
+      g.lineWidth = 10;
+      g.moveTo(30, 92);
+      g.quadraticCurveTo(64, 30, 98, 92);
+    }
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 /** Cloth for Catan: a village disc with its number, cloth left and its trading partners' colours. */
 function villageTexture(n: number, cloth: number, partners: string[]): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -351,9 +426,17 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
   }, []);
 
   useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
-  const scenarioMarks = JSON.stringify([view.board.edgeItems, view.board.villages, view.players.map((p) => p.villages)]);
+  const scenarioMarks = JSON.stringify([
+    view.board.edgeItems,
+    view.board.villages,
+    view.players.map((p) => p.villages),
+    view.board.fortresses,
+    view.warships,
+    view.board.pirateHex === undefined,
+  ]);
   useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.ships, view.players.length, scenarioMarks]);
-  useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
+  // The Pirate Islands has no robber.
+  useEffect(() => engine.current?.setRobber(view.board.noRobber ? -1 : view.board.robberHex), [view.board.robberHex, view.board.noRobber]);
   useEffect(() => engine.current?.setPirate(view.board.pirateHex), [view.board.pirateHex]);
   useEffect(() => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'), [targets, selection]);
   useEffect(() => engine.current?.setHighlight(highlightHexes), [highlightHexes]);
@@ -521,6 +604,11 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   pirate.rotation.y = 0.5;
   pirate.visible = false;
   scene.add(pirate);
+  // The Pirate Islands: dark stone fortresses, and flat arrows marking the fleet's course.
+  const fortressMat = new THREE.MeshStandardMaterial({ color: '#4a4540', roughness: 0.9 });
+  const arrowGeo = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-0.12, -0.1), new THREE.Vector2(0.14, 0), new THREE.Vector2(-0.12, 0.1)]));
+  arrowGeo.rotateX(-Math.PI / 2);
+  const arrowMat = new THREE.MeshBasicMaterial({ color: '#14141c', transparent: true, opacity: 0.55, depthWrite: false });
   const itemMats = new Map<string, THREE.SpriteMaterial>();
   const itemMat = (key: string, make: () => THREE.Texture) => {
     if (!itemMats.has(key)) itemMats.set(key, new THREE.SpriteMaterial({ map: make(), transparent: true }));
@@ -739,7 +827,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     const poleMat = new THREE.MeshStandardMaterial({ color: '#4a2c12', roughness: 0.8 });
     for (const h of view.board.harbors) {
       const e = G.edges[h.edge];
-      const hex = G.hexes[e.hexes[0]];
+      // The pier points away from the land hex; facing a sea tile (not the frame) it stands on that tile.
+      const hex = G.hexes[e.hexes.find((x) => view.board.hexes[x].terrain !== 'sea') ?? e.hexes[0]];
+      const base = e.hexes.length > 1 ? TILE_H : 0;
       const dx = e.x - hex.x;
       const dy = e.y - hex.y;
       const len = Math.hypot(dx, dy);
@@ -749,18 +839,18 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         const v = G.vertices[vid];
         const l = Math.hypot(px - v.x, py - v.y);
         const pier = new THREE.Mesh(new THREE.BoxGeometry(l, 0.04, 0.12), plankMat);
-        pier.position.set((v.x + px) / 2, 0.03, (v.y + py) / 2);
+        pier.position.set((v.x + px) / 2, base + 0.03, (v.y + py) / 2);
         pier.rotation.y = -Math.atan2(py - v.y, px - v.x);
         pier.castShadow = true;
         pier.receiveShadow = true;
         harborsGroup.add(pier);
       }
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.62, 8), poleMat);
-      pole.position.set(px, 0.31, py);
+      pole.position.set(px, base + 0.31, py);
       pole.castShadow = true;
       const flag = new THREE.Sprite(new THREE.SpriteMaterial({ map: flagTexture(h.type, invalidate), transparent: true }));
       flag.scale.set(0.66, 0.5, 1);
-      flag.position.set(px, 0.8, py);
+      flag.position.set(px, base + 0.8, py);
       harborsGroup.add(pole, flag);
     }
     invalidate(true);
@@ -795,15 +885,22 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
         },
       });
     }
+    const warships = new Set(view.warships ?? []);
     for (const [edge, owner] of Object.entries(view.ships ?? {})) {
       const e = G.edges[edge];
       const [a, b] = e.vertices.map((id) => G.vertices[id]);
-      wanted.set(`s:${edge}:${owner}`, {
+      // The Pirate Islands: a warship lies on its side, as in the rulebook.
+      const war = warships.has(edge);
+      wanted.set(`s:${edge}:${owner}${war ? ':w' : ''}`, {
         make: () => {
           const m = new THREE.Mesh(shipGeo, [pieceMat(colors[owner]), sailMat]);
           m.scale.setScalar(1.45);
           m.position.set(e.x, TILE_H, e.y);
           m.rotation.y = -Math.atan2(b.y - a.y, b.x - a.x);
+          if (war) {
+            m.rotation.x = Math.PI / 2;
+            m.position.y = TILE_H + 0.11;
+          }
           return m;
         },
       });
@@ -840,6 +937,53 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       s.position.set(v.x, TILE_H + 0.45, v.y);
       markersGroup.add(s);
     });
+    // The Pirate Islands: the fleet's course, beachheads and the fortresses still standing.
+    const fleet = view.board.pirateFleet;
+    if (fleet && view.board.pirateHex !== undefined) {
+      fleet.forEach((h, i) => {
+        const a = G.hexes[h];
+        const b = G.hexes[fleet[(i + 1) % fleet.length]];
+        const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+        arrow.position.set((a.x + b.x) / 2, TILE_H + 0.01, (a.y + b.y) / 2);
+        arrow.rotation.y = -Math.atan2(b.y - a.y, b.x - a.x);
+        markersGroup.add(arrow);
+      });
+    }
+    for (const f of view.board.fortresses ?? []) {
+      const color = colors[f.owner];
+      if (!view.buildings[f.beachhead]) {
+        const v = G.vertices[f.beachhead];
+        const ring = new THREE.Sprite(itemMat(`beach:${color}`, () => markTexture('beachhead', color)));
+        ring.scale.set(0.34, 0.34, 1);
+        ring.position.set(v.x, TILE_H + 0.12, v.y);
+        markersGroup.add(ring);
+      }
+      if (f.lairs > 0) {
+        const v = G.vertices[f.vertex];
+        const keep = new THREE.Mesh(cityGeo, fortressMat);
+        keep.scale.setScalar(1.5);
+        keep.position.set(v.x, TILE_H, v.y);
+        keep.castShadow = true;
+        markersGroup.add(keep);
+        const badge = new THREE.Sprite(itemMat(`fort:${color}:${f.lairs}`, () => markTexture('fortress', color, f.lairs)));
+        badge.scale.set(0.34, 0.34, 1);
+        badge.position.set(v.x, TILE_H + 0.75, v.y);
+        markersGroup.add(badge);
+      }
+    }
+    // The Wonders of Catan: Great Wall, Great Bridge and "X" spots.
+    const spots = view.board.wonderSpots;
+    if (spots) {
+      for (const kind of ['wall', 'bridge', 'blocked'] as const) {
+        for (const vertex of spots[kind]) {
+          const v = G.vertices[vertex];
+          const mark = new THREE.Sprite(itemMat(`spot:${kind}`, () => markTexture(kind)));
+          mark.scale.set(0.3, 0.3, 1);
+          mark.position.set(v.x, TILE_H + (view.buildings[vertex] ? 0.62 : 0.12), v.y);
+          markersGroup.add(mark);
+        }
+      }
+    }
     const firstFill = pieceMeshes.size === 0;
     for (const [key, mesh] of pieceMeshes) {
       if (!wanted.has(key)) {
@@ -869,6 +1013,12 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   let robberHex = -1;
   function setRobber(hex: number) {
+    robber.visible = hex >= 0 && !!G.hexes[hex];
+    if (!robber.visible) {
+      robberHex = -1;
+      invalidate(true);
+      return;
+    }
     const g = G.hexes[hex];
     const to = new THREE.Vector3(g.x + 0.42, TILE_H, g.y - 0.2);
     if (robberHex < 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -1036,6 +1186,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     clear(harborsGroup);
     clear(markersGroup, false);
     shipGeo.dispose();
+    arrowGeo.dispose();
+    arrowMat.dispose();
+    fortressMat.dispose();
     sailMat.dispose();
     for (const m of pirate.material as THREE.Material[]) m.dispose();
     itemMats.forEach((m) => {

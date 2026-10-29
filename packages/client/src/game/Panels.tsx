@@ -1,6 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   RESOURCES,
+  WONDERS,
+  WONDER_IDS,
+  WONDER_LEVELS,
+  fortressOf,
+  warshipCount,
+  wonderBlock,
   modFor,
   devCardReady,
   emptyRes,
@@ -20,7 +26,7 @@ import {
   type Resource,
 } from '@hex/engine';
 import { DevCardFace, ResourceCard } from '../art';
-import { devInfo, displayName, resourceName, t } from '../i18n';
+import { devInfo, displayName, errorText, resourceName, t, type Key } from '../i18n';
 import type { PublicSeat } from '../net';
 
 export type Dispatch = (a: Action) => Promise<boolean>;
@@ -149,6 +155,15 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
               {sea && <span title={t('ships')}>⛵ {p.shipsBuilt}</span>}
               {view.board.villages && <span title={t('cloth')}>🧵 {p.cloth}</span>}
               {p.heldPorts.length > 0 && <span title={t('heldPorts')}>⚓ {p.heldPorts.length}</span>}
+              {view.board.fortresses && <span title={t('warships')}>🛡 {warshipCount(view, i)}</span>}
+              {view.board.fortresses && (fortressOf(view, i)?.lairs ?? 0) > 0 && (
+                <span title={t('lairsLeft')}>🏴 {fortressOf(view, i)!.lairs}</span>
+              )}
+              {p.wonder && (
+                <span title={t(`wonder_${p.wonder.id}` as Key)}>
+                  🏛 {p.wonder.level}/{WONDER_LEVELS}
+                </span>
+              )}
             </div>
             {(view.longestRoad.holder === i || view.largestArmy === i) && (
               <div className="chip-badges">
@@ -204,7 +219,8 @@ export function BuildSheet({
       : []),
     {
       key: 'settlement',
-      leftN: pieceLimits.settlements - (p.settlementsBuilt - p.citiesBuilt),
+      // The Pirate Islands: the settlement under the player's fortress waits there until captured.
+      leftN: pieceLimits.settlements - ((fortressOf(view, me)?.lairs ?? 0) > 0 ? 1 : 0) - (p.settlementsBuilt - p.citiesBuilt),
       left: '',
       spots: legalSettlements(view, me).length,
       reason: null,
@@ -248,6 +264,7 @@ export function BuildSheet({
           </button>
         ))}
       </div>
+      {view.board.wonderSpots && <WonderList view={view} canAct={canAct} dispatch={dispatch} />}
       {confirmDev && (
         <div className="confirm-inline">
           <span>
@@ -269,6 +286,60 @@ export function BuildSheet({
         </div>
       )}
     </Sheet>
+  );
+}
+
+// --- Wonders (The Wonders of Catan) ------------------------------------------
+
+/** The five wonder tiles: requirement, cost per level, who claimed it and how far it is built. */
+function WonderList({ view, canAct, dispatch }: { view: PlayerView; canAct: boolean; dispatch: Dispatch }) {
+  const me = view.me!;
+  const mine = view.players[me];
+  return (
+    <div className="wonder-list">
+      <h3>{t('wonders')}</h3>
+      <p className="hint-text">{t('wonderInfo')}</p>
+      {WONDER_IDS.map((id) => {
+        const owner = view.players.findIndex((p) => p.wonder?.id === id);
+        const level = owner >= 0 ? view.players[owner].wonder!.level : 0;
+        const block = wonderBlock(view, me, id, mine.victoryPoints);
+        const cost = WONDERS[id].cost;
+        return (
+          <div key={id} className={`wonder-row ${owner === me ? 'mine' : ''}`}>
+            <div className="build-name">
+              <b>{t(`wonder_${id}` as Key)}</b>
+              <span className="muted">{t(`wonder_${id}_req` as Key)}</span>
+            </div>
+            <ResList res={cost} />
+            <div className="wonder-state">
+              {owner >= 0 ? (
+                <span>
+                  <span className="dot" style={{ background: view.players[owner].color }} /> {playerName(view, owner)} ·{' '}
+                  {level >= WONDER_LEVELS ? t('wonderDone') : t('wonderLevel', { n: level })}
+                </span>
+              ) : (
+                <span className="muted">{t('wonderFree')}</span>
+              )}
+              {owner === me && level < WONDER_LEVELS && (
+                <button
+                  className="btn primary small"
+                  disabled={!canAct || !hasRes(mine.resources!, cost)}
+                  onClick={() => dispatch({ type: 'buildWonder' })}
+                >
+                  {t('wonderBuild', { n: level + 1 })}
+                </button>
+              )}
+              {owner < 0 && !mine.wonder && (
+                <button className="btn small" disabled={!canAct || !!block} onClick={() => dispatch({ type: 'claimWonder', wonder: id })}>
+                  {t('wonderClaim')}
+                </button>
+              )}
+            </div>
+            {owner < 0 && !mine.wonder && block && <span className="reason">{errorText(block)}</span>}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -562,7 +633,7 @@ export function DevSheet({ view, onClose, dispatch }: { view: PlayerView; onClos
       <div className="dev-hand">
         {[...groups.entries()].map(([type, g]) => {
           const why = reason(type, g);
-          const info = devInfo(type, hasShips(modFor(view)));
+          const info = devInfo(type, view.board.fortresses ? 'pirate' : hasShips(modFor(view)));
           return (
             <div key={type} className="dev-slot">
               <div className={`dev-stack ${g.total > 1 ? 'many' : ''}`}>
@@ -592,8 +663,8 @@ export function GoldSheet({ view, required, dispatch }: { view: PlayerView; requ
   const max = { ...view.bank };
   for (const r of RESOURCES) max[r] = Math.min(view.bank[r], pick[r] + (required - n));
   return (
-    <Sheet title={t('goldTitle', { n: required })}>
-      <p className="hint-text">{t('goldText', { n: required })}</p>
+    <Sheet title={t(view.board.fortresses ? 'goldTitleAny' : 'goldTitle', { n: required })}>
+      <p className="hint-text">{t(view.board.fortresses ? 'goldTextAny' : 'goldText', { n: required })}</p>
       <ResCounter value={pick} onChange={setPick} max={max} owned={view.bank} />
       <button
         className="btn primary wide"

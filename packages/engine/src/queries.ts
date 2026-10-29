@@ -1,5 +1,5 @@
 import { boardGraph } from './geometry';
-import { RESOURCES, type Board, type Building, type Resource } from './types';
+import { RESOURCES, type Board, type Building, type Fortress, type Resource, type WonderId } from './types';
 
 /** The public part of the board, shared by the full state and player views. */
 export interface BoardState {
@@ -8,6 +8,8 @@ export interface BoardState {
   roads: Record<string, number>;
   /** Seafarers ships (edge → owner); missing on boards without ships. */
   ships?: Record<string, number>;
+  /** The Pirate Islands: ships turned into warships. */
+  warships?: string[];
 }
 
 const isSeaHex = (board: Board, hex: number) => board.hexes[hex].terrain === 'sea';
@@ -24,10 +26,148 @@ export function vertexOnLand(s: BoardState, vertex: string): boolean {
   return !!v && v.hexes.some((h) => isLandHex(s.board, h));
 }
 
-/** Roads need at least one adjacent land hex. */
+/** Is the hex land of a region where building is allowed? (Any land without `buildRegions`.) */
+function buildableHex(board: Board, hex: number): boolean {
+  return isLandHex(board, hex) && (!board.buildRegions || board.buildRegions.includes(board.hexes[hex].region ?? ''));
+}
+
+/** Roads need at least one adjacent land hex (of a `buildRegions` region, when the board has them). */
 export function isRoadEdge(s: BoardState, edge: string): boolean {
   const e = boardGraph(s.board).edges[edge];
-  return !!e && e.hexes.some((h) => isLandHex(s.board, h));
+  return !!e && e.hexes.some((h) => buildableHex(s.board, h));
+}
+
+/**
+ * May `player` build a settlement at `vertex` as far as regions go? On boards with
+ * `buildRegions` (The Pirate Islands) only there, or on the player's own beachhead.
+ */
+export function inBuildRegion(s: BoardState, player: number, vertex: string): boolean {
+  if (!s.board.buildRegions) return true;
+  if (fortressOf(s, player)?.beachhead === vertex) return true;
+  const v = boardGraph(s.board).vertices[vertex];
+  return !!v && v.hexes.some((h) => buildableHex(s.board, h));
+}
+
+/** The Pirate Islands: the fortress (and beachhead, starting spot) of `player`. */
+export function fortressOf(s: BoardState, player: number): Fortress | undefined {
+  return s.board.fortresses?.find((f) => f.owner === player);
+}
+
+/**
+ * The Pirate Islands: a player's line of ships, from their printed coastal settlement
+ * towards the beachhead and the fortress (ship edges in order from the start), its end
+ * vertex, and whether it already passed the beachhead / reached the fortress.
+ */
+export function pirateRoute(
+  s: BoardState,
+  player: number,
+): { edges: string[]; end: string; beachhead: boolean; complete: boolean } | null {
+  const f = fortressOf(s, player);
+  if (!f) return null;
+  const G = boardGraph(s.board);
+  const ships = s.ships ?? {};
+  const edges: string[] = [];
+  let end = f.start;
+  let beachhead = end === f.beachhead;
+  for (;;) {
+    const next = G.vertices[end].edges.find((e) => ships[e] === player && !edges.includes(e));
+    if (!next) break;
+    edges.push(next);
+    const [a, b] = G.edges[next].vertices;
+    end = a === end ? b : a;
+    if (end === f.beachhead) beachhead = true;
+  }
+  return { edges, end, beachhead, complete: end === f.vertex };
+}
+
+/**
+ * The Pirate Islands: edges where `player`'s next ship may go — it extends the end of
+ * their line (no branching) one step along a shortest path to the beachhead, then on
+ * to the fortress. Paths avoid others' roads/ships and opponents' buildings.
+ */
+export function pirateRouteNext(s: BoardState, player: number): string[] {
+  const f = fortressOf(s, player);
+  const route = pirateRoute(s, player);
+  if (!f || !route || route.complete) return [];
+  const G = boardGraph(s.board);
+  const ships = s.ships ?? {};
+  const free = (e: string) =>
+    s.roads[e] === undefined && (ships[e] === undefined || ships[e] === player) && isShipEdge(s, e);
+  const target = route.beachhead ? f.vertex : f.beachhead;
+  const dist = new Map<string, number>([[target, 0]]);
+  const queue = [target];
+  while (queue.length) {
+    const v = queue.shift()!;
+    if (v !== target && s.buildings[v] && s.buildings[v].owner !== player) continue;
+    for (const e of G.vertices[v].edges) {
+      if (!free(e)) continue;
+      const [a, b] = G.edges[e].vertices;
+      const w = a === v ? b : a;
+      if (!dist.has(w)) {
+        dist.set(w, dist.get(v)! + 1);
+        queue.push(w);
+      }
+    }
+  }
+  const here = dist.get(route.end);
+  if (here === undefined) return [];
+  const pirate = pirateEdges(s);
+  return G.vertices[route.end].edges
+    .filter((e) => ships[e] === undefined && free(e) && !pirate.includes(e))
+    .filter((e) => {
+      const [a, b] = G.edges[e].vertices;
+      return dist.get(a === route.end ? b : a) === here - 1;
+    })
+    .sort();
+}
+
+/** The Pirate Islands: how many warships `player` has. */
+export function warshipCount(s: BoardState, player: number): number {
+  return (s.warships ?? []).filter((e) => s.ships?.[e] === player).length;
+}
+
+/** Cities of a player on the board. */
+export function cityCount(s: BoardState, player: number): number {
+  return Object.values(s.buildings).filter((b) => b.owner === player && b.type === 'city').length;
+}
+
+/**
+ * The Wonders of Catan: why `player` (with `vp` victory points) may not claim
+ * `wonder` now, or null when they may.
+ */
+export function wonderBlock(
+  s: BoardState & { players: Array<{ wonder?: { id: WonderId; level: number } | null }> },
+  player: number,
+  wonder: WonderId,
+  vp: number,
+): string | null {
+  const spots = s.board.wonderSpots;
+  if (!spots) return 'This game has no wonders';
+  if (s.players.some((p) => p.wonder?.id === wonder)) return 'That wonder is already claimed';
+  if (s.players[player].wonder) return 'You may only claim one wonder';
+  const G = boardGraph(s.board);
+  const mine = (v: string) => s.buildings[v]?.owner === player;
+  const cities = cityCount(s, player);
+  switch (wonder) {
+    case 'castle':
+      return cities >= 1 && vp >= 6 ? null : 'The Grand Castle needs a city and 6 victory points';
+    case 'monument': {
+      const portCity = s.board.harbors.some((h) =>
+        G.edges[h.edge].vertices.some((v) => mine(v) && s.buildings[v].type === 'city'),
+      );
+      return portCity && longestRoadLength(s, player) >= 5
+        ? null
+        : 'The Grand Monument needs a city at a port and a route of 5 roads or ships';
+    }
+    case 'bridge':
+      return spots.bridge.some(mine) ? null : 'The Great Bridge needs a building at a Great Bridge marker';
+    case 'theater':
+      return cities >= 2 ? null : 'The Grand Theater needs 2 cities';
+    case 'wall':
+      return spots.wall.some(mine) ? null : 'The Great Wall needs a building at a Great Wall marker';
+    default:
+      return 'Unknown wonder';
+  }
 }
 
 /** Ships need a sea hex on at least one side; outside the map (the frame) counts as sea. */
@@ -118,6 +258,8 @@ export function satisfiesDistanceRule(s: BoardState, vertex: string): boolean {
 
 /** Scenario limit on starting settlements: every land hex at the vertex is in an allowed region. */
 export function inStartRegion(s: BoardState, vertex: string): boolean {
+  const spots = s.board.wonderSpots;
+  if (spots && [...spots.wall, ...spots.bridge, ...spots.blocked].includes(vertex)) return false;
   const allowed = s.board.startRegions;
   if (!allowed) return true;
   const v = boardGraph(s.board).vertices[vertex];
@@ -142,7 +284,8 @@ export function legalSetupRoads(s: BoardState, settlementVertex: string): string
 export function legalSetupShips(s: BoardState, settlementVertex: string): string[] {
   const G = boardGraph(s.board);
   const v = G.vertices[settlementVertex];
-  if (!v) return [];
+  // The Pirate Islands: every ship belongs to the one line to the fortress.
+  if (!v || s.board.fortresses) return [];
   const pirate = pirateEdges(s);
   return v.edges.filter(
     (e) => s.roads[e] === undefined && s.ships?.[e] === undefined && isShipEdge(s, e) && !pirate.includes(e),
@@ -194,6 +337,7 @@ export function isShipConnected(s: BoardState, player: number, edge: string, ign
 
 /** Can `player` place a ship on `edge` (ignoring cost and piece count)? `ignore` = ship being moved. */
 export function canPlaceShip(s: BoardState, player: number, edge: string, ignore?: string): boolean {
+  if (s.board.fortresses) return ignore === undefined && pirateRouteNext(s, player).includes(edge);
   return (
     !!boardGraph(s.board).edges[edge] &&
     s.roads[edge] === undefined &&
@@ -205,6 +349,7 @@ export function canPlaceShip(s: BoardState, player: number, edge: string, ignore
 }
 
 export function legalShips(s: BoardState, player: number): string[] {
+  if (s.board.fortresses) return pirateRouteNext(s, player);
   const G = boardGraph(s.board);
   return G.edgeIds.filter((e) => canPlaceShip(s, player, e));
 }
@@ -296,6 +441,7 @@ export function shipLinksVillage(s: BoardState, player: number, edge: string): b
 /** Why `player` may not move the ship on `edge` (the once-per-turn limit aside), or null. */
 export function shipMoveBlock(s: BoardState & { newShips?: string[] }, player: number, edge: string): string | null {
   if (s.ships?.[edge] !== player) return 'That is not your ship';
+  if (s.board.fortresses) return 'Ships on the route to the pirate fortress cannot move';
   if (s.newShips?.includes(edge)) return 'A ship built this turn cannot move';
   if (pirateEdges(s).includes(edge)) return 'Ships next to the pirate cannot move';
   if (!shipHasOpenEnd(s, player, edge)) return 'Only a ship with an open end can move';
@@ -319,7 +465,10 @@ export function legalSettlements(s: BoardState, player: number): string[] {
   const G = boardGraph(s.board);
   const ships = s.ships ?? {};
   return G.vertexIds.filter(
-    (v) => satisfiesDistanceRule(s, v) && G.vertices[v].edges.some((e) => s.roads[e] === player || ships[e] === player),
+    (v) =>
+      satisfiesDistanceRule(s, v) &&
+      inBuildRegion(s, player, v) &&
+      G.vertices[v].edges.some((e) => s.roads[e] === player || ships[e] === player),
   );
 }
 

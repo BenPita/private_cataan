@@ -59,7 +59,7 @@ the Seafarers 5–6 maps and the paired-players turn (same as base 5–6).
 - **S2** Scenarios 2 and 4 (maps + home/unexplored island rules).
 - **S3** Scenario 3 Fog Islands (hidden stacks + discovery). DONE 2026-10-29.
 - **S4** Scenarios 5 and 6. DONE 2026-10-29.
-- **S5** Scenarios 7 and 8.
+- **S5** Scenarios 7 and 8. DONE 2026-10-29 (local; awaiting owner review + deploy).
 - **S6** New World (random generator) + "variable setup" options for 1–4/8.
 - **S7** Seafarers 5–6 maps for every scenario (+ wonders Lighthouse, Great Library).
 - Then the side task: stronger, more distinct bots (SPEC).

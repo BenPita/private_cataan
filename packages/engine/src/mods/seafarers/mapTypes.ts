@@ -41,15 +41,40 @@ export interface MapPort {
 export interface ScenarioMap {
   hexes: MapHex[];
   ports: MapPort[];
-  /** Starting hex of the robber (a land hex) and of the pirate (a sea hex), as [q, r]. */
-  robber: [number, number];
-  pirate: [number, number];
+  /**
+   * Starting hex of the robber (a land hex) and of the pirate (a sea hex), as [q, r].
+   * `robber: null` = no robber in this scenario; no `pirate` = no pirate.
+   */
+  robber: [number, number] | null;
+  pirate?: [number, number];
   /** Sea spaces printed on the frame; part of the board as sea hexes (ids after the listed hexes). */
   frameSea?: Array<[number, number]>;
   /** The Forgotten Tribe: items lying on side `dir` of hex (q, r). */
   edgeItems?: Array<{ q: number; r: number; dir: 0 | 1 | 2 | 3 | 4 | 5; item: 'vp' | 'dev' | 'port' }>;
   /** Cloth for Catan: a village at the top or bottom corner of hex (q, r), with its number disc. */
   villages?: Array<{ q: number; r: number; corner: 'top' | 'bottom'; n: number }>;
+  /**
+   * The Pirate Islands: the pirate fleet's path (sea hexes in sailing order) and one
+   * slot per colour — printed settlement + ship, beachhead and pirate fortress.
+   * `slots3` = the slots used with 2–3 participants.
+   */
+  pirateIslands?: { path: Array<[number, number]>; slots: PirateSlot[]; slots3: number[] };
+  /** The Wonders of Catan: Great Wall and Great Bridge markers, and the "X" markers. */
+  wonderSpots?: { wall: MapCorner[]; bridge: MapCorner[]; blocked: MapCorner[] };
+}
+
+/** Corner `c` of hex (q, r): 0 top, 1 north-east, 2 south-east, 3 bottom, 4 south-west, 5 north-west. */
+export interface MapCorner {
+  q: number;
+  r: number;
+  c: 0 | 1 | 2 | 3 | 4 | 5;
+}
+
+export interface PirateSlot {
+  start: MapCorner;
+  ship: { q: number; r: number; dir: 0 | 1 | 2 | 3 | 4 | 5 };
+  beachhead: MapCorner;
+  fortress: MapCorner;
 }
 
 /** Every hex of the board in id order: the listed hexes, then the frame-printed sea spaces. */

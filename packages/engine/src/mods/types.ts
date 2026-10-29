@@ -28,6 +28,14 @@ export interface ScenarioDef {
   noLongestRoute?: boolean;
   /** Cloth for Catan: tokens per village, the general supply, and empty villages that end the game. */
   cloth?: { perVillage: number; supply: number; endWhenEmpty: number };
+  /** Settlements and roads only in these regions (The Pirate Islands: the main island). */
+  buildRegions?: string[];
+  /** Development deck per map size, replacing the mod's (The Pirate Islands). */
+  devDeck?: { 3: Record<DevCardType, number>; 4: Record<DevCardType, number> };
+  /** No Largest Army in this scenario. */
+  noLargestArmy?: boolean;
+  /** The Wonders of Catan: wonder tiles; winning needs a finished wonder or the highest wonder level. */
+  wonders?: boolean;
 }
 
 export interface FogStack {

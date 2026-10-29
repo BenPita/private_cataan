@@ -350,6 +350,47 @@ The Forgotten Tribe (5) and Cloth for Catan (6), wired 2026-10-29 (`tribeClothMa
   Route. End: 14 VP on your turn, or at the end of a turn with 5+ empty villages → most VP, then most
   cloth, then lowest seat.
 
+The Pirate Islands (7) and The Wonders of Catan (8), wired 2026-10-29 (`pirateWonderMaps.ts`, one map for
+3 and 4 players each; local check only, not deployed). Pirate islands are regions `isle1-5`; Wonders has
+`main` (deserts included) + `isle1-2`.
+- Pirate Islands: `Board.pirateFleet` (14 sea hexes, sails clockwise), `Board.fortresses` (per seat: printed
+  settlement `start` + `startShip`, `beachhead`, fortress `vertex`, `lairs` 3), `Board.noRobber`,
+  `Board.buildRegions: ['main']`, `GameState.warships`. Slots red/blue/white/orange; 2–3 participants use
+  red, blue, orange (seat i → i-th slot). Deck: 3p 20 cards (no VP cards), 4p VP cards become Knights (19).
+  No Longest Route / Largest Army. Win: fortress captured and 10 VP on your turn.
+- Interpretations (Pirate Islands): the single line of ships starts at the printed ship; every ship (built,
+  Road Building) must extend its end one step along a shortest path (BFS over free sea edges, avoiding
+  opponents' buildings) to the beachhead, then to the fortress; no other ships ("other routes around the main
+  island" = roads); no setup ships; ships never move. Settlements only on the main island or the own
+  beachhead; roads only next to main-island land. The fortress settlement is one of the player's 5 pieces
+  (reserved until captured). Fleet: after every roll it sails the lower die along the path and attacks each
+  player with a building on a corner of that hex (before production / the 7); "1 card + 1 per city" counts all
+  of that player's cities; a won attack gives 1 resource of choice via GOLD_CHOICE (on a 7 the choice comes
+  first, then the discards — `goldReturnPhase: 'ROLLED_SEVEN'`). A 7: discards, then the roller picks any
+  player with cards (always ROBBER_STEAL, no robber, the pirate is never moved by hand). Knight = turn the
+  normal ship nearest the start into a warship (not counted as a knight played). End of turn (on `endTurn`)
+  with a line reaching the fortress: die vs warships in the line; win removes a lair (third captures it,
+  becomes the player's settlement); lose removes the 2 ships nearest the fortress, tie 1. All fortresses
+  captured → pirate removed. Log keys: pirateFleet, fleetRaid, fleetRepelled, fleetTie, warship,
+  fortressAttack, fortressHit, fortressCaptured, fortressRepelled, pirateGone.
+- Wonders: `Board.wonderSpots` (5 wall, 2 bridge, 4 "X"); starting settlements on `main`, never on those
+  spots; +1 VP first settlement on each small island; no pirate (`map.pirate` optional). Tiles (rulebook p. 1,
+  cost per level): Grand Castle brick+grain+3 ore (1 city & 6 VP), Grand Monument 3 grain+2 ore (city at a port
+  & route 5+ = longest route ≥ 5), Great Bridge 3 lumber+wool+grain (building at a bridge marker), Grand
+  Theater brick+lumber+3 wool (2 cities), Great Wall 3 brick+lumber+grain (building at a wall marker).
+  Actions `claimWonder {wonder}` (free, one per player, requirement checked when claiming) and `buildWonder`
+  (next level, 4 levels). Win on your turn: level 4, or 10+ VP and a strictly higher level (≥1) than everyone
+  else; 10 VP alone does not win. Log keys claimedWonder, builtWonder (param `w`).
+- Client: 2D/3D fortress (dark keep + lairs badge), beachhead ring, warships (2D gun ports + pennant, 3D ship
+  on its side), fleet course (dotted loop with arrows), wall/bridge/X markers, no robber; chips show 🛡
+  warships, 🏴 lairs, 🏛 wonder level; Build sheet lists the wonders (claim / build level, reason in Hebrew);
+  Knight text for the Pirate Islands; harbors are now drawn above the tiles and point away from the land hex
+  (fixes ports hidden under inner sea tiles in every Seafarers map).
+- Bots: sail the line, hold the ship that reaches the fortress until they have 3/4/5 warships (easy/medium/
+  hard), buy dev cards for Knights; claim a wonder as soon as one is open and build levels. Measured over 24
+  seeded bot games: every game ends (Pirate ~90–105 turns, fortress + 10 VP; Wonders ~60–85 turns, mostly a
+  finished Grand Theater/Castle), zero rejected actions.
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

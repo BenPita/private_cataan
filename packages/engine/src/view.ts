@@ -28,6 +28,8 @@ export interface PublicPlayer {
   heldPorts: PlayerState['heldPorts'] & object;
   cloth: number;
   villages: number[];
+  /** The Wonders of Catan: claimed wonder and level (public). */
+  wonder: PlayerState['wonder'] | null;
 }
 
 /**
@@ -85,6 +87,7 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
         heldPorts: p.heldPorts ?? [],
         cloth: p.cloth ?? 0,
         villages: p.villages ?? [],
+        wonder: p.wonder ?? null,
       };
     }),
     log: log.map((entry: LogEntry): LogItem => {

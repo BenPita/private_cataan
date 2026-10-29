@@ -2687,3 +2687,45 @@ h3,
 .steal-row .btn {
   flex: 1;
 }
+
+/* ---------- Seafarers: The Pirate Islands / The Wonders of Catan ---------- */
+.fortress-num {
+  text-anchor: middle;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 10px;
+  fill: #f2e2b8;
+}
+.wonder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.wonder-list h3 {
+  margin: 0;
+}
+.wonder-row {
+  background: #f4e7c4;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #e2cd97;
+}
+.wonder-row.mine {
+  border: 2px solid #c9952b;
+  background: #fff1cc;
+}
+.wonder-row .build-name {
+  flex-direction: column;
+  gap: 2px;
+}
+.wonder-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
