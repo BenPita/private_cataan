@@ -6,6 +6,8 @@
  */
 import { io } from 'socket.io-client';
 import {
+  chooseBotAction,
+  hasShips,
   modFor,
   RESOURCES,
   emptyRes,
@@ -17,6 +19,7 @@ import {
   legalSetupSettlements,
   tradeRates,
   type Action,
+  type BotMemory,
   type PlayerView,
 } from '@hex/engine';
 
@@ -29,7 +32,12 @@ interface Snap {
   game: PlayerView | null;
 }
 
+/** Bot memory kept across moves (e.g. trade offers already tried this turn). */
+const botMemory: BotMemory = {};
+
 function choose(v: PlayerView): Action | null {
+  // Seafarers (ships, pirate, gold choices): let the medium bot pick the move.
+  if (hasShips(modFor(v))) return chooseBotAction(v, 'medium', Math.random, botMemory);
   const me = v.me!;
   const costs = modFor(v).costs;
   const res = v.players[me].resources!;

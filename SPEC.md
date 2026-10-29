@@ -241,7 +241,7 @@ should also depend on `board.layout`.
 Roadmap and rules summary: `docs/superpowers/plans/2026-10-29-seafarers.md` (stages S1–S7).
 2 participants play the official 3-player map; 5–6 use the Seafarers 5–6 maps with paired turns.
 
-Stage S1 engine + server DONE 2026-10-29 (no client UI yet):
+Stage S1 engine + server DONE 2026-10-29:
 - Mod `seafarers` (`SEAFARERS_MOD`, 2–4 participants for now; 5–6 is stage S7). Ships cost
   lumber + wool, 15 per player (`pieceLimits.ships`, `costs.ship`; their presence = `hasShips(mod)`
   turns on ships, pirate and gold). Scenarios in `mod.scenarios` (`ScenarioDef`: victory target,
@@ -262,6 +262,25 @@ Stage S1 engine + server DONE 2026-10-29 (no client UI yet):
   pirateMoved, goldOwed, goldChosen, regionBonus. Server: `RoomConfig.scenario` validated
   ("Unknown scenario"), fixed after creation ("The scenario cannot be changed"); `chooseGold` is
   parallel-safe like discards; `migrate()` defaults the ship fields of Seafarers saves.
+
+Stage S1 client DONE 2026-10-29 (local check only, not deployed):
+- Mod screen: the Seafarers box is playable (2–4); a scenario list under the boxes shows every rulebook
+  scenario (playable = ids in `SEAFARERS_MOD.scenarios`, the rest greyed "coming soon") with a goal line
+  and "first to N points"; for Seafarers the target/board controls are replaced by the scenario's
+  target. `RoomConfig.scenario` is sent; the lobby shows "Scenario: <name>" and the scenario target.
+- Boards: `boardFrame()` returns `sea: null` for `sf-` layouts → no painted beach, plain open sea
+  (`OPEN_SEA` #2394b0, the painted sea's rim colour) under the map's own sea tiles (2D rect, 3D frame
+  plate hidden). Ships: 2D hull along the edge + upright sail; 3D one shared merged geometry (hull in
+  the player colour, shared sail material), dropping in like roads. Pirate: dark ship on
+  `board.pirateHex`, animated like the robber. Island bonus: a "+2" laurel coin under the player's
+  first building in each bonus region (the engine stores regions, not spots).
+- Play: build tray "Ship" and "Move ship" (pick a highlighted movable ship, then its target);
+  setup / Road Building edges are road ∪ ship; an edge that is both asks "Road or ship?" (two
+  buttons); robber phase highlights land (robber) and sea (pirate, dark/yellow ring) hexes; gold
+  choice sheet like the discard sheet, limited by the bank; ⛵ ship count on player chips; Knight and
+  Road Building card texts mention the pirate/ships. fx: ship clack + dust, pirate sound, gold cards
+  fly from the bank, small "+2 points: new island!" banner.
+- `server/scripts/autoplay.ts` drives Seafarers seats with the medium bot (keeps bot memory).
 
 Interpretations (Seafarers S1):
 - Pirate "to the frame": there is no separate frame spot — the player moves the pirate to any
