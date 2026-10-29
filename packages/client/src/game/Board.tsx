@@ -225,7 +225,7 @@ function BeachheadMark({ x, y, color, title }: { x: number; y: number; color: st
 }
 
 /** The Wonders of Catan: Great Wall, Great Bridge and "X" markers on intersections. */
-function WonderSpotMark({ x, y, kind, title }: { x: number; y: number; kind: 'wall' | 'bridge' | 'blocked'; title: string }) {
+function WonderSpotMark({ x, y, kind, title }: { x: number; y: number; kind: 'wall' | 'bridge' | 'blocked' | 'lighthouse'; title: string }) {
   return (
     <g transform={`translate(${x},${y})`} pointerEvents="none" className="wonder-spot">
       <title>{title}</title>
@@ -233,6 +233,12 @@ function WonderSpotMark({ x, y, kind, title }: { x: number; y: number; kind: 'wa
         <>
           <circle r={7.5} fill="#b3261a" stroke="#f2e2b8" strokeWidth="1.3" />
           <path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#f2e2b8" strokeWidth="2" strokeLinecap="round" />
+        </>
+      ) : kind === 'lighthouse' ? (
+        <>
+          <rect x={-9} y={-10} width={18} height={20} rx={2} fill="#1f3550" stroke="#0d1a2a" strokeWidth="1.3" />
+          <path d="M-3,7 L-2,-4 L2,-4 L3,7 Z" fill="#f2e2b8" />
+          <circle cx={0} cy={-6} r={2.6} fill="#ffd25a" />
         </>
       ) : kind === 'wall' ? (
         <>
@@ -577,10 +583,10 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
 
       {/* The Wonders of Catan: marker spots */}
       {view.board.wonderSpots &&
-        (['wall', 'bridge', 'blocked'] as const).flatMap((kind) =>
-          view.board.wonderSpots![kind].map((vertex) => {
+        (['wall', 'bridge', 'lighthouse', 'blocked'] as const).flatMap((kind) =>
+          (view.board.wonderSpots![kind] ?? []).map((vertex) => {
             const v = G.vertices[vertex];
-            const title = t(kind === 'wall' ? 'wallTitle' : kind === 'bridge' ? 'bridgeTitle' : 'blockedTitle');
+            const title = t(kind === 'wall' ? 'wallTitle' : kind === 'bridge' ? 'bridgeTitle' : kind === 'lighthouse' ? 'lighthouseTitle' : 'blockedTitle');
             return <WonderSpotMark key={`ws-${vertex}`} x={v.x * S} y={v.y * S + (view.buildings[vertex] ? 16 : 0)} kind={kind} title={title} />;
           }),
         )}

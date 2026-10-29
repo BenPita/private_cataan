@@ -313,6 +313,12 @@ const en = {
   wonder_theater_req: '2 cities',
   wonder_wall: 'Great Wall',
   wonder_wall_req: 'A building at a Great Wall marker',
+  wonder_lighthouse: 'Lighthouse',
+  wonder_lighthouse_req: 'A building at a lighthouse marker',
+  wonder_library: 'Great Library',
+  wonder_library_req: '2 cities',
+  lighthouseTitle: 'Lighthouse marker',
+  scenario_sixIslands: 'The Six Islands',
   wallTitle: 'Great Wall marker',
   bridgeTitle: 'Great Bridge marker',
   blockedTitle: 'No starting settlement here',
@@ -611,6 +617,12 @@ const he: Dict = {
   wonder_theater_req: '2 ערים',
   wonder_wall: 'החומה הגדולה',
   wonder_wall_req: 'מבנה על סימן של החומה הגדולה',
+  wonder_lighthouse: 'המגדלור',
+  wonder_lighthouse_req: 'מבנה על סימן של המגדלור',
+  wonder_library: 'הספרייה הגדולה',
+  wonder_library_req: '2 ערים',
+  lighthouseTitle: 'סימן המגדלור',
+  scenario_sixIslands: 'ששת האיים',
   wallTitle: 'סימן החומה הגדולה',
   bridgeTitle: 'סימן הגשר הגדול',
   blockedTitle: 'אסור להניח כאן יישוב פתיחה',
@@ -737,14 +749,14 @@ const BOT_NAMES: Record<Lang, string[]> = {
   ],
 };
 
-/** Three distinct random bot names (`Bot#<pool index>`) to show before a room exists. */
+/** Five distinct random bot names (`Bot#<pool index>`, up to 5 bots) to show before a room exists. */
 export function randomBotNames(): string[] {
   const pool = BOT_NAMES.he.map((_, i) => `Bot#${i}`);
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return pool.slice(0, 3);
+  return pool.slice(0, 5);
 }
 
 /** Display name for a seat: bots get a translated, numbered name. */
@@ -981,6 +993,8 @@ const ERRORS_HE: Record<string, string> = {
   'Unknown wonder': 'פלא לא ידוע',
   'Claim a wonder first': 'קודם צריך לקחת פלא',
   'Your wonder is finished': 'הפלא שלך כבר הושלם',
+  'The Lighthouse needs a building at a lighthouse marker': 'המגדלור דורש מבנה על סימן של המגדלור',
+  'The Great Library needs 2 cities': 'הספרייה הגדולה דורשת 2 ערים',
 };
 
 export function errorText(msg: string): string {

@@ -1,4 +1,5 @@
 import type { HarborType, Terrain } from '../../types';
+import type { VariableSpec } from '../types';
 
 /**
  * A Seafarers scenario map as printed in the rulebook, in pointy-top axial
@@ -50,7 +51,7 @@ export interface ScenarioMap {
   /** Sea spaces printed on the frame; part of the board as sea hexes (ids after the listed hexes). */
   frameSea?: Array<[number, number]>;
   /** The Forgotten Tribe: items lying on side `dir` of hex (q, r). */
-  edgeItems?: Array<{ q: number; r: number; dir: 0 | 1 | 2 | 3 | 4 | 5; item: 'vp' | 'dev' | 'port' }>;
+  edgeItems?: Array<{ q: number; r: number; dir: 0 | 1 | 2 | 3 | 4 | 5; item: 'vp' | 'dev' | 'port'; port?: HarborType }>;
   /** Cloth for Catan: a village at the top or bottom corner of hex (q, r), with its number disc. */
   villages?: Array<{ q: number; r: number; corner: 'top' | 'bottom'; n: number }>;
   /**
@@ -58,9 +59,20 @@ export interface ScenarioMap {
    * slot per colour — printed settlement + ship, beachhead and pirate fortress.
    * `slots3` = the slots used with 2–3 participants.
    */
-  pirateIslands?: { path: Array<[number, number]>; slots: PirateSlot[]; slots3: number[] };
+  pirateIslands?: {
+    path: Array<[number, number]>;
+    slots: PirateSlot[];
+    /** Slots used with fewer players than slots (2–3 on the 4-slot map, 5 on the 6-slot map). */
+    slots3: number[];
+    /** A path hex where the fleet does not attack (the "!" hex of the 5–6 map). */
+    safe?: [number, number];
+  };
   /** The Wonders of Catan: Great Wall and Great Bridge markers, and the "X" markers. */
-  wonderSpots?: { wall: MapCorner[]; bridge: MapCorner[]; blocked: MapCorner[] };
+  wonderSpots?: { wall: MapCorner[]; bridge: MapCorner[]; blocked: MapCorner[]; lighthouse?: MapCorner[] };
+  /** Port types are shuffled over the port spots ("?" ports) on this map. */
+  shufflePorts?: boolean;
+  /** Areas dealt at random in every game (New Shores 5–6: the main island). */
+  deal?: VariableSpec;
 }
 
 /** Corner `c` of hex (q, r): 0 top, 1 north-east, 2 south-east, 3 bottom, 4 south-west, 5 north-west. */

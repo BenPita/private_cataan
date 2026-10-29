@@ -410,6 +410,29 @@ New World (9) and the variable setup option, wired 2026-10-29 (`mods/seafarers/r
   redealt, no red next to a desert, robber on its printed desert. Pirate Islands, Forgotten Tribe and Cloth for
   Catan ignore the option (Pirate Islands: "not recommended"; the other two are not in this stage).
 
+Seafarers 5–6 players, wired 2026-10-29 (rulebook CN3084; `mods/seafarers/maps56.ts`; local check only):
+- `SEAFARERS_MOD.large` = CATAN 5–6 bank (24), deck (34), 6 colours, paired players, plus ships; it shares the
+  scenario list. `scenarioMapSize` → 3 | 4 | 6; every scenario has `maps[6]` (layouts `sf-<id>-6p`). Frames:
+  56 spaces (rows 7-8-9-8-9-8-7) or 63 (8-9-10-9-10-9-8). Maps written as token rows; islands named
+  automatically (connected land), checked against each page's component table in seafarers-maps.test.ts.
+- Per scenario: New Shores — the 30-hex main island is dealt in every game like a CATAN 5–6 board
+  (`ScenarioMap.deal`, no red neighbours, robber on a desert), ports "?" shuffled; The Six Islands (= The
+  Four Islands) — robber on the pasture 12; Fog Islands — 18 face-down hexes / 14 discs, ports printed (two
+  wool 2:1); Through the Desert — two strips above the desert row (`strip`, `strip2`, both bonus regions),
+  robber on the middle desert (rulebook: "any desert"); Forgotten Tribe — 10 VP, 6 cards, 8 ports with printed
+  types (`edgeItems[].port`), robber on a desert; Cloth for Catan — 12 villages on 6 small islands (70 cloth:
+  60 + 10 supply; the game still ends at 5 empty villages, rulebook adds nothing); Pirate Islands — 6 slots
+  (red, blue, white, orange, green, purple; 5 players leave out purple), deck = CATAN 5–6 deck with the VP
+  cards as Knights (25), the fleet skips its attack on the "!" hex (`board.pirateSafe`); Wonders — 7 tiles:
+  + Lighthouse (3 lumber, wool, grain; building at a lighthouse marker) and Great Library (brick, lumber,
+  3 wool; 2 cities), 2 lighthouse markers with 4 more "X" spots (`availableWonders(board)`); New World — 63
+  hexes (21 sea, 4 gold, 7 each of the 5 land types, 3 deserts), 39 discs (no red on gold), 11 ports.
+- The variable setup option applies to the 3–4 player maps only (the 5–6 book has none); the mod screen hides
+  it for 5–6 participants. The scenario list shows "ששת האיים / The Six Islands" for 5–6 participants.
+- Home screen now pre-draws 5 bot names (was 3: bots 4–5 showed "Bot 4/5").
+- Tests: every scenario starts with 5 and 6 players; 6-bot games finish in all 9 scenarios (+ Pirate Islands
+  with 5).
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

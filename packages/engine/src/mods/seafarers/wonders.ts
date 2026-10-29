@@ -16,6 +16,10 @@ export const WONDERS: Record<WonderId, { cost: Partial<ResMap> }> = {
   theater: { cost: { brick: 1, lumber: 1, wool: 3 } },
   // a building at a Great Wall marker
   wall: { cost: { brick: 3, lumber: 1, grain: 1 } },
+  // Seafarers 5-6: a building at a lighthouse marker
+  lighthouse: { cost: { lumber: 3, wool: 1, grain: 1 } },
+  // Seafarers 5-6: 2 cities
+  library: { cost: { brick: 1, lumber: 1, wool: 3 } },
 };
 
 export const WONDER_IDS = Object.keys(WONDERS) as WonderId[];

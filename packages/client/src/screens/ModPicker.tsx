@@ -46,7 +46,9 @@ const SCENARIOS = [
 ];
 
 /** Display name of a Seafarers scenario. */
-export const scenarioName = (id: string) => t(`scenario_${id}` as Key);
+export const scenarioName = (id: string, participants = 0) =>
+  // The Four Islands is "The Six Islands" on the 5–6 player map.
+  t((participants > 4 && id === 'fourIslands' ? 'scenario_sixIslands' : `scenario_${id}`) as Key);
 
 /** Victory target of a room: the scenario's, if the mod has scenarios. */
 export function roomTarget(config: Pick<RoomConfig, 'mod' | 'scenario' | 'victoryTarget'>): number {
@@ -55,7 +57,7 @@ export function roomTarget(config: Pick<RoomConfig, 'mod' | 'scenario' | 'victor
   return scenario?.victoryTarget ?? config.victoryTarget;
 }
 
-function ScenarioPicker({ value, onPick }: { value: string; onPick: (id: string) => void }) {
+function ScenarioPicker({ value, onPick, participants }: { value: string; onPick: (id: string) => void; participants: number }) {
   const playable = SEAFARERS_MOD.scenarios ?? {};
   return (
     <div className="scenario-list" role="radiogroup" aria-label={t('scenarioTitle')}>
@@ -72,7 +74,7 @@ function ScenarioPicker({ value, onPick }: { value: string; onPick: (id: string)
             onClick={() => onPick(id)}
           >
             <span className="mod-text">
-              <b>{scenarioName(id)}</b>
+              <b>{scenarioName(id, participants)}</b>
               {def && <small>{t(`scenario_${id}_goal` as Key)}</small>}
               {def && <span className="mod-meta">{t('scenarioTarget', { n: def.victoryTarget })}</span>}
             </span>
@@ -220,7 +222,7 @@ export function ModPicker({
         {selectedDef.scenarios && (
           <>
             <p className="mod-settings-title">{t('scenarioTitle')}</p>
-            <ScenarioPicker value={config.scenario ?? selectedDef.defaultScenario ?? ''} onPick={(scenario) => update({ scenario })} />
+            <ScenarioPicker value={config.scenario ?? selectedDef.defaultScenario ?? ''} onPick={(scenario) => update({ scenario })} participants={participants} />
           </>
         )}
 
@@ -255,7 +257,7 @@ export function ModPicker({
             </div>
           </>
         )}
-        {selectedDef.scenarios?.[config.scenario ?? selectedDef.defaultScenario ?? '']?.variable && (
+        {participants <= 4 && selectedDef.scenarios?.[config.scenario ?? selectedDef.defaultScenario ?? '']?.variable && (
           <label className="check house-rule">
             <input type="checkbox" checked={!!config.variableSetup} onChange={(e) => update({ variableSetup: e.target.checked })} />
             <span>

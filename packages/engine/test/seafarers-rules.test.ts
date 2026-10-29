@@ -46,21 +46,22 @@ const placeShipDirect = (s: GameState, player: number, edge: string) => {
 const goldTop = (s: GameState) => boardGraph(s.board).hexes[hexAt(s, 2, 0)].vertices[0];
 
 describe('seafarers: mod, scenarios and boards', () => {
-  it('is registered with ships, 2–4 players and the newShores default scenario', () => {
+  it('is registered with ships, 2–6 players (5–6 with the large rules) and the newShores default scenario', () => {
     expect(SEAFARERS_MOD.pieceLimits.ships).toBe(15);
     expect(SEAFARERS_MOD.costs.ship).toEqual({ lumber: 1, wool: 1 });
-    expect(modPlayerRange(SEAFARERS_MOD)).toEqual({ min: 2, max: 4 });
+    expect(modPlayerRange(SEAFARERS_MOD)).toEqual({ min: 2, max: 6 });
     expect(SEAFARERS_MOD.defaultScenario).toBe('newShores');
     expect(Object.keys(SEAFARERS_MOD.scenarios!)).toContain('newShores');
   });
 
   const people = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `P${i}`, kind: 'human' as const }));
 
-  it('picks the 3-player map for 2–3 participants and the 4-player map for 4', () => {
+  it('picks the 3-player map for 2–3 participants, the 4-player map for 4, the 5–6 map for 5–6', () => {
     expect(createGame(people(2), 1, { mod: 'seafarers' }).board.layout).toBe('sf-newShores-3p');
     expect(createGame(people(3), 1, { mod: 'seafarers' }).board.layout).toBe('sf-newShores-3p');
     expect(createGame(people(4), 1, { mod: 'seafarers', scenario: 'newShores' }).board.layout).toBe('sf-newShores-4p');
-    expect(() => createGame(people(5), 1, { mod: 'seafarers' })).toThrow(/2-4/);
+    expect(createGame(people(5), 1, { mod: 'seafarers' }).board.layout).toBe('sf-newShores-6p');
+    expect(() => createGame(people(7), 1, { mod: 'seafarers' })).toThrow(/2-6/);
   });
 
   it('the scenario sets the victory target and is recorded in the config', () => {

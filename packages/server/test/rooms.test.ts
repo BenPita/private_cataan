@@ -251,7 +251,8 @@ describe('seafarers rooms', () => {
     expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers', scenario: 'nope' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
     expect(validateConfig({ humans: 1, bots: 2, mod: 'seafarers', scenario: 'toString' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
     expect(validateConfig({ humans: 1, bots: 2, scenario: 'newShores' })).toMatchObject({ ok: false, error: 'Unknown scenario' });
-    expect(validateConfig({ humans: 2, bots: 3, mod: 'seafarers' })).toMatchObject({ ok: false, error: 'A game needs 2-4 participants' });
+    expect(validateConfig({ humans: 2, bots: 3, mod: 'seafarers' }).ok).toBe(true);
+    expect(validateConfig({ humans: 2, bots: 5, mod: 'seafarers' })).toMatchObject({ ok: false, error: 'A game needs 2-6 participants' });
     expect('scenario' in (validateConfig({ humans: 2, bots: 0 }) as { config: object }).config).toBe(false);
   });
 

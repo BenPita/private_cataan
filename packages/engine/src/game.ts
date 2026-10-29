@@ -198,7 +198,8 @@ export function createGame(
  */
 function setUpScenarioExtras(state: GameState, scenario: ScenarioDef, rng: Rng): void {
   const board = state.board;
-  if (scenario.shufflePorts) {
+  const map = scenario.maps[scenarioMapSize(state.players.length)];
+  if (scenario.shufflePorts || map?.shufflePorts) {
     const types = rng.shuffle(board.harbors.map((h) => h.type));
     board.harbors = board.harbors.map((h, i) => ({ ...h, type: types[i] }));
   }
@@ -209,7 +210,9 @@ function setUpScenarioExtras(state: GameState, scenario: ScenarioDef, rng: Rng):
     state.edgeDevs = {};
     for (const e of edges) {
       const item = board.edgeItems[e];
-      if (item.kind === 'port') board.edgeItems[e] = { kind: 'port', type: ports[p++] ?? 'generic' };
+      // Printed port types (the 5–6 map) stay; "?" items get the shuffled types.
+      const printed = map?.edgeItems?.some((it) => it.port);
+      if (item.kind === 'port' && !printed) board.edgeItems[e] = { kind: 'port', type: ports[p++] ?? 'generic' };
       else if (item.kind === 'dev' && state.devDeck.length > 0) state.edgeDevs[e] = state.devDeck.shift()!;
     }
   }
@@ -267,6 +270,8 @@ function sailPirateFleet(state: GameState, rng: Rng, steps: number): Record<numb
   const hex = path[(path.indexOf(at) + steps) % path.length];
   state.board.pirateHex = hex;
   say(state, 'pirateFleet', { n: steps });
+  // The 5–6 map's "!" hex: no attack there.
+  if (hex === state.board.pirateSafe) return rewards;
   const G = boardGraph(state.board);
   const attacked = [...new Set(G.hexes[hex].vertices.map((v) => state.buildings[v]?.owner).filter((o) => o !== undefined))];
   for (const p of attacked.sort((a, b) => a - b)) {

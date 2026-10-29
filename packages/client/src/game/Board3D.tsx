@@ -239,7 +239,7 @@ function itemTexture(kind: 'vp' | 'dev'): THREE.CanvasTexture {
  * Round markers drawn on a canvas: a pirate fortress (dark disc, owner's ring, lairs
  * left), a beachhead (owner's ring), and the Wonders of Catan spots (wall, bridge, "X").
  */
-function markTexture(kind: 'fortress' | 'beachhead' | 'wall' | 'bridge' | 'blocked', color = '#000', n = 0): THREE.CanvasTexture {
+function markTexture(kind: 'fortress' | 'beachhead' | 'wall' | 'bridge' | 'lighthouse' | 'blocked', color = '#000', n = 0): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d')!;
@@ -266,6 +266,26 @@ function markTexture(kind: 'fortress' | 'beachhead' | 'wall' | 'bridge' | 'block
     g.strokeStyle = color;
     g.lineWidth = 15;
     g.stroke();
+  } else if (kind === 'lighthouse') {
+    g.fillStyle = '#1f3550';
+    g.strokeStyle = '#0d1a2a';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.roundRect(26, 16, 76, 96, 8);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#f2e2b8';
+    g.beginPath();
+    g.moveTo(52, 100);
+    g.lineTo(56, 52);
+    g.lineTo(72, 52);
+    g.lineTo(76, 100);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#ffd25a';
+    g.beginPath();
+    g.arc(64, 42, 11, 0, Math.PI * 2);
+    g.fill();
   } else if (kind === 'blocked') {
     g.fillStyle = '#b3261a';
     g.strokeStyle = '#f2e2b8';
@@ -974,8 +994,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     // The Wonders of Catan: Great Wall, Great Bridge and "X" spots.
     const spots = view.board.wonderSpots;
     if (spots) {
-      for (const kind of ['wall', 'bridge', 'blocked'] as const) {
-        for (const vertex of spots[kind]) {
+      for (const kind of ['wall', 'bridge', 'lighthouse', 'blocked'] as const) {
+        for (const vertex of spots[kind] ?? []) {
           const v = G.vertices[vertex];
           const mark = new THREE.Sprite(itemMat(`spot:${kind}`, () => markTexture(kind)));
           mark.scale.set(0.3, 0.3, 1);

@@ -198,7 +198,7 @@ function Lobby({ snapshot }: { snapshot: RoomSnapshot }) {
           🗺️ {t('modLobbyTag', { name: modName(snapshot.config.mod) })}
           {snapshot.config.humans + snapshot.config.bots > 4 && <span className="tag">{t('mod56Tag')}</span>}
         </p>
-        {snapshot.config.scenario && <p className="mod-tag">⛵ {t('scenarioLobbyTag', { name: scenarioName(snapshot.config.scenario) })}</p>}
+        {snapshot.config.scenario && <p className="mod-tag">⛵ {t('scenarioLobbyTag', { name: scenarioName(snapshot.config.scenario, snapshot.config.humans + snapshot.config.bots) })}</p>}
         {snapshot.config.variableSetup && <p className="house-rule-tag">🎲 {t('variableSetupOn')}</p>}
         {snapshot.config.startResBoth && <p className="house-rule-tag">🏠 {t('houseStartResOn')}</p>}
         {snapshot.config.devSameTurn && <p className="house-rule-tag">🏠 {t('houseDevNowOn')}</p>}

@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   RESOURCES,
   WONDERS,
-  WONDER_IDS,
   WONDER_LEVELS,
+  availableWonders,
   fortressOf,
   warshipCount,
   wonderBlock,
@@ -299,7 +299,7 @@ function WonderList({ view, canAct, dispatch }: { view: PlayerView; canAct: bool
     <div className="wonder-list">
       <h3>{t('wonders')}</h3>
       <p className="hint-text">{t('wonderInfo')}</p>
-      {WONDER_IDS.map((id) => {
+      {availableWonders(view.board).map((id) => {
         const owner = view.players.findIndex((p) => p.wonder?.id === id);
         const level = owner >= 0 ? view.players[owner].wonder!.level : 0;
         const block = wonderBlock(view, me, id, mine.victoryPoints);

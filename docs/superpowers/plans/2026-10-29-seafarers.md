@@ -61,7 +61,7 @@ the Seafarers 5–6 maps and the paired-players turn (same as base 5–6).
 - **S4** Scenarios 5 and 6. DONE 2026-10-29.
 - **S5** Scenarios 7 and 8. DONE 2026-10-29 (local; awaiting owner review + deploy).
 - **S6** New World (random generator) + "variable setup" options for 1–4/8. DONE 2026-10-29 (local).
-- **S7** Seafarers 5–6 maps for every scenario (+ wonders Lighthouse, Great Library).
+- **S7** Seafarers 5–6 maps for every scenario (+ wonders Lighthouse, Great Library). DONE 2026-10-29 (local).
 - Then the side task: stronger, more distinct bots (SPEC).
 
 Bots must play every scenario (build/move ships, choose gold, pick robber vs pirate); each stage

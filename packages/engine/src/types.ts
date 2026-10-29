@@ -80,7 +80,9 @@ export interface Board {
   /** The Pirate Islands: one pirate fortress per player. */
   fortresses?: Fortress[];
   /** The Wonders of Catan: Great Wall / Great Bridge marker spots and "X" spots (no starting settlement). */
-  wonderSpots?: { wall: string[]; bridge: string[]; blocked: string[] };
+  wonderSpots?: { wall: string[]; bridge: string[]; blocked: string[]; lighthouse?: string[] };
+  /** The Pirate Islands 5–6: path hex (the "!") where the fleet does not attack. */
+  pirateSafe?: number;
 }
 
 /**
@@ -97,7 +99,7 @@ export interface Fortress {
 }
 
 /** The Wonders of Catan: the five wonder tiles. */
-export type WonderId = 'castle' | 'monument' | 'bridge' | 'theater' | 'wall';
+export type WonderId = 'castle' | 'monument' | 'bridge' | 'theater' | 'wall' | 'lighthouse' | 'library';
 
 export type EdgeItem = { kind: 'vp' } | { kind: 'dev' } | { kind: 'port'; type: HarborType };
 

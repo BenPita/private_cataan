@@ -1,7 +1,7 @@
 import { graphFor } from '../../geometry';
 import type { Rng } from '../../rng';
 import type { Board, HarborType, HexTile, LayoutId, Terrain } from '../../types';
-import type { ScenarioDef } from '../types';
+import type { NewWorldDeal, ScenarioDef, VariableSpec } from '../types';
 import type { MapHex, ScenarioMap } from './mapTypes';
 
 /*
@@ -31,12 +31,7 @@ export const NEW_WORLD_FRAME: ScenarioMap = {
 };
 
 /** What New World deals (p. 20 component table). */
-export interface NewWorldSpec {
-  hexes: Partial<Record<Terrain, number>>;
-  numbers: number[];
-  /** Port types; each is placed on a random coastal edge, one edge apart from the others. */
-  ports: HarborType[];
-}
+export type NewWorldSpec = NewWorldDeal;
 
 /** Islands = connected land hexes, named isle1.. in hex-id order (top to bottom, left to right). */
 function nameIslands(hexes: HexTile[], layout: LayoutId): void {
@@ -94,7 +89,8 @@ export function newWorldBoard(layout: LayoutId, spec: NewWorldSpec, rng: Rng): B
   for (let attempt = 0; attempt < 1000; attempt++) {
     const dealt = rng.shuffle(terrains);
     const hexes: HexTile[] = dealt.map((terrain, id) => ({ id, terrain, number: null }));
-    if (!dealNumbers(hexes, hexes.filter((h) => isLand(h.terrain) && h.terrain !== 'desert'), spec.numbers, rng, layout, { noAdjacentRed: true })) continue;
+    const rules = { noAdjacentRed: true, noRedOnGold: spec.noRedOnGold };
+    if (!dealNumbers(hexes, hexes.filter((h) => isLand(h.terrain) && h.terrain !== 'desert'), spec.numbers, rng, layout, rules)) continue;
     nameIslands(hexes, layout);
     const harbors = placePorts(hexes, layout, rng.shuffle(spec.ports), rng);
     if (!harbors) continue;
@@ -103,12 +99,12 @@ export function newWorldBoard(layout: LayoutId, spec: NewWorldSpec, rng: Rng): B
   throw new Error('Could not deal a New World');
 }
 
-type NumberRules = NonNullable<ScenarioDef['variable']> | { noAdjacentRed?: boolean };
+type NumberRules = VariableSpec | { noAdjacentRed?: boolean; noRedOnGold?: boolean };
 
 /** Deals `numbers` onto `targets` until the number rules hold (up to 200 tries); false if never. */
 function dealNumbers(hexes: HexTile[], targets: HexTile[], numbers: number[], rng: Rng, layout: LayoutId, rules: NumberRules): boolean {
   const G = graphFor(layout);
-  const r = rules as NonNullable<ScenarioDef['variable']>;
+  const r = rules as VariableSpec;
   for (let i = 0; i < 200; i++) {
     const dealt = rng.shuffle(numbers);
     targets.forEach((h, k) => (h.number = dealt[k]));
@@ -131,8 +127,11 @@ function dealNumbers(hexes: HexTile[], targets: HexTile[], numbers: number[], rn
  * that scenario says. Sea, regions and spots stay as printed.
  */
 export function applyVariableSetup(board: Board, def: ScenarioDef, participants: number, rng: Rng): void {
-  const v = def.variable;
-  if (!v) return;
+  if (def.variable) dealArea(board, def.variable, participants, rng);
+}
+
+/** Redeals the land of `v.groups` (see applyVariableSetup); also used for areas dealt in every game. */
+export function dealArea(board: Board, v: VariableSpec, participants: number, rng: Rng): void {
   const layout = board.layout!;
   const fixed = new Set(v.fixed ?? []);
   const named = new Set(v.groups.flat().filter((g) => g !== '*'));

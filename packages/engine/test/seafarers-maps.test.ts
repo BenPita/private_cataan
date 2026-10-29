@@ -10,6 +10,16 @@ import {
 import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from '../src/mods/seafarers/fogMaps';
 import { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from '../src/mods/seafarers/tribeClothMaps';
 import { PIRATE_ISLANDS, WONDERS_OF_CATAN } from '../src/mods/seafarers/pirateWonderMaps';
+import {
+  CLOTH_FOR_CATAN_56,
+  FOG_ISLANDS_56,
+  FORGOTTEN_TRIBE_56,
+  NEW_SHORES_56,
+  PIRATE_ISLANDS_56,
+  SIX_ISLANDS_56,
+  THROUGH_DESERT_56,
+  WONDERS_OF_CATAN_56,
+} from '../src/mods/seafarers/maps56';
 import { MAP_DIRS, type MapHex, type ScenarioMap } from '../src/mods/seafarers/mapTypes';
 
 /** Component tables printed next to each map (rulebook pp. 4-7, 10-11). */
@@ -22,6 +32,8 @@ interface Table {
   unnumbered?: boolean;
   /** The ports lie on sea edges as items (The Forgotten Tribe), not on the map's coast. */
   itemPorts?: boolean;
+  /** Seafarers 5–6 adds a second 2:1 wool port. */
+  extraWool?: boolean;
 }
 
 const TABLE_3P: Table = {
@@ -127,7 +139,7 @@ interface RegionSpec {
    * A pair of regions allowed to touch, and only through hexes of this terrain
    * (Through the Desert: the deserts, counted as 'main', border the 'strip').
    */
-  touchVia?: { a: string; b: string; terrain: string };
+  touchVia?: { a: string; b: string; terrain: string } | Array<{ a: string; b: string; terrain: string }>;
 }
 
 const key = (q: number, r: number) => `${q},${r}`;
@@ -205,9 +217,9 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
       const generic = map.ports.filter((p) => p.type === 'generic').length;
       expect(generic).toBe(table.ports3to1);
       expect(map.ports.length - generic).toBe(table.ports2to1);
-      // the 2:1 ports are one of each resource
+      // the 2:1 ports are one of each resource (5–6: and a second wool port)
       expect(map.ports.filter((p) => p.type !== 'generic').map((p) => p.type).sort()).toEqual(
-        ['brick', 'grain', 'lumber', 'ore', 'wool'],
+        table.extraWool ? ['brick', 'grain', 'lumber', 'ore', 'wool', 'wool'] : ['brick', 'grain', 'lumber', 'ore', 'wool'],
       );
     });
 
@@ -281,14 +293,14 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
         expect(seen.size, `region ${id} connected`).toBe(hs.length);
         // distinct regions never touch (otherwise they would be one island),
         // except the declared pair, and then only through the declared terrain
-        const tv = spec.touchVia;
+        const tvs = spec.touchVia ? [spec.touchVia].flat() : [];
         for (const h of hs)
           for (const [dq, dr] of MAP_DIRS) {
             const n = byKey.get(key(h.q + dq, h.r + dr));
             if (!isLand(n) || n!.region === id) continue;
-            const pair = new Set(tv ? [tv.a, tv.b] : []);
-            const allowed =
-              !!tv && pair.has(id) && pair.has(n!.region!) && (h.t === tv.terrain || n!.t === tv.terrain);
+            const allowed = tvs.some(
+              (tv) => [tv.a, tv.b].includes(id) && [tv.a, tv.b].includes(n!.region!) && (h.t === tv.terrain || n!.t === tv.terrain),
+            );
             expect(allowed, `${id} ${h.q},${h.r} touches ${n!.region} ${n!.q},${n!.r}`).toBe(true);
           }
       }
@@ -321,6 +333,123 @@ check('The Fog Islands, 4 players', FOG_ISLANDS_4P, TABLE_FOG_4P, { named: ['eas
 check('The Forgotten Tribe', FORGOTTEN_TRIBE, TABLE_TRIBE, { named: ['main'], isles: 6 });
 check('Cloth for Catan', CLOTH_FOR_CATAN, TABLE_CLOTH, { named: ['north', 'south'], isles: 4 });
 check('The Pirate Islands', PIRATE_ISLANDS, TABLE_PIRATE, { named: ['main'], isles: 5 });
+
+// Seafarers 5–6 (CN3084 pp. 4–12)
+const ALL_DISCS_56 = { 2: 3, 3: 4, 4: 4, 5: 4, 6: 4, 8: 4, 9: 4, 10: 4, 11: 4, 12: 3 };
+check(
+  'Heading for New Shores, 5–6 players',
+  NEW_SHORES_56,
+  { terrain: { sea: 16, gold: 3, hills: 7, forest: 7, pasture: 7, fields: 7, mountains: 7, desert: 2 }, discs: ALL_DISCS_56, ports2to1: 6, ports3to1: 5, extraWool: true },
+  { named: ['main'], isles: 6 },
+);
+check(
+  'The Six Islands, 5–6 players',
+  SIX_ISLANDS_56,
+  {
+    terrain: { sea: 24, gold: 0, hills: 6, forest: 7, pasture: 7, fields: 6, mountains: 6, desert: 0 },
+    discs: { 2: 2, 3: 3, 4: 4, 5: 4, 6: 4, 8: 3, 9: 4, 10: 4, 11: 2, 12: 2 },
+    ports2to1: 6,
+    ports3to1: 5,
+    extraWool: true,
+  },
+  { named: [], isles: 6 },
+);
+check(
+  'The Fog Islands, 5–6 players',
+  FOG_ISLANDS_56,
+  {
+    terrain: { sea: 14, gold: 0, hills: 5, forest: 5, pasture: 5, fields: 5, mountains: 4, desert: 0, fog: 18 },
+    discs: { 2: 1, 3: 2, 4: 3, 5: 2, 6: 3, 8: 3, 9: 3, 10: 3, 11: 2, 12: 2 },
+    ports2to1: 6,
+    ports3to1: 5,
+    extraWool: true,
+  },
+  { named: ['east', 'west'], isles: 0 },
+);
+check(
+  'Through the Desert, 5–6 players',
+  THROUGH_DESERT_56,
+  { terrain: { sea: 20, gold: 3, hills: 7, forest: 7, pasture: 7, fields: 7, mountains: 7, desert: 5 }, discs: ALL_DISCS_56, ports2to1: 6, ports3to1: 5, extraWool: true },
+  {
+    named: ['main', 'strip', 'strip2'],
+    isles: 4,
+    touchVia: [
+      { a: 'main', b: 'strip', terrain: 'desert' },
+      { a: 'main', b: 'strip2', terrain: 'desert' },
+    ],
+  },
+);
+check(
+  'The Forgotten Tribe, 5–6 players',
+  FORGOTTEN_TRIBE_56,
+  {
+    terrain: { sea: 22, gold: 3, hills: 7, forest: 7, pasture: 7, fields: 7, mountains: 6, desert: 4 },
+    discs: { 2: 1, 3: 4, 4: 4, 5: 4, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 1 },
+    ports2to1: 5,
+    ports3to1: 3,
+    unnumbered: true,
+    itemPorts: true,
+  },
+  { named: ['main'], isles: 6 },
+);
+check(
+  'Cloth for Catan, 5–6 players',
+  CLOTH_FOR_CATAN_56,
+  { terrain: { sea: 24, gold: 2, hills: 4, forest: 6, pasture: 5, fields: 6, mountains: 5, desert: 4 }, discs: ALL_DISCS_56, ports2to1: 6, ports3to1: 5, unnumbered: true, extraWool: true },
+  { named: ['north', 'south'], isles: 6 },
+);
+check(
+  'The Pirate Islands, 5–6 players',
+  PIRATE_ISLANDS_56,
+  {
+    terrain: { sea: 26, gold: 4, hills: 4, forest: 6, pasture: 6, fields: 5, mountains: 7, desert: 5 },
+    discs: { 2: 1, 3: 4, 4: 4, 5: 4, 6: 4, 8: 4, 9: 3, 10: 3, 11: 4, 12: 1 },
+    ports2to1: 5,
+    ports3to1: 4,
+  },
+  { named: ['main'], isles: 9 },
+);
+check(
+  'The Wonders of Catan, 5–6 players',
+  WONDERS_OF_CATAN_56,
+  {
+    terrain: { sea: 24, gold: 3, hills: 6, forest: 7, pasture: 7, fields: 6, mountains: 6, desert: 4 },
+    discs: { 2: 2, 3: 3, 4: 4, 5: 4, 6: 4, 8: 4, 9: 4, 10: 4, 11: 4, 12: 2 },
+    ports2to1: 6,
+    ports3to1: 5,
+    extraWool: true,
+  },
+  { named: ['main'], isles: 3 },
+);
+
+describe('Seafarers 5–6 maps: scenario pieces', () => {
+  it('The Forgotten Tribe: 10 VP tokens, 6 cards, 8 printed ports (5 x 2:1, one per resource)', () => {
+    const items = FORGOTTEN_TRIBE_56.edgeItems ?? [];
+    const n = (k: string) => items.filter((i) => i.item === k).length;
+    expect([n('vp'), n('dev'), n('port')]).toEqual([10, 6, 8]);
+    expect(items.filter((i) => i.port && i.port !== 'generic').map((i) => i.port).sort()).toEqual(['brick', 'grain', 'lumber', 'ore', 'wool']);
+  });
+  it('Cloth for Catan: 12 villages on the corners of the 6 small islands', () => {
+    expect(CLOTH_FOR_CATAN_56.villages).toHaveLength(12);
+  });
+  it('The Pirate Islands: 6 slots, 5 for five players, a 14-hex loop with the "!" hex on it', () => {
+    const pi = PIRATE_ISLANDS_56.pirateIslands!;
+    expect(pi.slots).toHaveLength(6);
+    expect(pi.slots3).toEqual([0, 1, 2, 3, 4]);
+    expect(pi.path).toHaveLength(14);
+    expect(pi.path.some(([q, r]) => q === pi.safe![0] && r === pi.safe![1])).toBe(true);
+    const byKey = new Map(PIRATE_ISLANDS_56.hexes.map((h) => [key(h.q, h.r), h]));
+    pi.path.forEach(([q, r], i) => {
+      expect(byKey.get(key(q, r))?.t).toBe('sea');
+      const [nq, nr] = pi.path[(i + 1) % pi.path.length];
+      expect(MAP_DIRS.some(([dq, dr]) => q + dq === nq && r + dr === nr)).toBe(true);
+    });
+  });
+  it('The Wonders of Catan: 5 wall, 2 bridge, 2 lighthouse and 8 "X" markers', () => {
+    const w = WONDERS_OF_CATAN_56.wonderSpots!;
+    expect([w.wall.length, w.bridge.length, w.lighthouse!.length, w.blocked.length]).toEqual([5, 2, 2, 8]);
+  });
+});
 check('The Wonders of Catan', WONDERS_OF_CATAN, TABLE_WONDERS, { named: ['main'], isles: 2 });
 
 describe('The Pirate Islands: path, slots and fortresses', () => {

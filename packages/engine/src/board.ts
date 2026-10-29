@@ -125,8 +125,9 @@ export function boardFromMap(
   if (map.pirateIslands) {
     const pi = map.pirateIslands;
     board.pirateFleet = pi.path.map(([q, r]) => index(q, r, 'Pirate path'));
-    const players = opts.participants ?? 4;
-    const slots = players <= 3 ? pi.slots3.slice(0, players) : pi.slots.map((_, i) => i);
+    const players = opts.participants ?? pi.slots.length;
+    const slots = players < pi.slots.length ? pi.slots3.slice(0, players) : pi.slots.map((_, i) => i);
+    if (pi.safe) board.pirateSafe = index(pi.safe[0], pi.safe[1], 'Safe hex');
     board.fortresses = slots.map((slot, owner) => {
       const s = pi.slots[slot];
       return {
@@ -144,6 +145,7 @@ export function boardFromMap(
       wall: map.wonderSpots.wall.map(corner),
       bridge: map.wonderSpots.bridge.map(corner),
       blocked: map.wonderSpots.blocked.map(corner),
+      ...(map.wonderSpots.lighthouse ? { lighthouse: map.wonderSpots.lighthouse.map(corner) } : {}),
     };
   }
   if (map.edgeItems) {
@@ -151,7 +153,8 @@ export function boardFromMap(
     board.edgeItems = {};
     for (const it of map.edgeItems) {
       const edge = hexSideEdge(graph, index(it.q, it.r, 'Item'), it.dir);
-      board.edgeItems[edge] = it.item === 'port' ? { kind: 'port', type: 'generic' } : { kind: it.item };
+      // Printed port types stay; otherwise createGame deals them ('generic' is a placeholder).
+      board.edgeItems[edge] = it.item === 'port' ? { kind: 'port', type: it.port ?? 'generic' } : { kind: it.item };
     }
   }
   if (map.villages) {

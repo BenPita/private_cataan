@@ -126,6 +126,13 @@ export function warshipCount(s: BoardState, player: number): number {
   return (s.warships ?? []).filter((e) => s.ships?.[e] === player).length;
 }
 
+/** The Wonders of Catan: wonder tiles of this board (the 5–6 map adds the Lighthouse and the Great Library). */
+export function availableWonders(board: Board): WonderId[] {
+  if (!board.wonderSpots) return [];
+  const base: WonderId[] = ['castle', 'monument', 'bridge', 'theater', 'wall'];
+  return board.wonderSpots.lighthouse ? [...base, 'lighthouse', 'library'] : base;
+}
+
 /** Cities of a player on the board. */
 export function cityCount(s: BoardState, player: number): number {
   return Object.values(s.buildings).filter((b) => b.owner === player && b.type === 'city').length;
@@ -142,7 +149,7 @@ export function wonderBlock(
   vp: number,
 ): string | null {
   const spots = s.board.wonderSpots;
-  if (!spots) return 'This game has no wonders';
+  if (!spots || !availableWonders(s.board).includes(wonder)) return 'This game has no wonders';
   if (s.players.some((p) => p.wonder?.id === wonder)) return 'That wonder is already claimed';
   if (s.players[player].wonder) return 'You may only claim one wonder';
   const G = boardGraph(s.board);
@@ -165,6 +172,10 @@ export function wonderBlock(
       return cities >= 2 ? null : 'The Grand Theater needs 2 cities';
     case 'wall':
       return spots.wall.some(mine) ? null : 'The Great Wall needs a building at a Great Wall marker';
+    case 'lighthouse':
+      return (spots.lighthouse ?? []).some(mine) ? null : 'The Lighthouse needs a building at a lighthouse marker';
+    case 'library':
+      return cities >= 2 ? null : 'The Great Library needs 2 cities';
     default:
       return 'Unknown wonder';
   }
@@ -259,7 +270,7 @@ export function satisfiesDistanceRule(s: BoardState, vertex: string): boolean {
 /** Scenario limit on starting settlements: every land hex at the vertex is in an allowed region. */
 export function inStartRegion(s: BoardState, vertex: string): boolean {
   const spots = s.board.wonderSpots;
-  if (spots && [...spots.wall, ...spots.bridge, ...spots.blocked].includes(vertex)) return false;
+  if (spots && [...spots.wall, ...spots.bridge, ...spots.blocked, ...(spots.lighthouse ?? [])].includes(vertex)) return false;
   const allowed = s.board.startRegions;
   if (!allowed) return true;
   const v = boardGraph(s.board).vertices[vertex];

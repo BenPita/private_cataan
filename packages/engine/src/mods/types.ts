@@ -6,8 +6,8 @@ export interface ScenarioDef {
   id: string;
   /** Victory points needed to win; overrides the room's target. */
   victoryTarget: number;
-  /** Printed maps: 2–3 participants play `3`, 4 play `4`. */
-  maps: { 3: ScenarioMap; 4: ScenarioMap };
+  /** Printed maps: 2–3 participants play `3`, 4 play `4`, 5–6 play `6`. */
+  maps: { 3: ScenarioMap; 4: ScenarioMap; 6?: ScenarioMap };
   /** Starting settlements only on hexes of these regions (missing = anywhere). */
   startRegions?: string[];
   /** Regions where a first settlement earns no bonus (home islands). */
@@ -15,7 +15,7 @@ export interface ScenarioDef {
   /** VP tokens for a player's first settlement in each other region (0/missing = none). */
   regionBonus?: number;
   /** The Fog Islands: face-down hexes and number discs for the empty (`fog`) spaces, per map. */
-  fog?: { 3: FogStack; 4: FogStack };
+  fog?: { 3: FogStack; 4: FogStack; 6?: FogStack };
   /** Settlements and the robber only on/at hexes with a number disc (see Board.numberedOnly). */
   numberedOnly?: boolean;
   /** The Forgotten Tribe: port types shuffled onto the map's port items. */
@@ -31,31 +31,42 @@ export interface ScenarioDef {
   /** Settlements and roads only in these regions (The Pirate Islands: the main island). */
   buildRegions?: string[];
   /** Development deck per map size, replacing the mod's (The Pirate Islands). */
-  devDeck?: { 3: Record<DevCardType, number>; 4: Record<DevCardType, number> };
+  devDeck?: { 3: Record<DevCardType, number>; 4: Record<DevCardType, number>; 6?: Record<DevCardType, number> };
   /** No Largest Army in this scenario. */
   noLargestArmy?: boolean;
   /** The Wonders of Catan: wonder tiles; winning needs a finished wonder or the highest wonder level. */
   wonders?: boolean;
   /** New World: the board is dealt at random from these hexes, discs and ports. */
-  newWorld?: { hexes: Partial<Record<Terrain, number>>; numbers: number[]; ports: HarborType[] };
+  newWorld?: NewWorldDeal & { 6?: NewWorldDeal };
   /**
    * Variable setup (an option for scenarios 1-4 and 8): land hexes and discs are dealt again
    * within each group of regions ('*' = every other land region); `fixed` terrains stay put.
    * Number rules: no two red discs side by side, none on gold or next to `noRedNextTo`,
    * no 2/3/11/12 on `lowNotOn`. The robber goes on the 12, a desert, or stays (`keep`).
    */
-  variable?: {
-    groups: string[][];
-    fixed?: Terrain[];
-    noAdjacentRed?: boolean;
-    noRedOnGold?: boolean;
-    lowNotOn?: Terrain[];
-    noRedNextTo?: Terrain;
-    robber: VariableRobber | { 3: VariableRobber; 4: VariableRobber };
-  };
+  variable?: VariableSpec;
+}
+
+/** How land is redealt (see `variable`). */
+export interface VariableSpec {
+  groups: string[][];
+  fixed?: Terrain[];
+  noAdjacentRed?: boolean;
+  noRedOnGold?: boolean;
+  lowNotOn?: Terrain[];
+  noRedNextTo?: Terrain;
+  robber: VariableRobber | { 3: VariableRobber; 4: VariableRobber };
 }
 
 export type VariableRobber = 'twelve' | 'desert' | 'keep';
+
+export interface NewWorldDeal {
+  hexes: Partial<Record<Terrain, number>>;
+  numbers: number[];
+  ports: HarborType[];
+  /** No red disc on a gold field. */
+  noRedOnGold?: boolean;
+}
 
 export interface FogStack {
   hexes: Partial<Record<Terrain, number>>;
