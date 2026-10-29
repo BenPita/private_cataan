@@ -127,6 +127,8 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
     else value += Math.min(owned[harbor.type] / 3, 2.5) + (level === 'hard' ? 0.5 : 0);
   }
   if (c.ships) value += regionBonusAt(c, vertex) * (level === 'easy' ? 2 : 4);
+  // The Fog Islands: ships (the way into the fog) can only start from a coastal building.
+  if ((v.fogLeft ?? 0) > 0 && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
   return value;
 }
 
@@ -790,6 +792,14 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
   if (goal === 'settlement' && left.roads > 0 && hasRes(c.res, { lumber: 2, brick: 2 }) && c.level !== 'easy') {
     const target = expansionTargets(c, 2)[0];
     if (target && legalSettlements(v, me).length < 2) return { type: 'buildRoad', edge: target.firstEdge };
+  }
+  // The Fog Islands: discoveries pay a resource and open new land, so a spare ship heads into the fog.
+  if (c.ships && (v.fogLeft ?? 0) > 0 && c.level !== 'easy' && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
+    if (totalRes(c.res) >= 6 || hasRes(c.res, { lumber: 2, wool: 2 }) || goal === 'ship') {
+      const legal = new Set(legalShips(v, me));
+      const target = shipTargets(c, 6).find((t) => fogBonus(c, t.vertex) > 0 && legal.has(t.firstEdge));
+      if (target) return { type: 'buildShip', edge: target.firstEdge };
+    }
   }
   if ((goal === 'devCard' || (c.level !== 'easy' && hasRes(c.res, { ...c.mod.costs.devCard, ore: 1 + (goal === 'city' ? 3 : 0) }))) && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard)) {
     return { type: 'buyDevCard' };

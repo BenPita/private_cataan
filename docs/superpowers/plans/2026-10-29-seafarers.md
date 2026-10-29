@@ -57,7 +57,7 @@ the Seafarers 5–6 maps and the paired-players turn (same as base 5–6).
   under the Seafarers box. 3p + 4p maps of "Heading for New Shores" (2p uses 3p). Art: sea + gold
   tiles, ships, pirate, VP tokens; 2D and 3D.
 - **S2** Scenarios 2 and 4 (maps + home/unexplored island rules).
-- **S3** Scenario 3 Fog Islands (hidden stacks + discovery).
+- **S3** Scenario 3 Fog Islands (hidden stacks + discovery). DONE 2026-10-29.
 - **S4** Scenarios 5 and 6.
 - **S5** Scenarios 7 and 8.
 - **S6** New World (random generator) + "variable setup" options for 1–4/8.

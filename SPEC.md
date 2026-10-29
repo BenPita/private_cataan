@@ -316,6 +316,19 @@ regions of a player's starting settlements are their home islands, stored as `Pl
 3-player-size frame (35 tiles); pirate starts printed on the frame are `frameSea` spaces (Through the
 Desert's touches only land).
 
+The Fog Islands (3, wired 2026-10-29; 12 VP; starting settlements anywhere). Maps on the 4-player
+frame for 3p and 4p (`fogMaps.ts`); empty spaces are terrain `fog` (neither land nor sea: no
+production, no robber/pirate, no settlement on a spot touching only fog + sea, roads need a real land
+side, ships a real sea side or the frame). `GameState.fogStack` holds the face-down hexes and discs
+(unordered, hidden from views; views get `fogLeft`). Interpretations:
+- Every `fog` space touching either end of a newly placed road or ship is discovered — built, free
+  (Road Building), setup, or moved ships alike — one random hex each, in hex-id order.
+- Land gets a random disc and pays 1 resource of its type if the bank has it; sea pays nothing; a gold
+  field pays 1 resource of choice (GOLD_CHOICE, then back to the same phase; `goldDiscovered` keeps
+  it out of the dice-roll gains). Desert would get no disc (none in the stack).
+- Bots value fog spaces (roads/ships toward them, a spare ship into the fog, coastal spots) — a
+  scenario-specific nudge; the general bot rework is the side task below.
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

@@ -234,7 +234,7 @@ const en = {
   scenario_fourIslands: 'The Four Islands',
   scenario_fourIslands_goal: 'Your starting islands are home: +2 points for your first settlement on each other island.',
   scenario_fogIslands: 'The Fog Islands',
-  scenario_fogIslands_goal: 'Sail into the fog and discover new land.',
+  scenario_fogIslands_goal: 'Sail or build into the fog: every land you discover pays 1 resource.',
   scenario_throughDesert: 'Through the Desert',
   scenario_throughDesert_goal: 'Cross the desert or sail away: +2 points for your first settlement on each new land.',
   scenario_forgottenTribe: 'The Forgotten Tribe',
@@ -490,7 +490,7 @@ const he: Dict = {
   scenario_fourIslands: 'ארבעת האיים',
   scenario_fourIslands_goal: 'איי הפתיחה הם הבית: +2 נקודות על היישוב הראשון בכל אי אחר.',
   scenario_fogIslands: 'איי הערפל',
-  scenario_fogIslands_goal: 'הפליגו לתוך הערפל וגלו ארצות חדשות.',
+  scenario_fogIslands_goal: 'הפליגו או סללו לתוך הערפל: כל אדמה שתגלו נותנת משאב.',
   scenario_throughDesert: 'דרך המדבר',
   scenario_throughDesert_goal: 'חצו את המדבר או הפליגו: +2 נקודות על היישוב הראשון בכל ארץ חדשה.',
   scenario_forgottenTribe: 'השבט הנשכח',
@@ -577,8 +577,8 @@ const RESOURCE_NAMES: Record<Lang, Record<Resource, string>> = {
 };
 
 const TERRAIN_NAMES: Record<Lang, Record<Terrain, string>> = {
-  en: { forest: 'Forest', hills: 'Hills', pasture: 'Pasture', fields: 'Fields', mountains: 'Mountains', desert: 'Desert', sea: 'Sea', gold: 'Gold field' },
-  he: { forest: 'יער', hills: 'גבעות', pasture: 'מרעה', fields: 'שדות', mountains: 'הרים', desert: 'מדבר', sea: 'ים', gold: 'שדה זהב' },
+  en: { forest: 'Forest', hills: 'Hills', pasture: 'Pasture', fields: 'Fields', mountains: 'Mountains', desert: 'Desert', sea: 'Sea', gold: 'Gold field', fog: 'Unexplored' },
+  he: { forest: 'יער', hills: 'גבעות', pasture: 'מרעה', fields: 'שדות', mountains: 'הרים', desert: 'מדבר', sea: 'ים', gold: 'שדה זהב', fog: 'לא נחקר' },
 };
 
 const DEV: Record<Lang, Record<DevCardType, { name: string; text: string }>> = {
@@ -704,6 +704,9 @@ const LOG_HE: Record<keyof typeof LOG_EN, string> = {
   goldOwed: '{p} יכול/ה לקחת {n} משאבים לבחירה משדה זהב.',
   goldChosen: '{p} לקח/ה {res} משדה זהב.',
   regionBonus: '{p} התיישב/ה באי חדש: +{n} נקודות.',
+  discoveredSea: '{p} גילה/תה ים פתוח.',
+  discoveredLand: '{p} גילה/תה אדמה ({n}) ולקח/ה {res}.',
+  discoveredGold: '{p} גילה/תה שדה זהב ({n}).',
   win: '{p} ניצח/ה עם {n} נקודות!',
 };
 

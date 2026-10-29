@@ -185,6 +185,11 @@ export function useGameFx(view: PlayerView, names: string[], boardApi: MutableRe
         banner({ kind: 'bonus', title: t('bonusTitle', { n: p.n ?? 2 }), caption });
         setTimeout(() => sfx.award(), delay);
         break;
+      case 'discoveredLand':
+        // The Fog Islands: the discovery pays one card from the bank.
+        expand(p.res).forEach((r, k) => fly(`/art/card-${r}.webp`, bank(), playerAt(p.p!, r), delay + 300 + k * 110));
+        setTimeout(() => (p.p === me ? sfx.gain(1) : sfx.card()), delay + 300);
+        break;
       default:
         break;
     }

@@ -4,6 +4,7 @@ import {
   modFor,
   hasShips,
   legalCities,
+  isLandHex,
   legalRoads,
   legalSettlements,
   legalSetupRoads,
@@ -290,7 +291,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
     if (view.phase === 'INITIAL_PLACEMENT') return view.setup?.lastSettlement ? {} : { vertices: legalSetupSettlements(view) };
     if (view.phase === 'ROBBER_MOVE') {
       // Robber on land; with ships, the pirate on any other sea hex.
-      const hexes = view.board.hexes.filter((h) => h.terrain !== 'sea' && h.id !== view.board.robberHex).map((h) => h.id);
+      const hexes = view.board.hexes.filter((h) => isLandHex(view.board, h.id) && h.id !== view.board.robberHex).map((h) => h.id);
       if (view.board.pirateHex === undefined) return { hexes };
       const pirateHexes = view.board.hexes.filter((h) => h.terrain === 'sea' && h.id !== view.board.pirateHex).map((h) => h.id);
       return { hexes, pirateHexes };

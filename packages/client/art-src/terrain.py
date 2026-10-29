@@ -307,6 +307,31 @@ def sea(seed):
     return finish(to_image(rgb), seed)
 
 
+def fog(seed):
+    """The Fog Islands: an undiscovered space — drifting mist over dim water, with a faint question mark."""
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    n = fbm(H, W, seed, 5, 3)
+    m = fbm(H, W, seed + 11, 7, 2)
+    drift = np.sin((xx * 0.8 - yy) * 0.012 + n * 5) * 0.5 + 0.5
+    mist = np.clip(n * 0.55 + drift * 0.3 + m * 0.25, 0, 1)
+    rgb = ramp(mist, [(0, (150, 176, 190)), (0.45, (206, 218, 224)), (0.8, (236, 241, 243)), (1, (250, 251, 252))])
+    img = to_image(rgb)
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype('C:/Windows/Fonts/georgiab.ttf', int(H * 0.42))
+        glyph = Image.new('L', (W, H), 0)
+        d = ImageDraw.Draw(glyph)
+        d.text((W / 2, H / 2), '?', font=font, fill=255, anchor='mm')
+        glyph = glyph.filter(ImageFilter.GaussianBlur(3))
+        g = np.array(glyph).astype(np.float32)[..., None] / 255 * 0.55
+        arr = np.array(img).astype(np.float32)
+        arr = arr * (1 - g) + np.array([70, 92, 108], np.float32) * g
+        img = to_image(arr)
+    except OSError:
+        pass
+    return finish(img, seed)
+
+
 TERRAINS = {
     'forest': forest,
     'hills': hills,
@@ -316,4 +341,5 @@ TERRAINS = {
     'desert': desert,
     'gold': gold,
     'sea': sea,
+    'fog': fog,
 }
