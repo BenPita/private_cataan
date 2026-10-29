@@ -36,7 +36,26 @@ export interface ScenarioDef {
   noLargestArmy?: boolean;
   /** The Wonders of Catan: wonder tiles; winning needs a finished wonder or the highest wonder level. */
   wonders?: boolean;
+  /** New World: the board is dealt at random from these hexes, discs and ports. */
+  newWorld?: { hexes: Partial<Record<Terrain, number>>; numbers: number[]; ports: HarborType[] };
+  /**
+   * Variable setup (an option for scenarios 1-4 and 8): land hexes and discs are dealt again
+   * within each group of regions ('*' = every other land region); `fixed` terrains stay put.
+   * Number rules: no two red discs side by side, none on gold or next to `noRedNextTo`,
+   * no 2/3/11/12 on `lowNotOn`. The robber goes on the 12, a desert, or stays (`keep`).
+   */
+  variable?: {
+    groups: string[][];
+    fixed?: Terrain[];
+    noAdjacentRed?: boolean;
+    noRedOnGold?: boolean;
+    lowNotOn?: Terrain[];
+    noRedNextTo?: Terrain;
+    robber: VariableRobber | { 3: VariableRobber; 4: VariableRobber };
+  };
 }
+
+export type VariableRobber = 'twelve' | 'desert' | 'keep';
 
 export interface FogStack {
   hexes: Partial<Record<Terrain, number>>;

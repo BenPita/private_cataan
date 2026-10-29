@@ -15,6 +15,8 @@ export interface RoomConfig {
   botNames?: string[];
   /** Seafarers scenario id (fixed once the room exists). */
   scenario?: string;
+  /** Seafarers: the scenario's board dealt at random (its "variable setup"). */
+  variableSetup?: boolean;
 }
 
 export interface PublicSeat {

@@ -247,7 +247,10 @@ const en = {
   scenario_wondersOfCatan: 'The Wonders of Catan',
   scenario_wondersOfCatan_goal: 'Claim a wonder and finish its 4 levels — or reach 10 points with the highest wonder.',
   scenario_newWorld: 'New World',
-  scenario_newWorld_goal: 'A new random archipelago every game.',
+  scenario_newWorld_goal: 'New random islands every game: +1 point for your first settlement on each island away from home.',
+  variableSetup: 'Variable setup',
+  variableSetupInfo: "The scenario's official variant: the land hexes, number discs and ports are dealt at random instead of the printed map.",
+  variableSetupOn: 'Variable setup: the board is dealt at random',
   // Seafarers: game
   ship: 'Ship',
   ships: 'Ships on the board',
@@ -542,7 +545,10 @@ const he: Dict = {
   scenario_wondersOfCatan: 'פלאי האי',
   scenario_wondersOfCatan_goal: 'קחו פלא והשלימו את 4 השלבים שלו — או הגיעו ל-10 נקודות עם הפלא הגבוה ביותר.',
   scenario_newWorld: 'עולם חדש',
-  scenario_newWorld_goal: 'ארכיפלג אקראי חדש בכל משחק.',
+  scenario_newWorld_goal: 'איים אקראיים חדשים בכל משחק: +1 נקודה ליישוב הראשון בכל אי שאינו הבית.',
+  variableSetup: 'סידור משתנה',
+  variableSetupInfo: 'הגרסה הרשמית של התרחיש: משושי היבשה, המספרים והנמלים מחולקים באקראי במקום המפה המודפסת.',
+  variableSetupOn: 'סידור משתנה: הלוח מחולק באקראי',
   // Seafarers: game
   ship: 'ספינה',
   ships: 'ספינות על הלוח',

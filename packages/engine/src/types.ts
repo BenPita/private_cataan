@@ -56,8 +56,9 @@ export interface Board {
   layout?: LayoutId;
   hexes: HexTile[];
   harbors: Harbor[];
+  /** -1 = on the frame, off the board (New World starts it there). */
   robberHex: number;
-  /** Seafarers: sea hex holding the pirate. Missing on boards without a pirate. */
+  /** Seafarers: sea hex holding the pirate (-1 = on the frame). Missing on boards without a pirate. */
   pirateHex?: number;
   /** Seafarers: regions where starting settlements may go (missing = anywhere). */
   startRegions?: string[];
@@ -202,6 +203,8 @@ export interface GameConfig {
   devCardsSameTurn?: boolean;
   /** Seafarers: scenario id (default 'newShores'). Missing for mods without scenarios. */
   scenario?: string;
+  /** Seafarers: deal the scenario's land hexes, discs and ports at random (its "variable setup"). */
+  variableSetup?: boolean;
 }
 
 export interface GameState {

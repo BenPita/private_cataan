@@ -391,6 +391,25 @@ The Pirate Islands (7) and The Wonders of Catan (8), wired 2026-10-29 (`pirateWo
   seeded bot games: every game ends (Pirate ~90–105 turns, fortress + 10 VP; Wonders ~60–85 turns, mostly a
   finished Grand Theater/Castle), zero rejected actions.
 
+New World (9) and the variable setup option, wired 2026-10-29 (`mods/seafarers/random.ts`; local check only):
+- New World (p. 20): frame of 42 spaces (rows 5-6-7-6-7-6-5, `NEW_WORLD_FRAME`, one for 3 and 4 players) dealt
+  at random in `createGame` (`ScenarioDef.newWorld`): 19 sea, 4 hills, 5 forest, 5 pasture, 5 fields, 4 mountains;
+  23 discs with no two red side by side (redealt — same result as the rulebook's swap); 10 ports (5 × 2:1, one per
+  resource, 5 × 3:1) placed one by one on random coastal edges (land + sea/frame), never sharing a corner
+  (interpretation of "players take turns placing a random port"). Islands = connected land, regions isle1..
+  in hex order. Robber and pirate start on the frame: `robberHex` / `pirateHex` = -1 (no hex blocked, no
+  ship-placement limit) until the first 7 / Knight. Home islands = islands of the starting settlements
+  (`homeRegions: 'starting'`), +1 VP for the first settlement on each other island, 12 VP wins.
+- Variable setup: room/engine option `variableSetup` (mod screen checkbox "סידור משתנה", only for scenarios
+  with `ScenarioDef.variable`; lobby tag). Land hexes + their discs are redealt within groups of regions, fixed
+  terrains stay, port types are shuffled over the printed port spots, sea and regions stay. Per scenario:
+  New Shores — main and small islands apart, no adjacent red, robber on the 12 (3p) / desert (4p); Four
+  Islands — all land together, no 2/3/11/12 on forest/pasture, robber on the 12; Fog Islands — all face-up land
+  together, red may touch, robber on the 12; Through the Desert — deserts fixed, main and unexplored apart, no
+  adjacent red, no red on gold, robber as printed; Wonders — deserts and small islands fixed, main island
+  redealt, no red next to a desert, robber on its printed desert. Pirate Islands, Forgotten Tribe and Cloth for
+  Catan ignore the option (Pirate Islands: "not recommended"; the other two are not in this stage).
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

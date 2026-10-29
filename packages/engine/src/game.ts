@@ -119,7 +119,7 @@ export function createGame(
     : { victoryTarget: 10, boardType: 'random', ...config, mod: mod.id, modVersion: mod.version };
   const rng = new Rng(seed);
   const board = scenario
-    ? scenarioBoard(scenario, players.length)
+    ? scenarioBoard(scenario, players.length, rng, fullConfig.variableSetup === true)
     : fullConfig.boardType === 'beginner'
       ? generateBeginnerBoard(mod)
       : generateRandomBoard(rng, mod);

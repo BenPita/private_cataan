@@ -255,6 +255,15 @@ export function ModPicker({
             </div>
           </>
         )}
+        {selectedDef.scenarios?.[config.scenario ?? selectedDef.defaultScenario ?? '']?.variable && (
+          <label className="check house-rule">
+            <input type="checkbox" checked={!!config.variableSetup} onChange={(e) => update({ variableSetup: e.target.checked })} />
+            <span>
+              <b>{t('variableSetup')}</b>
+              <small>{t('variableSetupInfo')}</small>
+            </span>
+          </label>
+        )}
         <label className="check house-rule">
           <input type="checkbox" checked={!!config.startResBoth} onChange={(e) => update({ startResBoth: e.target.checked })} />
           <span>

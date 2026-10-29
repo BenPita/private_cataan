@@ -179,7 +179,7 @@ export function isShipEdge(s: BoardState, edge: string): boolean {
 /** Edges of the hex holding the pirate (no ship may be placed on or moved from them). */
 export function pirateEdges(s: BoardState): string[] {
   const hex = s.board.pirateHex;
-  return hex === undefined ? [] : boardGraph(s.board).hexes[hex].edges;
+  return hex === undefined || hex < 0 ? [] : boardGraph(s.board).hexes[hex].edges;
 }
 
 /** May the robber stand on `hex`? Land only; on `numberedOnly` boards only hexes with a number disc. */
@@ -548,7 +548,7 @@ export function shipOwnersOnHex(s: BoardState, hex: number): number[] {
 export function playersOnHex(s: BoardState, hex: number): number[] {
   const G = boardGraph(s.board);
   const owners = new Set<number>();
-  for (const v of G.hexes[hex].vertices) {
+  for (const v of G.hexes[hex]?.vertices ?? []) {
     const b = s.buildings[v];
     if (b) owners.add(b.owner);
   }

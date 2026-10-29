@@ -36,6 +36,8 @@ export interface RoomConfig {
   botNames?: string[];
   /** Scenario of a scenario-based mod (Seafarers); fixed once the room exists. */
   scenario?: string;
+  /** Seafarers: deal the scenario's board at random ("variable setup"), if the scenario has one. */
+  variableSetup?: boolean;
 }
 
 export interface Seat {
@@ -136,7 +138,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
   const botNames = Array.isArray(c.botNames)
     ? [...new Set(c.botNames.filter((n) => typeof n === 'string' && /^Bot#\d+$/.test(n) && Number(n.slice(4)) < BOT_NAME_POOL))]
     : [];
-  for (const flag of [c.startResBoth, c.devSameTurn]) {
+  for (const flag of [c.startResBoth, c.devSameTurn, c.variableSetup]) {
     if (flag !== undefined && typeof flag !== 'boolean') return { ok: false, error: 'Invalid settings' };
   }
   return {
@@ -153,6 +155,7 @@ export function validateConfig(raw: Partial<RoomConfig> | undefined): Result<{ c
       devSameTurn: c.devSameTurn === true,
       ...(botNames.length ? { botNames: botNames.slice(0, c.bots) } : {}),
       ...(scenario ? { scenario } : {}),
+      ...(c.variableSetup === true && scenario && def.scenarios?.[scenario]?.variable ? { variableSetup: true } : {}),
     },
   };
 }
@@ -430,6 +433,7 @@ export class RoomManager {
       { mod: room.config.mod ?? 'base', victoryTarget: room.config.victoryTarget, boardType: room.config.boardType, startResBothSettlements: room.config.startResBoth === true,
         devCardsSameTurn: room.config.devSameTurn === true,
         ...(room.config.scenario ? { scenario: room.config.scenario } : {}),
+        ...(room.config.variableSetup ? { variableSetup: true } : {}),
       },
     );
     room.status = 'playing';
