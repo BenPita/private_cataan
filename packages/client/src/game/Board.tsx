@@ -13,10 +13,10 @@ export const OPEN_SEA = '#2394b0';
  * and the painted sea made for that island shape by art-src/extras.py.
  * Seafarers maps draw their own sea tiles on open water: `sea` is null.
  */
-export function boardFrame(board: Pick<BoardData, 'layout'>): { view: number; sea: string | null } {
+export function boardFrame(board: Pick<BoardData, 'layout'>): { view: number; sea: string | null; maxX: number; maxY: number } {
   const { maxX, maxY } = graphBounds(boardGraph(board));
   const sea = board.layout?.startsWith('sf-') ? null : board.layout === 'classic56' ? '/art/sea-56.webp' : '/art/sea.webp';
-  return { view: 2 * (Math.max(maxX, maxY) + 0.97), sea };
+  return { view: 2 * (Math.max(maxX, maxY) + 0.97), sea, maxX, maxY };
 }
 
 /**

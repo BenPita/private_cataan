@@ -374,6 +374,9 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
 
   /** The painted sea square under the island; resized for the island's shape in setBoard. */
   let frameView = 10.6;
+  /** Half width / half height the camera keeps in view (classic island: 5.6 × 4.6). */
+  let fitX = 5.6;
+  let fitY = 4.6;
   const frameGeometry = (view: number) => {
     const h = view / 2;
     return fanGeometry([[h, h], [-h, h], [-h, -h], [h, -h]], view, view);
@@ -501,8 +504,8 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       const vfov = (camera.fov * Math.PI) / 180;
       const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
       // Sized for the classic island (frame 10.6); bigger islands scale the fit.
-      const fitW = (5.6 * frameView) / 10.6 / Math.tan(hfov / 2);
-      const fitH = (4.6 * frameView) / 10.6 / Math.tan(vfov / 2);
+      const fitW = fitX / Math.tan(hfov / 2);
+      const fitH = fitY / Math.tan(vfov / 2);
       const dist = Math.max(fitW, fitH) * 0.94;
       const polar = 0.5;
       camera.position.set(0, Math.cos(polar) * dist, Math.sin(polar) * dist + 0.15);
@@ -581,6 +584,15 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   function setBoard(view: PlayerView) {
     G = boardGraph(view.board);
     const frame = boardFrame(view.board);
+    // Fit the island itself (wide Seafarers maps fill a portrait screen better than a square frame).
+    const nextFitX = frame.maxX + 1.27;
+    const nextFitY = frame.maxY + 0.6;
+    if (nextFitX !== fitX || nextFitY !== fitY) {
+      fitX = nextFitX;
+      fitY = nextFitY;
+      framed = false;
+      resize();
+    }
     if (frame.view !== frameView || frame.sea !== frameSea) {
       frameView = frame.view;
       frameSea = frame.sea;
