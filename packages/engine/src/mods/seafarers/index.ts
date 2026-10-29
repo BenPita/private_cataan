@@ -8,8 +8,10 @@ export type { ScenarioMap, MapHex, MapPort, MapTerrain } from './mapTypes';
 export { MAP_DIRS, boardHexes } from './mapTypes';
 import { boardHexes } from './mapTypes';
 import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
+import { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from './tribeClothMaps';
 import { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 export { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from './fogMaps';
+export { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from './tribeClothMaps';
 export { FOUR_ISLANDS_3P, FOUR_ISLANDS_4P, NEW_SHORES_3P, NEW_SHORES_4P, THROUGH_DESERT_3P, THROUGH_DESERT_4P } from './maps';
 
 /** Map size a game uses: 2–3 participants play the 3-player map, 4 the 4-player map. */
@@ -61,7 +63,11 @@ export function addScenario(def: ScenarioDef): void {
 /** The fixed board of a scenario for this many participants. */
 export function scenarioBoard(def: ScenarioDef, participants: number): Board {
   const size = scenarioMapSize(participants);
-  return boardFromMap(def.maps[size], scenarioLayoutId(def.id, size), def.startRegions);
+  return boardFromMap(def.maps[size], scenarioLayoutId(def.id, size), {
+    startRegions: def.startRegions,
+    numberedOnly: def.numberedOnly,
+    clothPerVillage: def.cloth?.perVillage,
+  });
 }
 
 /**
@@ -124,4 +130,35 @@ addScenario({
   startRegions: ['main'],
   homeRegions: ['main'],
   regionBonus: 2,
+});
+
+/**
+ * Scenario 5, The Forgotten Tribe (rulebook p. 12): starting settlements on the
+ * large island; settlements and the robber only at/on hexes with a number disc;
+ * ships pick up the tribe's VP tokens, development cards and ports; 13 VP wins.
+ */
+addScenario({
+  id: 'forgottenTribe',
+  victoryTarget: 13,
+  maps: { 3: FORGOTTEN_TRIBE, 4: FORGOTTEN_TRIBE },
+  startRegions: ['main'],
+  numberedOnly: true,
+  itemPorts: ['lumber', 'brick', 'wool', 'grain', 'ore', 'generic'],
+});
+
+/**
+ * Scenario 6, Cloth for Catan (rulebook p. 14): 3 starting settlements (resources
+ * from the third); no settlements or robber on the small islands (their hexes have
+ * no disc); a route to a village opens cloth trade; 2 cloth = 1 VP; no Longest
+ * Route; 14 VP wins, or the game ends when 5 villages are empty.
+ */
+addScenario({
+  id: 'clothForCatan',
+  victoryTarget: 14,
+  maps: { 3: CLOTH_FOR_CATAN, 4: CLOTH_FOR_CATAN },
+  numberedOnly: true,
+  shufflePorts: true,
+  setupRounds: 3,
+  noLongestRoute: true,
+  cloth: { perVillage: 5, supply: 10, endWhenEmpty: 5 },
 });

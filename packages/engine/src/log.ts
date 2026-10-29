@@ -53,6 +53,15 @@ export const LOG_EN = {
   discoveredSea: '{p} discovered open sea.',
   discoveredLand: '{p} discovered land ({n}) and took {res}.',
   discoveredGold: '{p} discovered a gold field ({n}).',
+  tookVpToken: '{p} picked up a victory point token.',
+  tookDevCard: '{p} picked up a development card.',
+  tookPort: '{p} picked up a 2:1 {r} port.',
+  tookPortGeneric: '{p} picked up a 3:1 port.',
+  placedPort: '{p} placed a port.',
+  villageTrade: '{p} opened trade with village {n}.',
+  clothReceived: '{p} received {n} cloth.',
+  stoleCloth: '{p} took a cloth token from {q}.',
+  villagesEmpty: '{n} villages have run out of cloth: the game ends.',
   win: '{p} wins with {n} points!',
 } as const;
 

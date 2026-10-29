@@ -15,8 +15,9 @@ import { boardGraph, type BoardGraph } from './geometry';
 import { hasShips, modFor, scenarioFor, type ModDef } from './mods';
 import {
   isRoadEdge,
-  isLandHex,
   isShipEdge,
+  legalPortEdges,
+  robberAllowed,
   legalCities,
   legalRoads,
   legalSettlements,
@@ -128,8 +129,32 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
   }
   if (c.ships) value += regionBonusAt(c, vertex) * (level === 'easy' ? 2 : 4);
   // The Fog Islands: ships (the way into the fog) can only start from a coastal building.
-  if ((v.fogLeft ?? 0) > 0 && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
+  if (sailingPays(v) && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
   return value;
+}
+
+/** Scenarios where ships earn something besides new settlement spots (fog, the tribe's gifts, villages). */
+function sailingPays(v: PlayerView): boolean {
+  return (v.fogLeft ?? 0) > 0 || Object.keys(v.board.edgeItems ?? {}).length > 0 || (v.board.villages ?? []).some((x) => x.cloth > 0);
+}
+
+/** The Forgotten Tribe: worth of the item a ship on `edge` would pick up. */
+function itemValue(c: Ctx, edge: string): number {
+  const item = c.v.board.edgeItems?.[edge];
+  if (!item) return 0;
+  const k = c.level === 'hard' ? 1.2 : c.level === 'easy' ? 0.6 : 1;
+  return (item.kind === 'vp' ? 6 : item.kind === 'dev' ? 3.5 : 2.5) * k;
+}
+
+/** Cloth for Catan: worth of reaching a village the bot does not trade with yet. */
+function villageValue(c: Ctx, vertex: string): number {
+  const villages = c.v.board.villages ?? [];
+  const i = villages.findIndex((x) => x.vertex === vertex);
+  if (i < 0 || c.v.players[c.me].villages.includes(i)) return 0;
+  const village = villages[i];
+  if (village.cloth === 0) return 0;
+  const k = c.level === 'hard' ? 1.3 : c.level === 'easy' ? 0.7 : 1;
+  return (3 + pips(village.number) * 1.2) * k;
 }
 
 /** The Fog Islands: worth of reaching `vertex` with a road or ship — each empty space there gets discovered. */
@@ -156,17 +181,21 @@ function regionBonusAt(c: Ctx, vertex: string): number {
  * Ships start from the bot's buildings and ships, cross only sea edges and
  * never pass an opponent's building or the pirate.
  */
-function shipTargets(c: Ctx, maxDepth: number, ignore?: string): Array<{ vertex: string; dist: number; firstEdge: string; value: number }> {
+function shipTargets(
+  c: Ctx,
+  maxDepth: number,
+  ignore?: string,
+): Array<{ vertex: string; dist: number; firstEdge: string; value: number; extra: number }> {
   const { v, me } = c;
   const ships = v.ships ?? {};
   const pirate = pirateEdges(v);
   const owned = production(v, me);
-  const seen = new Map<string, { dist: number; firstEdge: string }>();
-  let frontier: Array<{ vertex: string; firstEdge: string }> = [];
+  const seen = new Map<string, { dist: number; firstEdge: string; bonus: number }>();
+  let frontier: Array<{ vertex: string; firstEdge: string; bonus: number }> = [];
   const add = (vertex: string) => {
     if (seen.has(vertex)) return;
-    seen.set(vertex, { dist: 0, firstEdge: '' });
-    frontier.push({ vertex, firstEdge: '' });
+    seen.set(vertex, { dist: 0, firstEdge: '', bonus: 0 });
+    frontier.push({ vertex, firstEdge: '', bonus: 0 });
   };
   for (const [vertex, b] of Object.entries(v.buildings)) if (b.owner === me) add(vertex);
   for (const [edge, owner] of Object.entries(ships)) {
@@ -175,7 +204,7 @@ function shipTargets(c: Ctx, maxDepth: number, ignore?: string): Array<{ vertex:
   }
   for (let d = 1; d <= maxDepth; d++) {
     const next: typeof frontier = [];
-    for (const { vertex, firstEdge } of frontier) {
+    for (const { vertex, firstEdge, bonus } of frontier) {
       const b = v.buildings[vertex];
       if (b && b.owner !== me) continue;
       for (const e of c.g.vertices[vertex].edges) {
@@ -187,19 +216,21 @@ function shipTargets(c: Ctx, maxDepth: number, ignore?: string): Array<{ vertex:
         const other = a === vertex ? bb : a;
         if (seen.has(other)) continue;
         const fe = firstEdge || (mine ? '' : e);
-        seen.set(other, { dist: d, firstEdge: fe });
-        next.push({ vertex: other, firstEdge: fe });
+        // Items on the way (The Forgotten Tribe) are picked up by the ships of the route.
+        const nb = bonus + (mine ? 0 : itemValue(c, e));
+        seen.set(other, { dist: d, firstEdge: fe, bonus: nb });
+        next.push({ vertex: other, firstEdge: fe, bonus: nb });
       }
     }
     frontier = next;
   }
-  const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number }> = [];
-  for (const [vertex, { dist, firstEdge }] of seen) {
+  const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number; extra: number }> = [];
+  for (const [vertex, { dist, firstEdge, bonus }] of seen) {
     if (dist === 0 || !firstEdge) continue;
     const spot = satisfiesDistanceRule(v, vertex);
-    const fog = fogBonus(c, vertex);
-    if (!spot && fog === 0) continue;
-    out.push({ vertex, dist, firstEdge, value: ((spot ? vertexValue(c, vertex, owned) : 0) + fog) / (1 + 0.35 * dist) });
+    const extra = fogBonus(c, vertex) + bonus + villageValue(c, vertex);
+    if (!spot && extra === 0) continue;
+    out.push({ vertex, dist, firstEdge, extra, value: ((spot ? vertexValue(c, vertex, owned) : 0) + extra) / (1 + 0.35 * dist) });
   }
   return out.sort((a, b) => b.value - a.value);
 }
@@ -403,7 +434,7 @@ function robberHex(c: Ctx): number {
   const { v, me } = c;
   const lead = leader(c);
   const candidates = v.board.hexes
-    .filter((h) => h.id !== v.board.robberHex && isLandHex(v.board, h.id))
+    .filter((h) => h.id !== v.board.robberHex && robberAllowed(v.board, h.id))
     .map((h) => {
       const owners = playersOnHex(v, h.id);
       if (owners.includes(me)) return { id: h.id, score: -100 };
@@ -430,6 +461,7 @@ function robberOrPirate(c: Ctx): Action {
   const robber: Action = { type: 'moveRobber', hex: robberHex(c) };
   const { v, me } = c;
   if (v.board.pirateHex === undefined || c.level === 'easy' || robberOnMe(c)) return robber;
+  if (v.board.villages && v.players[me].villages.length === 0) return robber;
   const lead = leader(c);
   let best: { hex: number; score: number } | null = null;
   for (const h of v.board.hexes) {
@@ -705,8 +737,13 @@ export function chooseBotAction(view: PlayerView, level: BotDifficulty, rand: Ra
       return { type: 'rollDice' };
     case 'ROBBER_MOVE':
       return c.ships ? robberOrPirate(c) : { type: 'moveRobber', hex: robberHex(c) };
-    case 'ROBBER_STEAL':
-      return { type: 'steal', victim: stealVictim(c) };
+    case 'ROBBER_STEAL': {
+      const victim = stealVictim(c);
+      // Cloth for Catan: the pirate may take cloth — worth it to complete a pair, or when there are no cards.
+      const vp = view.players[victim];
+      const cloth = !!view.stealCloth && vp.cloth > 0 && (vp.resourceCount === 0 || view.players[me].cloth % 2 === 1);
+      return cloth ? { type: 'steal', victim, cloth: true } : { type: 'steal', victim };
+    }
     case 'MAIN_ACTIONS':
       return mainPhase(c, memory);
     default:
@@ -757,6 +794,13 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
     return { type: 'cancelTrade' };
   }
 
+  // The Forgotten Tribe: a captured port goes next to a settlement as soon as it can.
+  const held = v.players[me].heldPorts ?? [];
+  if (held.length > 0) {
+    const spots = legalPortEdges(v, me);
+    if (spots.length > 0) return { type: 'placePort', edge: spots[Math.floor(c.rand() * spots.length)], port: held[0] };
+  }
+
   const goal = chooseGoal(c);
 
   const dev = mainPhaseDev(c, goal);
@@ -793,11 +837,11 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
     const target = expansionTargets(c, 2)[0];
     if (target && legalSettlements(v, me).length < 2) return { type: 'buildRoad', edge: target.firstEdge };
   }
-  // The Fog Islands: discoveries pay a resource and open new land, so a spare ship heads into the fog.
-  if (c.ships && (v.fogLeft ?? 0) > 0 && c.level !== 'easy' && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
+  // Fog to discover, gifts to pick up or villages to reach: a spare ship heads there.
+  if (c.ships && sailingPays(v) && c.level !== 'easy' && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
     if (totalRes(c.res) >= 6 || hasRes(c.res, { lumber: 2, wool: 2 }) || goal === 'ship') {
       const legal = new Set(legalShips(v, me));
-      const target = shipTargets(c, 6).find((t) => fogBonus(c, t.vertex) > 0 && legal.has(t.firstEdge));
+      const target = shipTargets(c, 6).find((t) => t.extra > 0 && legal.has(t.firstEdge));
       if (target) return { type: 'buildShip', edge: target.firstEdge };
     }
   }

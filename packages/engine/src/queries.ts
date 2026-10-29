@@ -42,6 +42,59 @@ export function pirateEdges(s: BoardState): string[] {
   return hex === undefined ? [] : boardGraph(s.board).hexes[hex].edges;
 }
 
+/** May the robber stand on `hex`? Land only; on `numberedOnly` boards only hexes with a number disc. */
+export function robberAllowed(board: Board, hex: number): boolean {
+  return isLandHex(board, hex) && (!board.numberedOnly || board.hexes[hex].number !== null);
+}
+
+/**
+ * The Forgotten Tribe: edges where `player` may put a captured port — a coastal edge
+ * (land on one side, sea or the frame on the other) at one of their buildings, with
+ * no port on it and at least one edge between it and every other port.
+ */
+export function legalPortEdges(s: BoardState, player: number): string[] {
+  const G = boardGraph(s.board);
+  const portVertices = new Set(s.board.harbors.flatMap((h) => G.edges[h.edge].vertices));
+  const out = new Set<string>();
+  for (const [vertex, b] of Object.entries(s.buildings)) {
+    if (b.owner !== player) continue;
+    for (const e of G.vertices[vertex].edges) {
+      const edge = G.edges[e];
+      const land = edge.hexes.filter((h) => isLandHex(s.board, h)).length;
+      const coastal = land === 1 && (edge.hexes.length === 1 || edge.hexes.some((h) => isSeaHex(s.board, h)));
+      if (coastal && !edge.vertices.some((x) => portVertices.has(x))) out.add(e);
+    }
+  }
+  return [...out].sort();
+}
+
+/**
+ * Cloth for Catan: does a route of `player`'s roads and ships run from one of
+ * their buildings to `target`? It may not pass an opponent's building.
+ */
+export function routeReaches(s: BoardState, player: number, target: string): boolean {
+  const G = boardGraph(s.board);
+  const mine = (e: string) => s.roads[e] === player || s.ships?.[e] === player;
+  const seen = new Set<string>();
+  const queue = Object.keys(s.buildings).filter((v) => s.buildings[v].owner === player);
+  queue.forEach((v) => seen.add(v));
+  while (queue.length) {
+    const v = queue.shift()!;
+    if (v === target) return true;
+    if (s.buildings[v] && s.buildings[v].owner !== player) continue;
+    for (const e of G.vertices[v].edges) {
+      if (!mine(e)) continue;
+      const [a, b] = G.edges[e].vertices;
+      const next = a === v ? b : a;
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
 /** Land region of a vertex (Seafarers), or null on boards without regions / pure sea. */
 export function vertexRegion(s: BoardState, vertex: string): string | null {
   const v = boardGraph(s.board).vertices[vertex];
@@ -59,6 +112,7 @@ export function satisfiesDistanceRule(s: BoardState, vertex: string): boolean {
   const v = G.vertices[vertex];
   if (!v || s.buildings[vertex]) return false;
   if (!v.hexes.some((h) => isLandHex(s.board, h))) return false;
+  if (s.board.numberedOnly && !v.hexes.some((h) => s.board.hexes[h].number !== null)) return false;
   return v.neighbors.every((n) => !s.buildings[n]);
 }
 
@@ -200,6 +254,45 @@ export function shipLinksBuildings(s: BoardState, player: number, edge: string):
   return false;
 }
 
+/**
+ * Cloth for Catan: is the ship part of a "closed" route — a line of the owner's
+ * ships from one of their buildings to a village?
+ */
+export function shipLinksVillage(s: BoardState, player: number, edge: string): boolean {
+  const villages = new Set((s.board.villages ?? []).map((v) => v.vertex));
+  if (villages.size === 0) return false;
+  const G = boardGraph(s.board);
+  const ships = s.ships ?? {};
+  const reach = (start: string): { building: boolean; village: boolean } => {
+    const out = { building: false, village: false };
+    const seen = new Set([start]);
+    const queue = [start];
+    while (queue.length) {
+      const v = queue.shift()!;
+      if (villages.has(v)) out.village = true;
+      if (s.buildings[v]?.owner === player) {
+        out.building = true;
+        continue;
+      }
+      if (s.buildings[v]) continue;
+      for (const o of G.vertices[v].edges) {
+        if (o === edge || ships[o] !== player) continue;
+        const [a, b] = G.edges[o].vertices;
+        const next = a === v ? b : a;
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return out;
+  };
+  const [a, b] = G.edges[edge].vertices;
+  const ra = reach(a);
+  const rb = reach(b);
+  return (ra.building && rb.village) || (ra.village && rb.building);
+}
+
 /** Why `player` may not move the ship on `edge` (the once-per-turn limit aside), or null. */
 export function shipMoveBlock(s: BoardState & { newShips?: string[] }, player: number, edge: string): string | null {
   if (s.ships?.[edge] !== player) return 'That is not your ship';
@@ -207,6 +300,7 @@ export function shipMoveBlock(s: BoardState & { newShips?: string[] }, player: n
   if (pirateEdges(s).includes(edge)) return 'Ships next to the pirate cannot move';
   if (!shipHasOpenEnd(s, player, edge)) return 'Only a ship with an open end can move';
   if (shipLinksBuildings(s, player, edge)) return 'This ship links two of your buildings';
+  if (shipLinksVillage(s, player, edge)) return 'This ship is part of a closed route to a village';
   return null;
 }
 

@@ -1,11 +1,14 @@
 import { generateBeginnerBoard, generateRandomBoard } from './board';
-import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor, scenarioMapSize } from './mods';
+import { hasShips, isModId, modFor, modPlayerRange, scenarioBoard, scenarioFor, scenarioMapSize, type ScenarioDef } from './mods';
 import { boardGraph } from './geometry';
 import {
   canPlaceShip,
   inStartRegion,
   isLandHex,
   isRoadConnected,
+  legalPortEdges,
+  robberAllowed,
+  routeReaches,
   isRoadEdge,
   isShipConnected,
   isShipEdge,
@@ -39,6 +42,7 @@ import {
   type ActionResult,
   type DevCardType,
   type GameConfig,
+  type HarborType,
   type GameState,
   type LogEntry,
   type PlayerSetup,
@@ -110,6 +114,7 @@ export function createGame(
     for (let i = 0; i < mod.devDeck[t]; i++) deck.push(t);
   });
 
+  const devDeck = rng.shuffle(deck);
   const ruleset = rulesetFor(players.length);
   const bank = emptyRes();
   for (const r of RESOURCES) bank[r] = mod.bankPerResource;
@@ -133,10 +138,12 @@ export function createGame(
         citiesBuilt: 0,
         playedDevThisTurn: false,
         ...(ships ? { shipsBuilt: 0, vpTokens: 0, bonusRegions: [] } : {}),
+        ...(scenario?.itemPorts ? { heldPorts: [] } : {}),
+        ...(scenario?.cloth ? { cloth: 0, villages: [] } : {}),
       }),
     ),
     bank,
-    devDeck: rng.shuffle(deck),
+    devDeck,
     turn: 0,
     currentPlayer: 0,
     phase: 'ORDER_ROLL',
@@ -161,7 +168,111 @@ export function createGame(
     logSeq: 1,
     rng: rng.seed,
   };
+  if (scenario) setUpScenarioExtras(state, scenario, rng);
+  state.rng = rng.seed;
   return state;
+}
+
+/**
+ * Scenario pieces dealt at the start: shuffled port types ("?" ports and the
+ * Forgotten Tribe's port items), the Tribe's face-down development cards (the
+ * top cards of the deck) and Cloth for Catan's general cloth supply.
+ */
+function setUpScenarioExtras(state: GameState, scenario: ScenarioDef, rng: Rng): void {
+  const board = state.board;
+  if (scenario.shufflePorts) {
+    const types = rng.shuffle(board.harbors.map((h) => h.type));
+    board.harbors = board.harbors.map((h, i) => ({ ...h, type: types[i] }));
+  }
+  if (board.edgeItems) {
+    const edges = Object.keys(board.edgeItems).sort();
+    const ports: HarborType[] = rng.shuffle([...(scenario.itemPorts ?? [])]);
+    let p = 0;
+    state.edgeDevs = {};
+    for (const e of edges) {
+      const item = board.edgeItems[e];
+      if (item.kind === 'port') board.edgeItems[e] = { kind: 'port', type: ports[p++] ?? 'generic' };
+      else if (item.kind === 'dev' && state.devDeck.length > 0) state.edgeDevs[e] = state.devDeck.shift()!;
+    }
+  }
+  if (scenario.cloth) state.clothSupply = scenario.cloth.supply;
+}
+
+/**
+ * The Forgotten Tribe: a ship built or moved onto an edge with an item takes it —
+ * a VP token (+1 VP), a development card (as if bought this turn) or a port
+ * (placed at a coastal settlement now or later, see `placePort`).
+ */
+function collectItem(state: GameState, player: number, edge: string): void {
+  const item = state.board.edgeItems?.[edge];
+  if (!item) return;
+  const me = state.players[player];
+  const items = { ...state.board.edgeItems };
+  delete items[edge];
+  state.board.edgeItems = items;
+  if (item.kind === 'vp') {
+    me.vpTokens = (me.vpTokens ?? 0) + 1;
+    say(state, 'tookVpToken', { p: player });
+  } else if (item.kind === 'dev') {
+    const card = state.edgeDevs?.[edge];
+    if (state.edgeDevs) delete state.edgeDevs[edge];
+    if (card) me.devCards.push({ type: card, boughtTurn: state.turn });
+    say(state, 'tookDevCard', { p: player });
+  } else {
+    me.heldPorts = [...(me.heldPorts ?? []), item.type];
+    if (item.type === 'generic') say(state, 'tookPortGeneric', { p: player });
+    else say(state, 'tookPort', { p: player, r: item.type });
+  }
+}
+
+/**
+ * Cloth for Catan: a route from one of the player's buildings to a village opens
+ * trade with it — 1 cloth from that village right away.
+ */
+function checkVillages(state: GameState, player: number): void {
+  const villages = state.board.villages;
+  if (!villages) return;
+  const me = state.players[player];
+  villages.forEach((village, i) => {
+    if ((me.villages ?? []).includes(i) || !routeReaches(state, player, village.vertex)) return;
+    me.villages = [...(me.villages ?? []), i];
+    const got = village.cloth > 0 ? 1 : 0;
+    village.cloth -= got;
+    me.cloth = (me.cloth ?? 0) + got;
+    say(state, 'villageTrade', { p: player, n: village.number });
+  });
+}
+
+/** Cloth for Catan: villages with the rolled number give 1 cloth to each trading partner. */
+function produceCloth(state: GameState, roll: number): void {
+  for (const [i, village] of (state.board.villages ?? []).entries()) {
+    if (village.number !== roll || village.cloth === 0) continue;
+    state.players.forEach((p, seat) => {
+      if (!(p.villages ?? []).includes(i)) return;
+      // A village that runs out mid-roll is topped up from the general supply.
+      if (village.cloth > 0) village.cloth--;
+      else if ((state.clothSupply ?? 0) > 0) state.clothSupply!--;
+      else return;
+      p.cloth = (p.cloth ?? 0) + 1;
+      say(state, 'clothReceived', { p: seat, n: 1 });
+    });
+  }
+}
+
+/** Cloth for Catan: enough empty villages end the game; most VP wins, ties go to more cloth. */
+function checkClothEnd(state: GameState): void {
+  const rule = scenarioFor(state)?.cloth;
+  if (!rule || state.phase === 'GAME_OVER') return;
+  const empty = (state.board.villages ?? []).filter((v) => v.cloth === 0).length;
+  if (empty < rule.endWhenEmpty) return;
+  const ranked = state.players
+    .map((p, i) => ({ i, vp: victoryPoints(state, i), cloth: p.cloth ?? 0 }))
+    .sort((a, b) => b.vp - a.vp || b.cloth - a.cloth || a.i - b.i);
+  state.winner = ranked[0].i;
+  state.phase = 'GAME_OVER';
+  state.trade = null;
+  say(state, 'villagesEmpty', { n: empty });
+  say(state, 'win', { p: ranked[0].i, n: ranked[0].vp });
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +281,7 @@ export function createGame(
 
 export function publicVictoryPoints(state: GameState, player: number): number {
   const p = state.players[player];
-  let vp = p.settlementsBuilt - p.citiesBuilt + p.citiesBuilt * 2 + (p.vpTokens ?? 0);
+  let vp = p.settlementsBuilt - p.citiesBuilt + p.citiesBuilt * 2 + (p.vpTokens ?? 0) + Math.floor((p.cloth ?? 0) / 2);
   if (state.longestRoad.holder === player) vp += 2;
   if (state.largestArmy === player) vp += 2;
   return vp;
@@ -182,6 +293,7 @@ export function victoryPoints(state: GameState, player: number): number {
 }
 
 function updateLongestRoad(state: GameState): void {
+  if (scenarioFor(state)?.noLongestRoute) return;
   const lengths = state.players.map((_, i) => longestRoadLength(state, i));
   const previous = state.longestRoad.holder;
   const max = Math.max(...lengths);
@@ -407,16 +519,20 @@ function produce(state: GameState, roll: number): { producing: number[]; gains: 
     }
   }
   if (Object.keys(gold).length > 0) state.pendingGold = gold;
+  produceCloth(state, roll);
   return { producing, gains };
 }
 
 
 /** Robber or pirate placed: steal automatically from a single candidate, else let the player choose. */
-function afterRobberMove(state: GameState, rng: Rng, player: number, owners: number[]): void {
-  const candidates = owners.filter((p) => p !== player && totalRes(state.players[p].resources) > 0);
+function afterRobberMove(state: GameState, rng: Rng, player: number, owners: number[], cloth = false): void {
+  // Cloth for Catan: the pirate may take a cloth token instead, so the thief always chooses.
+  const has = (p: number) => totalRes(state.players[p].resources) > 0 || (cloth && (state.players[p].cloth ?? 0) > 0);
+  const candidates = owners.filter((p) => p !== player && has(p));
+  state.stealCloth = cloth || undefined;
   if (candidates.length === 0) {
     finishRobber(state);
-  } else if (candidates.length === 1) {
+  } else if (candidates.length === 1 && !cloth) {
     stealFrom(state, rng, player, candidates[0]);
     finishRobber(state);
   } else {
@@ -427,6 +543,7 @@ function afterRobberMove(state: GameState, rng: Rng, player: number, owners: num
 
 function finishRobber(state: GameState): void {
   state.stealCandidates = [];
+  delete state.stealCloth;
   state.phase = state.robberReturnPhase;
 }
 
@@ -478,7 +595,10 @@ function resolveOrderRound(state: GameState): void {
 
   state.turnOrder = order.groups.flat();
   state.phase = 'INITIAL_PLACEMENT';
-  state.setup = { order: rulesetFor(state.players.length).setupOrder(state.turnOrder), step: 0, lastSettlement: null };
+  const setupOrder = rulesetFor(state.players.length).setupOrder(state.turnOrder);
+  // Cloth for Catan: a third starting settlement each, in turn order.
+  for (let round = 2; round < (scenarioFor(state)?.setupRounds ?? 2); round++) setupOrder.push(...state.turnOrder);
+  state.setup = { order: setupOrder, step: 0, lastSettlement: null };
   state.currentPlayer = state.turnOrder[0];
   say(state, 'orderDone', { order: state.turnOrder, p: state.turnOrder[0] });
 }
@@ -618,7 +738,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       state.buildings[action.vertex] = { owner: player, type: 'settlement' };
       me.settlementsBuilt++;
       setup.lastSettlement = action.vertex;
-      const isSecond = setup.step >= state.players.length;
+      // Starting resources come from the last round of starting settlements.
+      const isSecond = setup.step >= setup.order.length - state.players.length;
       let gold = 0;
       if (isSecond || state.config.startResBothSettlements) {
         const gained = emptyRes();
@@ -664,6 +785,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
         me.roadsBuilt++;
       }
       discover(state, rng, player, action.edge);
+      if (action.ship) collectItem(state, player, action.edge);
+      checkVillages(state, player);
       setup.lastSettlement = null;
       setup.step++;
       if (setup.step >= setup.order.length) {
@@ -751,6 +874,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (action.hex === state.board.robberHex) fail('The robber must move to a different hex');
       if (!isLandHex(state.board, action.hex)) fail('The robber must stay on land');
+      if (!robberAllowed(state.board, action.hex)) fail('The robber may only move to a hex with a number');
       state.board.robberHex = action.hex;
       say(state, 'robberMoved', { p: player });
       afterRobberMove(state, rng, player, playersOnHex(state, action.hex));
@@ -764,9 +888,10 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       if (!Number.isInteger(action.hex) || !state.board.hexes[action.hex]) fail('Unknown hex');
       if (state.board.hexes[action.hex].terrain !== 'sea') fail('The pirate must move to a sea hex');
       if (action.hex === state.board.pirateHex) fail('The pirate must move to a different hex');
+      if (state.board.villages && (me.villages ?? []).length === 0) fail('You may move the pirate once you trade with a village');
       state.board.pirateHex = action.hex;
       say(state, 'pirateMoved', { p: player });
-      afterRobberMove(state, rng, player, shipOwnersOnHex(state, action.hex));
+      afterRobberMove(state, rng, player, shipOwnersOnHex(state, action.hex), !!state.board.villages);
       return;
     }
 
@@ -774,6 +899,17 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       requirePhase(state, 'ROBBER_STEAL');
       requireActive(state, player);
       if (!state.stealCandidates.includes(action.victim)) fail('You cannot steal from that player');
+      if (action.cloth) {
+        if (!state.stealCloth) fail('Only the pirate can take cloth');
+        const victim = state.players[action.victim];
+        if ((victim.cloth ?? 0) === 0) fail('That player has no cloth');
+        victim.cloth!--;
+        me.cloth = (me.cloth ?? 0) + 1;
+        say(state, 'stoleCloth', { p: player, q: action.victim });
+        finishRobber(state);
+        checkVictory(state);
+        return;
+      }
       stealFrom(state, rng, player, action.victim);
       finishRobber(state);
       return;
@@ -789,6 +925,7 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       pay(state, player, mod.costs.road, 'a road');
       say(state, 'builtRoad', { p: player });
       discover(state, rng, player, action.edge);
+      checkVillages(state, player);
       updateLongestRoad(state);
       checkVictory(state);
       settleDiscoveredGold(state);
@@ -807,6 +944,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       state.newShips = [...(state.newShips ?? []), action.edge];
       say(state, 'builtShip', { p: player });
       discover(state, rng, player, action.edge);
+      collectItem(state, player, action.edge);
+      checkVillages(state, player);
       updateLongestRoad(state);
       checkVictory(state);
       settleDiscoveredGold(state);
@@ -831,6 +970,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       state.shipMoved = true;
       say(state, 'movedShip', { p: player });
       discover(state, rng, player, action.to);
+      collectItem(state, player, action.to);
+      checkVillages(state, player);
       updateLongestRoad(state);
       checkVictory(state);
       settleDiscoveredGold(state);
@@ -934,6 +1075,8 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       } else if (state.freeRoads > 0 && legalRoads(state, player).length === 0) state.freeRoads = 0;
       say(state, action.ship ? 'placedFreeShip' : 'placedFreeRoad', { p: player });
       discover(state, rng, player, action.edge);
+      if (action.ship) collectItem(state, player, action.edge);
+      checkVillages(state, player);
       updateLongestRoad(state);
       checkVictory(state);
       settleDiscoveredGold(state);
@@ -1085,10 +1228,30 @@ function reduce(state: GameState, rng: Rng, player: number, action: Action): voi
       return;
     }
 
+    case 'placePort': {
+      requirePhase(state, 'MAIN_ACTIONS');
+      requireActive(state, player);
+      const held = me.heldPorts ?? [];
+      if (held.length === 0) fail('You have no port to place');
+      const type: HarborType = action.port ?? held[0];
+      const idx = held.indexOf(type);
+      if (idx < 0) fail('You do not hold that port');
+      if (!legalPortEdges(state, player).includes(action.edge)) {
+        fail('A port goes on a coastal edge of your settlement, one edge away from other ports');
+      }
+      me.heldPorts = held.filter((_, i) => i !== idx);
+      state.board.harbors = [...state.board.harbors, { edge: action.edge, type }];
+      say(state, 'placedPort', { p: player });
+      return;
+    }
+
     case 'endTurn': {
       requirePhase(state, 'MAIN_ACTIONS');
       requireActive(state, player);
       requireNoFreeRoads(state);
+      if ((me.heldPorts ?? []).length > 0 && legalPortEdges(state, player).length > 0) fail('Place your port first');
+      checkClothEnd(state);
+      if (state.winner !== null) return;
       if (state.paired) {
         // Player 2 is done: the dice pass to the player after Player 1.
         const first = state.paired.first;

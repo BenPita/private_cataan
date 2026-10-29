@@ -89,7 +89,12 @@ export function validateBoard(board: Board, mod: ModDef): void {
  * numbers, ports on the given hex sides, robber and pirate where shown.
  * Registers the map's layout under `layout` so its graph can be built.
  */
-export function boardFromMap(map: ScenarioMap, layout: LayoutId, startRegions?: string[]): Board {
+export function boardFromMap(
+  map: ScenarioMap,
+  layout: LayoutId,
+  opts: { startRegions?: string[]; numberedOnly?: boolean; clothPerVillage?: number } = {},
+): Board {
+  const { startRegions } = opts;
   const all = boardHexes(map);
   registerLayout(layout, all.map((h): [number, number] => [h.q, h.r]));
   const graph = graphFor(layout);
@@ -109,5 +114,23 @@ export function boardFromMap(map: ScenarioMap, layout: LayoutId, startRegions?: 
   const pirateHex = index(map.pirate[0], map.pirate[1], 'Pirate');
   if (hexes[robberHex].terrain === 'sea') throw new Error('The robber must start on land');
   if (hexes[pirateHex].terrain !== 'sea') throw new Error('The pirate must start on the sea');
-  return { layout, hexes, harbors, robberHex, pirateHex, ...(startRegions ? { startRegions: [...startRegions] } : {}) };
+  const board: Board = { layout, hexes, harbors, robberHex, pirateHex, ...(startRegions ? { startRegions: [...startRegions] } : {}) };
+  if (opts.numberedOnly) board.numberedOnly = true;
+  if (map.edgeItems) {
+    // Port types are dealt by createGame (shuffled); 'generic' is a placeholder.
+    board.edgeItems = {};
+    for (const it of map.edgeItems) {
+      const edge = hexSideEdge(graph, index(it.q, it.r, 'Item'), it.dir);
+      board.edgeItems[edge] = it.item === 'port' ? { kind: 'port', type: 'generic' } : { kind: it.item };
+    }
+  }
+  if (map.villages) {
+    board.villages = map.villages.map((vl) => {
+      const h = graph.hexes[index(vl.q, vl.r, 'Village')];
+      const ys = h.vertices.map((id) => graph.vertices[id].y);
+      const y = vl.corner === 'top' ? Math.min(...ys) : Math.max(...ys);
+      return { vertex: h.vertices.find((id) => graph.vertices[id].y === y)!, number: vl.n, cloth: opts.clothPerVillage ?? 0 };
+    });
+  }
+  return board;
 }

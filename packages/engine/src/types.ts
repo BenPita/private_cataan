@@ -61,6 +61,24 @@ export interface Board {
   pirateHex?: number;
   /** Seafarers: regions where starting settlements may go (missing = anywhere). */
   startRegions?: string[];
+  /**
+   * Settlements only at spots touching a hex with a number disc, and the robber only on such
+   * hexes (The Forgotten Tribe; in Cloth for Catan this keeps both off the small islands).
+   */
+  numberedOnly?: boolean;
+  /** The Forgotten Tribe: VP tokens, face-down development cards and ports lying on sea edges. */
+  edgeItems?: Record<string, EdgeItem>;
+  /** Cloth for Catan: villages on the small islands (a corner with a number disc) and their cloth. */
+  villages?: Village[];
+}
+
+export type EdgeItem = { kind: 'vp' } | { kind: 'dev' } | { kind: 'port'; type: HarborType };
+
+export interface Village {
+  vertex: string;
+  number: number;
+  /** Cloth tokens left next to the village. */
+  cloth: number;
 }
 
 export interface Building {
@@ -97,6 +115,11 @@ export interface PlayerState extends PlayerSetup {
   bonusRegions?: string[];
   /** Regions of the player's starting settlements, when the scenario makes those their home. */
   homeRegions?: string[];
+  /** The Forgotten Tribe: captured ports not placed yet (no valid coastal spot so far). */
+  heldPorts?: HarborType[];
+  /** Cloth for Catan: cloth tokens (2 = 1 VP) and the villages (indices) the player trades with. */
+  cloth?: number;
+  villages?: number[];
 }
 
 export interface TradeOffer {
@@ -186,6 +209,8 @@ export interface GameState {
   /** Phase to return to after the robber is resolved (PRE_ROLL when a Knight is played before rolling). */
   robberReturnPhase: 'PRE_ROLL' | 'MAIN_ACTIONS';
   stealCandidates: number[];
+  /** Cloth for Catan: the pending steal is the pirate's, which may take a cloth token instead. */
+  stealCloth?: boolean;
   /**
    * Seafarers gold fields: resources of their choice each player still has to
    * take (GOLD_CHOICE phase). Missing on older saves → {}.
@@ -200,6 +225,10 @@ export interface GameState {
    * (unordered; each discovery draws one at random). Hidden from player views.
    */
   fogStack?: { hexes: Terrain[]; numbers: number[] };
+  /** The Forgotten Tribe: the development card lying face down on each such edge. Hidden from views. */
+  edgeDevs?: Record<string, DevCardType>;
+  /** Cloth for Catan: cloth tokens in the general supply. */
+  clothSupply?: number;
   /** Seafarers: the active player already moved a ship this turn. */
   shipMoved?: boolean;
   /** Seafarers: edges of ships built this turn (they may not be moved this turn). */
@@ -230,11 +259,14 @@ export type Action =
   | { type: 'discard'; resources: ResMap }
   | { type: 'moveRobber'; hex: number }
   | { type: 'movePirate'; hex: number }
-  | { type: 'steal'; victim: number }
+  /** `cloth: true` steals a cloth token instead of a resource card (Cloth for Catan, pirate only). */
+  | { type: 'steal'; victim: number; cloth?: boolean }
   | { type: 'buildRoad'; edge: string }
   | { type: 'buildShip'; edge: string }
   | { type: 'moveShip'; from: string; to: string }
   | { type: 'chooseGold'; resources: ResMap }
+  /** The Forgotten Tribe: put a captured port (`type`, default the first held) on `edge`. */
+  | { type: 'placePort'; edge: string; port?: HarborType }
   | { type: 'buildSettlement'; vertex: string }
   | { type: 'buildCity'; vertex: string }
   | { type: 'buyDevCard' }

@@ -24,13 +24,17 @@ export interface PublicPlayer {
   vpTokens: number;
   bonusRegions: string[];
   homeRegions: string[];
+  /** The Forgotten Tribe: captured ports not placed yet (public). Cloth for Catan: cloth and villages. */
+  heldPorts: PlayerState['heldPorts'] & object;
+  cloth: number;
+  villages: number[];
 }
 
 /**
  * What one participant is allowed to know. Contains no other player's
  * resources or dev cards, no deck order and no RNG seed.
  */
-export interface PlayerView extends Omit<GameState, 'players' | 'devDeck' | 'rng' | 'log' | 'fogStack'> {
+export interface PlayerView extends Omit<GameState, 'players' | 'devDeck' | 'rng' | 'log' | 'fogStack' | 'edgeDevs'> {
   me: number | null;
   /** The Fog Islands: face-down hexes left to discover (their kinds stay hidden). */
   fogLeft?: number;
@@ -49,8 +53,9 @@ export interface LogItem {
 
 export function getPlayerView(state: GameState, viewer: number | null): PlayerView {
   const reveal = state.phase === 'GAME_OVER';
-  const { devDeck, rng, players, log, fogStack, ...rest } = cloneState(state);
+  const { devDeck, rng, players, log, fogStack, edgeDevs, ...rest } = cloneState(state);
   void rng;
+  void edgeDevs;
   return {
     ...rest,
     ...(fogStack ? { fogLeft: fogStack.hexes.length } : {}),
@@ -77,6 +82,9 @@ export function getPlayerView(state: GameState, viewer: number | null): PlayerVi
         vpTokens: p.vpTokens ?? 0,
         bonusRegions: p.bonusRegions ?? [],
         homeRegions: p.homeRegions ?? [],
+        heldPorts: p.heldPorts ?? [],
+        cloth: p.cloth ?? 0,
+        villages: p.villages ?? [],
       };
     }),
     log: log.map((entry: LogEntry): LogItem => {

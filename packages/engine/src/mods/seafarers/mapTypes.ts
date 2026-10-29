@@ -46,6 +46,10 @@ export interface ScenarioMap {
   pirate: [number, number];
   /** Sea spaces printed on the frame; part of the board as sea hexes (ids after the listed hexes). */
   frameSea?: Array<[number, number]>;
+  /** The Forgotten Tribe: items lying on side `dir` of hex (q, r). */
+  edgeItems?: Array<{ q: number; r: number; dir: 0 | 1 | 2 | 3 | 4 | 5; item: 'vp' | 'dev' | 'port' }>;
+  /** Cloth for Catan: a village at the top or bottom corner of hex (q, r), with its number disc. */
+  villages?: Array<{ q: number; r: number; corner: 'top' | 'bottom'; n: number }>;
 }
 
 /** Every hex of the board in id order: the listed hexes, then the frame-printed sea spaces. */

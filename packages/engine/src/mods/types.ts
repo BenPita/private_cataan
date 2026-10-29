@@ -16,6 +16,18 @@ export interface ScenarioDef {
   regionBonus?: number;
   /** The Fog Islands: face-down hexes and number discs for the empty (`fog`) spaces, per map. */
   fog?: { 3: FogStack; 4: FogStack };
+  /** Settlements and the robber only on/at hexes with a number disc (see Board.numberedOnly). */
+  numberedOnly?: boolean;
+  /** The Forgotten Tribe: port types shuffled onto the map's port items. */
+  itemPorts?: HarborType[];
+  /** Shuffle the printed port types over the port locations ("?" ports). */
+  shufflePorts?: boolean;
+  /** Rounds of starting settlements (default 2); resources come from the last round only. */
+  setupRounds?: number;
+  /** No Longest Route in this scenario. */
+  noLongestRoute?: boolean;
+  /** Cloth for Catan: tokens per village, the general supply, and empty villages that end the game. */
+  cloth?: { perVillage: number; supply: number; endWhenEmpty: number };
 }
 
 export interface FogStack {

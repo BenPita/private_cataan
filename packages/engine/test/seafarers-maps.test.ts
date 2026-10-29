@@ -8,6 +8,7 @@ import {
   THROUGH_DESERT_4P,
 } from '../src/mods/seafarers/maps';
 import { FOG_ISLANDS_3P, FOG_ISLANDS_4P } from '../src/mods/seafarers/fogMaps';
+import { CLOTH_FOR_CATAN, FORGOTTEN_TRIBE } from '../src/mods/seafarers/tribeClothMaps';
 import { MAP_DIRS, type MapHex, type ScenarioMap } from '../src/mods/seafarers/mapTypes';
 
 /** Component tables printed next to each map (rulebook pp. 4-7, 10-11). */
@@ -16,6 +17,10 @@ interface Table {
   discs: Record<number, number>;
   ports2to1: number;
   ports3to1: number;
+  /** Small islands without number discs (The Forgotten Tribe, Cloth for Catan). */
+  unnumbered?: boolean;
+  /** The ports lie on sea edges as items (The Forgotten Tribe), not on the map's coast. */
+  itemPorts?: boolean;
 }
 
 const TABLE_3P: Table = {
@@ -73,6 +78,25 @@ const TABLE_FOG_4P: Table = {
   discs: { 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 1, 12: 1 },
   ports2to1: 5,
   ports3to1: 4,
+};
+
+/** The Forgotten Tribe (p. 12), one map for 3 and 4 players. */
+const TABLE_TRIBE: Table = {
+  terrain: { sea: 19, gold: 2, hills: 5, forest: 5, pasture: 5, fields: 5, mountains: 5, desert: 3 },
+  discs: { 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 1 },
+  ports2to1: 5,
+  ports3to1: 1,
+  unnumbered: true,
+  itemPorts: true,
+};
+
+/** Cloth for Catan (p. 14), one map for 3 and 4 players; 8 of the 28 discs are villages. */
+const TABLE_CLOTH: Table = {
+  terrain: { sea: 18, gold: 2, hills: 3, forest: 4, pasture: 4, fields: 5, mountains: 4, desert: 2 },
+  discs: { 2: 2, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 2 },
+  ports2to1: 5,
+  ports3to1: 4,
+  unnumbered: true,
 };
 
 /** Per-scenario region expectations. */
@@ -147,13 +171,19 @@ function check(name: string, map: ScenarioMap, table: Table, spec: RegionSpec) {
       const counts: Record<number, number> = {};
       for (const h of map.hexes) {
         if (h.t === 'sea' || h.t === 'desert' || h.t === 'fog') expect(h.n).toBeNull();
-        else expect(h.n).not.toBeNull();
+        else if (!table.unnumbered) expect(h.n).not.toBeNull();
         if (h.n !== null) counts[h.n] = (counts[h.n] ?? 0) + 1;
       }
+      for (const v of map.villages ?? []) counts[v.n] = (counts[v.n] ?? 0) + 1;
       expect(counts).toEqual(table.discs);
     });
 
     it('ports: count and 2:1 / 3:1 split match the table', () => {
+      if (table.itemPorts) {
+        expect(map.ports).toHaveLength(0);
+        expect((map.edgeItems ?? []).filter((i) => i.item === 'port').length).toBe(table.ports2to1 + table.ports3to1);
+        return;
+      }
       const generic = map.ports.filter((p) => p.type === 'generic').length;
       expect(generic).toBe(table.ports3to1);
       expect(map.ports.length - generic).toBe(table.ports2to1);
@@ -269,6 +299,43 @@ check('Through the Desert, 3 players', THROUGH_DESERT_3P, TABLE_DESERT_3P, DESER
 check('Through the Desert, 4 players', THROUGH_DESERT_4P, TABLE_DESERT_4P, DESERT_REGIONS);
 check('The Fog Islands, 3 players', FOG_ISLANDS_3P, TABLE_FOG_3P, { named: ['east', 'west'], isles: 0 });
 check('The Fog Islands, 4 players', FOG_ISLANDS_4P, TABLE_FOG_4P, { named: ['east', 'west'], isles: 0 });
+check('The Forgotten Tribe', FORGOTTEN_TRIBE, TABLE_TRIBE, { named: ['main'], isles: 6 });
+check('Cloth for Catan', CLOTH_FOR_CATAN, TABLE_CLOTH, { named: ['north', 'south'], isles: 4 });
+
+describe('The Forgotten Tribe: gifts on the small islands', () => {
+  const byKey = new Map(FORGOTTEN_TRIBE.hexes.map((h) => [key(h.q, h.r), h]));
+  const items = FORGOTTEN_TRIBE.edgeItems ?? [];
+  it('8 VP tokens, 4 development cards and 6 ports', () => {
+    const n = (k: string) => items.filter((i) => i.item === k).length;
+    expect([n('vp'), n('dev'), n('port')]).toEqual([8, 4, 6]);
+  });
+  it('every item lies on a small-island side facing sea or the frame, one item per side', () => {
+    const sides = new Set<string>();
+    for (const it of items) {
+      const h = byKey.get(key(it.q, it.r));
+      expect(isLand(h) && h!.region !== 'main', `${it.q},${it.r}`).toBe(true);
+      const [dq, dr] = MAP_DIRS[it.dir];
+      const n = byKey.get(key(it.q + dq, it.r + dr));
+      expect(n === undefined || n.t === 'sea', `${it.q},${it.r}/${it.dir}`).toBe(true);
+      const corners = sideCorners(it.q, it.r, it.dir).sort().join('|');
+      expect(sides.has(corners)).toBe(false);
+      sides.add(corners);
+    }
+  });
+});
+
+describe('Cloth for Catan: villages', () => {
+  it('8 villages on the top and bottom corners of the 4 one-hex small islands', () => {
+    const vs = CLOTH_FOR_CATAN.villages ?? [];
+    expect(vs).toHaveLength(8);
+    const isles = CLOTH_FOR_CATAN.hexes.filter((h) => h.region?.startsWith('isle'));
+    expect(isles).toHaveLength(4);
+    for (const h of isles) {
+      expect(h.n).toBeNull();
+      expect(vs.filter((v) => v.q === h.q && v.r === h.r).map((v) => v.corner).sort()).toEqual(['bottom', 'top']);
+    }
+  });
+});
 
 describe('Through the Desert: the deserts split the large island', () => {
   for (const [name, map] of [
