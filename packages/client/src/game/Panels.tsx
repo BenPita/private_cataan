@@ -147,6 +147,8 @@ export function PlayerStrip({ view, seats }: { view: PlayerView; seats: PublicSe
               </span>
               <span title={t('knights')}>⚔ {p.knightsPlayed}</span>
               {sea && <span title={t('ships')}>⛵ {p.shipsBuilt}</span>}
+              {view.board.villages && <span title={t('cloth')}>🧵 {p.cloth}</span>}
+              {p.heldPorts.length > 0 && <span title={t('heldPorts')}>⚓ {p.heldPorts.length}</span>}
             </div>
             {(view.longestRoad.holder === i || view.largestArmy === i) && (
               <div className="chip-badges">
@@ -634,12 +636,25 @@ export function StealSheet({ view, dispatch }: { view: PlayerView; dispatch: Dis
   return (
     <Sheet title={t('stealTitle')}>
       <div className="steal-list">
-        {view.stealCandidates.map((p) => (
-          <button key={p} className="btn wide" onClick={() => dispatch({ type: 'steal', victim: p })}>
-            <span className="dot" style={{ background: view.players[p].color }} /> {playerName(view, p)} (
-            {t('cardsCount', { n: view.players[p].resourceCount })})
-          </button>
-        ))}
+        {view.stealCandidates.map((p) =>
+          // Cloth for Catan: the pirate may take a cloth token instead of a card.
+          view.stealCloth ? (
+            <div key={p} className="steal-row">
+              <span className="dot" style={{ background: view.players[p].color }} /> {playerName(view, p)}
+              <button className="btn" disabled={view.players[p].resourceCount === 0} onClick={() => dispatch({ type: 'steal', victim: p })}>
+                {t('stealCardBtn')} ({view.players[p].resourceCount})
+              </button>
+              <button className="btn" disabled={view.players[p].cloth === 0} onClick={() => dispatch({ type: 'steal', victim: p, cloth: true })}>
+                🧵 {t('stealClothBtn')} ({view.players[p].cloth})
+              </button>
+            </div>
+          ) : (
+            <button key={p} className="btn wide" onClick={() => dispatch({ type: 'steal', victim: p })}>
+              <span className="dot" style={{ background: view.players[p].color }} /> {playerName(view, p)} (
+              {t('cardsCount', { n: view.players[p].resourceCount })})
+            </button>
+          ),
+        )}
       </div>
     </Sheet>
   );

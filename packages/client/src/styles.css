@@ -2643,3 +2643,47 @@ h3,
   box-shadow: 0 0 0 4px #3f7a2a, 0 0 26px rgba(255, 210, 90, 0.7);
   animation: cardFlip 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
+
+/* The Forgotten Tribe: gifts on the sea; Cloth for Catan: villages */
+.item-vp {
+  text-anchor: middle;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 10px;
+  fill: #f7e2a0;
+}
+.item-port {
+  text-anchor: middle;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 10px;
+  fill: #3b2412;
+}
+.village-num {
+  text-anchor: middle;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 13px;
+  fill: #2a1e14;
+}
+.village-num.red {
+  fill: #b3261a;
+}
+.village-cloth {
+  text-anchor: middle;
+  font-weight: 800;
+  font-size: 9.5px;
+  fill: #3b2a06;
+}
+.village.empty {
+  opacity: 0.55;
+}
+.steal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.steal-row .btn {
+  flex: 1;
+}

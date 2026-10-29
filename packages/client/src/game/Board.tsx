@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode, type WheelEvent } from 'react';
-import { boardGraph, graphBounds, scenarioFor, vertexRegion, type Board as BoardData, type PlayerView } from '@hex/engine';
+import { boardGraph, graphBounds, scenarioFor, vertexRegion, type Board as BoardData, type EdgeItem, type PlayerView, type Village } from '@hex/engine';
 import { ResourceGlyph, shade } from '../art';
+import { t } from '../i18n';
 
 /** SVG units per hex radius. Must match art-src/extras.py (sea frame). */
 export const S = 60;
@@ -203,6 +204,57 @@ function BonusMarker({ x, y, n }: { x: number; y: number; n: number }) {
       <text y={3.4} className="bonus-num">
         +{n}
       </text>
+    </g>
+  );
+}
+
+/** The Forgotten Tribe: a gift on a sea edge — VP token, face-down development card or port. */
+function EdgeItemMark({ x, y, item }: { x: number; y: number; item: EdgeItem }) {
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none" className="edge-item">
+      <ellipse cx={1.5} cy={9} rx={11} ry={3} fill="rgba(10,40,60,0.35)" />
+      {item.kind === 'vp' && (
+        <>
+          <circle r={10} fill="#b3261a" stroke="#f2c94c" strokeWidth="1.6" />
+          <path d="M-6,-1 Q-6,5 -1,6 M6,-1 Q6,5 1,6" fill="none" stroke="#f2c94c" strokeWidth="1.4" strokeLinecap="round" />
+          <text y={2.6} className="item-vp">1</text>
+        </>
+      )}
+      {item.kind === 'dev' && (
+        <g transform="rotate(-8)">
+          <rect x={-8} y={-11} width={16} height={22} rx={2.5} fill="#7a2418" stroke="#f2e2b8" strokeWidth="1.6" />
+          <path d="M0,-6 L5,0 L0,6 L-5,0 Z" fill="#f2c94c" />
+        </g>
+      )}
+      {item.kind === 'port' && (
+        <>
+          <rect x={-14} y={-10} width={28} height={20} rx={3} fill="url(#flag)" stroke="#7a5a2a" strokeWidth="1.2" />
+          {item.type === 'generic' ? (
+            <text y={4} className="item-port">3:1</text>
+          ) : (
+            <ResourceGlyph r={item.type} size={14} x={-7} y={-7} />
+          )}
+        </>
+      )}
+    </g>
+  );
+}
+
+/** Cloth for Catan: a village — its number disc, the cloth left, and dots for its trading partners. */
+function VillageMark({ x, y, village, partners }: { x: number; y: number; village: Village; partners: string[] }) {
+  const red = village.number === 6 || village.number === 8;
+  return (
+    <g transform={`translate(${x},${y})`} pointerEvents="none" className={`village ${village.cloth === 0 ? 'empty' : ''}`}>
+      <title>{t('villageTitle', { n: village.number, k: village.cloth })}</title>
+      <circle r={13} fill="#f3e3b6" stroke="#8a6a2a" strokeWidth="1.4" />
+      <text y={4.5} className={`village-num ${red ? 'red' : ''}`}>{village.number}</text>
+      <g transform="translate(14,-12)">
+        <rect x={-9} y={-7} width={18} height={14} rx={3} fill="#e8c45a" stroke="#7a5a12" strokeWidth="1" />
+        <text y={3.6} className="village-cloth">{village.cloth}</text>
+      </g>
+      {partners.map((c, i) => (
+        <circle key={i} cx={(i - (partners.length - 1) / 2) * 7} cy={17} r={3} fill={c} stroke="#fff" strokeWidth="0.8" />
+      ))}
     </g>
   );
 }
@@ -486,6 +538,19 @@ export function Board({ view, targets, selection, onSelect, highlightHexes, onIn
         ) : (
           <Settlement key={`${vertex}-s`} x={v.x * S} y={v.y * S} color={colors[b.owner]} />
         );
+      })}
+
+      {/* The Forgotten Tribe: gifts lying on the sea */}
+      {Object.entries(view.board.edgeItems ?? {}).map(([edge, item]) => {
+        const e = G.edges[edge];
+        return <EdgeItemMark key={`item-${edge}`} x={e.x * S} y={e.y * S} item={item} />;
+      })}
+
+      {/* Cloth for Catan: villages on the small islands */}
+      {(view.board.villages ?? []).map((village, i) => {
+        const v = G.vertices[village.vertex];
+        const partners = view.players.flatMap((p) => (p.villages.includes(i) ? [p.color] : []));
+        return <VillageMark key={`village-${i}`} x={v.x * S} y={v.y * S} village={village} partners={partners} />;
       })}
 
       {/* Island bonus markers (Seafarers) */}

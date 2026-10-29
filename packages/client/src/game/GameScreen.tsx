@@ -4,7 +4,7 @@ import {
   modFor,
   hasShips,
   legalCities,
-  isLandHex,
+  legalPortEdges,
   legalRoads,
   legalSettlements,
   legalSetupRoads,
@@ -13,15 +13,17 @@ import {
   legalShipMoves,
   legalShips,
   movableShips,
+  robberAllowed,
   totalRes,
   TERRAIN_RESOURCE,
   type Action,
+  type HarborType,
   type ResMap,
   type Resource,
 } from '@hex/engine';
 import { emit, leaveGame, rejoinLink, sendAction, type RoomSnapshot } from '../net';
 import { canVibrate, getVolume, setVibrationEnabled, setVolume, sfx, vibrationEnabled } from '../sound';
-import { errorText, getLang, logText, setLang, t, terrainName, type Lang } from '../i18n';
+import { errorText, getLang, logText, resourceName, setLang, t, terrainName, type Lang } from '../i18n';
 import { HelpContent } from '../screens/Help';
 import { Board, hexCenter, type BoardApi, type BoardTargets, type Selection } from './Board';
 import { useGameFx } from './fx';
@@ -285,14 +287,24 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
   }, [view, myTurn, me, sea, mod]);
   const shipChoice = !!pieceEdges && pieceEdges.ship.length > 0;
 
+  // The Forgotten Tribe: a captured port waits to be placed next to a coastal settlement.
+  const heldPort: HarborType | undefined = view.players[me]?.heldPorts?.[0];
+  const portSpots = useMemo(
+    () => (myTurn && view.phase === 'MAIN_ACTIONS' && view.freeRoads === 0 && heldPort ? legalPortEdges(view, me) : []),
+    [view, myTurn, me, heldPort],
+  );
+  const portLabel = heldPort ? (heldPort === 'generic' ? t('port3to1') : t('port2to1', { res: resourceName(heldPort) })) : '';
+
   const targets: BoardTargets = useMemo(() => {
     if (!myTurn) return {};
     if (pieceEdges) return { edges: [...new Set([...pieceEdges.road, ...pieceEdges.ship])] };
+    if (portSpots.length > 0) return { edges: portSpots };
     if (view.phase === 'INITIAL_PLACEMENT') return view.setup?.lastSettlement ? {} : { vertices: legalSetupSettlements(view) };
     if (view.phase === 'ROBBER_MOVE') {
       // Robber on land; with ships, the pirate on any other sea hex.
-      const hexes = view.board.hexes.filter((h) => isLandHex(view.board, h.id) && h.id !== view.board.robberHex).map((h) => h.id);
-      if (view.board.pirateHex === undefined) return { hexes };
+      const hexes = view.board.hexes.filter((h) => robberAllowed(view.board, h.id) && h.id !== view.board.robberHex).map((h) => h.id);
+      // Cloth for Catan: the pirate moves only once you trade with a village.
+      if (view.board.pirateHex === undefined || (view.board.villages && view.players[me].villages.length === 0)) return { hexes };
       const pirateHexes = view.board.hexes.filter((h) => h.terrain === 'sea' && h.id !== view.board.pirateHex).map((h) => h.id);
       return { hexes, pirateHexes };
     }
@@ -304,7 +316,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
       if (mode === 'city') return { vertices: legalCities(view, me) };
     }
     return {};
-  }, [view, myTurn, mode, me, pieceEdges, moveFrom]);
+  }, [view, myTurn, mode, me, pieceEdges, moveFrom, portSpots]);
 
   // Moving a ship: the first tap picks the ship, the second where it sails.
   const onSelect = (sel: Selection) => {
@@ -350,6 +362,9 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         label: t('confirmRobber', { terrain: terrainName(view.board.hexes[sel.id].terrain) }),
         action: { type: 'moveRobber', hex: sel.id },
       };
+    }
+    if (sel.kind === 'edge' && portSpots.includes(sel.id)) {
+      return { label: t('confirmPort', { port: portLabel }), action: { type: 'placePort', edge: sel.id, port: heldPort } };
     }
     if (view.freeRoads > 0 && sel.kind === 'edge') {
       return pieceConfirm(
@@ -419,6 +434,7 @@ export function GameScreen({ snapshot, onLang }: { snapshot: RoomSnapshot; onLan
         return t('hintSteal');
       default:
         if (view.freeRoads > 0) return sea ? t('hintFreePieces', { n: view.freeRoads }) : t('hintFreeRoads', { n: view.freeRoads });
+        if (portSpots.length > 0) return t('hintPlacePort', { port: portLabel });
         if (mode === 'moveShip') return moveFrom ? t('hintShipTo') : t('hintPickShip');
         if (mode) return t('hintBuildMode');
         return view.paired ? t('pairedBannerMe') : t('hintMain');

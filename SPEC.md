@@ -329,6 +329,27 @@ side, ships a real sea side or the frame). `GameState.fogStack` holds the face-d
 - Bots value fog spaces (roads/ships toward them, a spare ship into the fog, coastal spots) — a
   scenario-specific nudge; the general bot rework is the side task below.
 
+The Forgotten Tribe (5) and Cloth for Catan (6), wired 2026-10-29 (`tribeClothMaps.ts`; one map for
+3 and 4 players each, as in the rulebook):
+- `Board.numberedOnly`: settlements only at spots touching a numbered hex, the robber only on numbered
+  hexes. Cloth uses it too: its small-island hexes carry no disc, which gives exactly "no settlements
+  or robber on the small islands".
+- Tribe: `Board.edgeItems` (8 VP, 4 dev, 6 ports; port types shuffled, dev cards = the top 4 of the
+  deck, kept in hidden `GameState.edgeDevs`). Any ship placed or moved onto the edge takes it (also
+  Road Building ships). Dev card counts as bought this turn. A port goes to `heldPorts`; `placePort`
+  puts it on a coastal edge (land + sea/frame) at one of your buildings with no port touching either
+  end. While a port can be placed you may not end your turn (rule: "if possible, place"); otherwise it
+  waits until you have a spot.
+- Cloth: villages are corners (top/bottom) of the 4 one-hex isles, 5 cloth each, general supply 10.
+  A route = your roads/ships from one of your buildings to the village corner, not through an
+  opponent's building (`routeReaches`). Opening trade takes 1 cloth (if any). A roll of the village
+  number gives each partner 1 cloth (village first, then the general supply; an empty village
+  gives nothing). 2 cloth = 1 public VP. Ships in a building–village line can't move. Pirate only
+  after your first village; its steal may take cloth (thief always chooses, `stealCloth`). 3 starting
+  settlements (`setupRounds`, third round in turn order, resources from the third only). No Longest
+  Route. End: 14 VP on your turn, or at the end of a turn with 5+ empty villages → most VP, then most
+  cloth, then lowest seat.
+
 ## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
 Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
 building, trading and racing for points. Wanted: clearly different levels, and Hard must be

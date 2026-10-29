@@ -195,6 +195,89 @@ function bonusTexture(n: number): THREE.CanvasTexture {
   return t;
 }
 
+/** The Forgotten Tribe: a VP token (red, laurel, "1") or a face-down development card. */
+function itemTexture(kind: 'vp' | 'dev'): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  if (kind === 'vp') {
+    g.fillStyle = '#b3261a';
+    g.strokeStyle = '#f2c94c';
+    g.lineWidth = 8;
+    g.beginPath();
+    g.arc(64, 64, 52, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#f7e2a0';
+    g.font = '900 62px "Frank Ruhl Libre", Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('1', 64, 68);
+  } else {
+    g.fillStyle = '#7a2418';
+    g.strokeStyle = '#f2e2b8';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.roundRect(30, 12, 68, 104, 10);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#f2c94c';
+    g.beginPath();
+    g.moveTo(64, 38);
+    g.lineTo(84, 64);
+    g.lineTo(64, 90);
+    g.lineTo(44, 64);
+    g.closePath();
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Cloth for Catan: a village disc with its number, cloth left and its trading partners' colours. */
+function villageTexture(n: number, cloth: number, partners: string[]): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 192;
+  c.height = 160;
+  const g = c.getContext('2d')!;
+  g.globalAlpha = cloth === 0 ? 0.55 : 1;
+  g.fillStyle = '#f3e3b6';
+  g.strokeStyle = '#8a6a2a';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(80, 84, 52, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  g.fillStyle = n === 6 || n === 8 ? '#b3261a' : '#2a1e14';
+  g.font = '900 60px "Frank Ruhl Libre", Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(String(n), 80, 88);
+  g.fillStyle = '#e8c45a';
+  g.strokeStyle = '#7a5a12';
+  g.lineWidth = 4;
+  g.beginPath();
+  g.roundRect(122, 8, 62, 50, 10);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#3b2a06';
+  g.font = '800 38px system-ui, sans-serif';
+  g.fillText(String(cloth), 153, 35);
+  partners.forEach((col, i) => {
+    g.fillStyle = col;
+    g.strokeStyle = '#fff';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(80 + (i - (partners.length - 1) / 2) * 26, 148, 10, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function flagTexture(type: string, onUpdate: () => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 200;
@@ -268,7 +351,8 @@ export default function Board3D({ view, targets, selection, onSelect, highlightH
   }, []);
 
   useEffect(() => engine.current?.setBoard(view), [JSON.stringify(view.board.hexes), JSON.stringify(view.board.harbors)]);
-  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.ships, view.players.length]);
+  const scenarioMarks = JSON.stringify([view.board.edgeItems, view.board.villages, view.players.map((p) => p.villages)]);
+  useEffect(() => engine.current?.setPieces(view), [view.buildings, view.roads, view.ships, view.players.length, scenarioMarks]);
   useEffect(() => engine.current?.setRobber(view.board.robberHex), [view.board.robberHex]);
   useEffect(() => engine.current?.setPirate(view.board.pirateHex), [view.board.pirateHex]);
   useEffect(() => engine.current?.setTargets(targets, selection, view.players[view.me ?? 0]?.color ?? '#ffffff'), [targets, selection]);
@@ -437,6 +521,11 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
   pirate.rotation.y = 0.5;
   pirate.visible = false;
   scene.add(pirate);
+  const itemMats = new Map<string, THREE.SpriteMaterial>();
+  const itemMat = (key: string, make: () => THREE.Texture) => {
+    if (!itemMats.has(key)) itemMats.set(key, new THREE.SpriteMaterial({ map: make(), transparent: true }));
+    return itemMats.get(key)!;
+  };
   const bonusMats = new Map<number, THREE.SpriteMaterial>();
   const bonusMat = (n: number) => {
     if (!bonusMats.has(n)) bonusMats.set(n, new THREE.SpriteMaterial({ map: bonusTexture(n), transparent: true }));
@@ -728,6 +817,29 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       coin.position.set(v.x, TILE_H + 0.06, v.y + 0.3);
       markersGroup.add(coin);
     }
+    // The Forgotten Tribe: gifts on the sea edges.
+    for (const [edge, item] of Object.entries(view.board.edgeItems ?? {})) {
+      const e = G.edges[edge];
+      const mat =
+        item.kind === 'port'
+          ? itemMat(`port:${item.type}`, () => flagTexture(item.type, invalidate))
+          : itemMat(item.kind, () => itemTexture(item.kind as 'vp' | 'dev'));
+      const s = new THREE.Sprite(mat);
+      if (item.kind === 'port') s.scale.set(0.52, 0.39, 1);
+      else s.scale.set(0.46, 0.46, 1);
+      s.position.set(e.x, TILE_H + 0.18, e.y);
+      markersGroup.add(s);
+    }
+    // Cloth for Catan: villages with their cloth and trading partners.
+    (view.board.villages ?? []).forEach((village, i) => {
+      const v = G.vertices[village.vertex];
+      const partners = view.players.flatMap((p) => (p.villages.includes(i) ? [p.color] : []));
+      const key = `village:${village.number}:${village.cloth}:${partners.join(',')}`;
+      const s = new THREE.Sprite(itemMat(key, () => villageTexture(village.number, village.cloth, partners)));
+      s.scale.set(1.08, 0.9, 1);
+      s.position.set(v.x, TILE_H + 0.45, v.y);
+      markersGroup.add(s);
+    });
     const firstFill = pieceMeshes.size === 0;
     for (const [key, mesh] of pieceMeshes) {
       if (!wanted.has(key)) {
@@ -926,6 +1038,10 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
     shipGeo.dispose();
     sailMat.dispose();
     for (const m of pirate.material as THREE.Material[]) m.dispose();
+    itemMats.forEach((m) => {
+      m.map?.dispose();
+      m.dispose();
+    });
     bonusMats.forEach((m) => {
       m.map?.dispose();
       m.dispose();
