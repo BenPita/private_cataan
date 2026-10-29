@@ -966,20 +966,20 @@ function bankTrade(c: Ctx, goal: Goal): Action | null {
 }
 
 /** One player-trade proposal per turn: offer spare cards for a missing one. */
-function proposeTrade(c: Ctx, goal: Goal): Action | null {
+function proposeTrade(c: Ctx, goal: Goal, generous = false): Action | null {
   const cost = goalCost(c, goal);
   const miss = missingFor(c.res, cost);
   const need = RESOURCES.find((r) => miss[r] > 0);
   if (!need) return null;
   const spare = surplus(c.res, cost);
-  const give = RESOURCES.filter((r) => r !== need && spare[r] > 0).sort((a, b) => spare[b] - spare[a])[0];
+  const give = RESOURCES.filter((r) => r !== need && spare[r] >= (generous ? 2 : 1)).sort((a, b) => spare[b] - spare[a])[0];
   if (!give) return null;
   const to = opponents(c).filter(
     (o) => c.v.players[o].resourceCount > 0 && (c.level !== 'hard' || c.v.players[o].victoryPoints < 8),
   );
   if (!to.length) return null;
   const offer = emptyRes();
-  offer[give] = 1;
+  offer[give] = generous ? 2 : 1;
   const want = emptyRes();
   want[need] = 1;
   return { type: 'proposeTrade', give: offer, get: want, to };
@@ -1029,7 +1029,8 @@ function respondToTrade(c: Ctx): Action {
 
 export interface BotMemory {
   /** Trade proposals made this turn (one per turn keeps bots from spamming). */
-  proposedOnTurn?: number;
+  /** Trade offers to players made this turn (the bot asks players before the bank). */
+  proposals?: { turn: number; count: number };
   /** Actions taken on the current turn, to guarantee the turn ends. */
   actionsOnTurn?: { turn: number; count: number };
   /** The goal the bot is trading toward this turn. */
@@ -1205,11 +1206,19 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
       if (target) return { type: 'buildShip', edge: target.firstEdge };
     }
   }
+  // Cards the goal needs stay in hand only while the goal is near; otherwise everything is spendable.
+  const goalNear = goal !== null && roundsFor(c, goalCost(c, goal)) <= 2.5;
+  const spare = goal && goalNear ? surplus(c.res, goalCost(c, goal)) : c.res;
+  const extra = extraBuild(c, goal, spare);
+  if (extra) return extra;
   const canDev = v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard);
   // Medium/hard: a dev card from cards the goal does not need.
-  const spare = goal ? surplus(c.res, goalCost(c, goal)) : c.res;
   if (canDev && (goal === 'devCard' || (c.level !== 'easy' && hasRes(spare, c.mod.costs.devCard)))) return { type: 'buyDevCard' };
   if (c.level === 'easy' && canDev && c.rand() < 0.5) return { type: 'buyDevCard' };
+
+  // Like a person: ask the other players first, the bank after.
+  const ask = goal ? offerToPlayers(c, goal, memory) : null;
+  if (ask) return ask;
 
   const trade = tradeToBuild(c, goal);
   if (trade) {
@@ -1222,15 +1231,48 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
   if (goal) {
     const bank = c.level === 'easy' ? bankTrade(c, goal) : null;
     if (bank) return bank;
-    const humansExist = v.players.some((p, i) => i !== me && p.kind === 'human');
-    // Player 2 of a 5–6 player turn may not trade with other players.
-    if (!v.paired && memory.proposedOnTurn !== v.turn && (c.level !== 'easy' || humansExist) && totalRes(c.res) >= 3) {
-      const offer = proposeTrade(c, goal);
-      if (offer) {
-        memory.proposedOnTurn = v.turn;
-        return offer;
-      }
-    }
   }
   return end;
+}
+
+/**
+ * Up to two offers per turn to the other players (easy: one): one card for the
+ * missing one, then two for one. Only when the trade gets the goal closer.
+ */
+function offerToPlayers(c: Ctx, goal: Goal, memory: BotMemory): Action | null {
+  const { v, me } = c;
+  const made = memory.proposals?.turn === v.turn ? memory.proposals.count : 0;
+  const humansExist = v.players.some((p, i) => i !== me && p.kind === 'human');
+  // Player 2 of a 5–6 player turn may not trade with other players.
+  if (v.paired || made >= (c.level === 'easy' ? 1 : 2) || (c.level === 'easy' && !humansExist)) return null;
+  if (!goalOpen(c, goal) || totalRes(c.res) < 2) return null;
+  const offer = proposeTrade(c, goal, made === 1);
+  if (!offer) return null;
+  memory.proposals = { turn: v.turn, count: made + 1 };
+  return offer;
+}
+
+/**
+ * Medium/hard: something useful the spendable cards already pay for — a road
+ * toward a new spot or Longest Road, or a ship toward land (easy: sometimes a
+ * random road).
+ */
+function extraBuild(c: Ctx, goal: Goal | null, spare: ResMap): Action | null {
+  const left = piecesLeft(c);
+  if (left.roads > 0 && hasRes(spare, c.mod.costs.road) && legalRoads(c.v, c.me).length > 0) {
+    if (c.level === 'easy') {
+      if (c.rand() < 0.4) {
+        const road = bestRoad(c);
+        if (road) return { type: 'buildRoad', edge: road };
+      }
+    } else if ((left.settlements > 0 && expansionTargets(c, 3).length > 0) || roadRace(c)) {
+      const road = bestRoad(c);
+      if (road) return { type: 'buildRoad', edge: road };
+    }
+  }
+  if (c.ships && c.level !== 'easy' && goal !== 'ship' && left.ships > 0 && left.settlements > 0 && hasRes(spare, goalCost(c, 'ship'))) {
+    const ship = bestShip(c);
+    if (ship) return { type: 'buildShip', edge: ship };
+  }
+  return null;
 }

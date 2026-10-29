@@ -454,6 +454,11 @@ instead of building roads; and bank trades were only made when one card short.
   Medium vs easy 90–100% in every mode. Cards lost to 7s per game roughly halved (base medium 14→11,
   hard 18→8; Forgotten Tribe hard 23→8); hard ends 1–3% of turns with 8+ cards (was 15–28%); VP at turn
   30 up 0.3–1.2 in most modes.
+- Polish after owner play-test (2026-10-29): bots ask the other players before the bank — up to two offers
+  a turn (easy: one, and only with humans in the game): one card for the missing one, then two for one;
+  the bank comes after. With cards the goal does not need (or when the goal is more than ~2.5 rounds
+  away) medium/hard also build a road toward a new spot / Longest Road or a ship, instead of waiting for
+  a full hand. Player trades per bot per game went from ~2 to ~5.
 - Setup placement decides a lot: medium picking among its top 10% instead of 4% moved hard's win rate
   from ~58% to ~80% on Four Islands and Wonders.
 - The regression snapshot's bot games use a frozen copy of the old bots (`test/legacy-bot.ts`), so the

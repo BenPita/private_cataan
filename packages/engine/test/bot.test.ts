@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRAPH, applyAction, chooseBotAction, createGame, getPlayerView, type BotDifficulty } from '../src';
+import { GRAPH, applyAction, chooseBotAction, createGame, getPlayerView, totalRes, type BotDifficulty, type ResMap } from '../src';
 import { mainPhaseGame, placeBuilding, playBotGame, setResources } from './helpers';
 
 describe('bots', () => {
@@ -43,6 +43,23 @@ describe('bots', () => {
     for (const level of ['medium', 'hard'] as const) {
       const a = chooseBotAction(getPlayerView(s, 0), level, () => 0.5, {});
       expect(a).toMatchObject({ type: 'bankTrade', get: 'ore' });
+    }
+  });
+
+  it('ask the other players before trading with the bank', () => {
+    const s = cityOnlyGame({ ore: 1, grain: 2, lumber: 4, brick: 4 });
+    s.players[1].kind = 'human';
+    setResources(s, 1, { ore: 3 });
+    for (const level of ['easy', 'medium', 'hard'] as const) {
+      const memory = {};
+      const a = chooseBotAction(getPlayerView(s, 0), level, () => 0.5, memory);
+      expect(a).toMatchObject({ type: 'proposeTrade', get: { ore: 1 }, to: [1] });
+      if (level === 'easy') continue;
+      // Turned down: a second, more generous offer, then the bank.
+      const b = chooseBotAction(getPlayerView(s, 0), level, () => 0.5, memory);
+      expect(b).toMatchObject({ type: 'proposeTrade', get: { ore: 1 } });
+      expect(totalRes((b as { give: ResMap }).give)).toBe(2);
+      expect(chooseBotAction(getPlayerView(s, 0), level, () => 0.5, memory)).toMatchObject({ type: 'bankTrade', get: 'ore' });
     }
   });
 
