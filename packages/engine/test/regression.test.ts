@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BASE_MOD, Rng, createGame, generateBeginnerBoard, generateRandomBoard } from '../src';
 import { fingerprint, playBotGame } from './helpers';
+import { chooseBotAction as legacyBot } from './legacy-bot';
 
 /**
  * Stage-0 safety net for the mods refactor: the base game must play exactly
@@ -32,7 +33,7 @@ describe('base game regression', () => {
     [['hard', 'hard', 'medium', 'easy'], 33],
   ] as const) {
     it(`bot game ${levels.join('/')} seed ${seed} plays out identically`, () => {
-      const r = playBotGame([...levels], seed);
+      const r = playBotGame([...levels], seed, 8000, {}, legacyBot);
       expect({ steps: r.steps, rejected: r.rejected, game: fingerprint(r.state) }).toMatchSnapshot();
     });
   }

@@ -1,0 +1,933 @@
+/**
+ * Frozen copy of the bots as they were before the 2026-10-29 rework. Only the
+ * regression snapshot uses it: those games check that the ENGINE plays out
+ * exactly as before, so the bots that drive them must not change.
+ */
+import { TERRAIN_RESOURCE, devCardReady } from '../src/rulesets';
+import { boardGraph, type BoardGraph } from '../src/geometry';
+import { WONDERS, WONDER_IDS, WONDER_LEVELS, hasShips, modFor, scenarioFor, type ModDef } from '../src/mods';
+import {
+  fortressOf,
+  pirateRoute,
+  warshipCount,
+  wonderBlock,
+  isRoadEdge,
+  isShipEdge,
+  legalPortEdges,
+  robberAllowed,
+  legalCities,
+  legalRoads,
+  legalSettlements,
+  legalSetupRoads,
+  legalSetupSettlements,
+  legalSetupShips,
+  legalShipMoves,
+  legalShips,
+  movableShips,
+  pirateEdges,
+  playersOnHex,
+  satisfiesDistanceRule,
+  shipHasOpenEnd,
+  shipOwnersOnHex,
+  tradeRates,
+  vertexRegion,
+} from '../src/queries';
+import { emptyRes, hasRes, totalRes } from '../src/resources';
+import { RESOURCES, type Action, type BotDifficulty, type ResMap, type Resource } from '../src/types';
+import type { PlayerView } from '../src/view';
+
+export type Random = () => number;
+
+type Goal = 'city' | 'settlement' | 'road' | 'devCard' | 'ship' | 'wonder';
+
+const pips = (n: number | null) => (n === null ? 0 : 6 - Math.abs(7 - n));
+
+interface Ctx {
+  v: PlayerView;
+  me: number;
+  res: ResMap;
+  level: BotDifficulty;
+  rand: Random;
+  /** The board's graph and the game's mod. */
+  g: BoardGraph;
+  mod: ModDef;
+  /** Seafarers: the game has ships, the pirate and gold fields. */
+  ships: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation helpers
+// ---------------------------------------------------------------------------
+
+/** Total pips per resource the player currently produces. */
+function production(v: PlayerView, player: number): ResMap {
+  const G = boardGraph(v.board);
+  const out = emptyRes();
+  for (const [vertex, b] of Object.entries(v.buildings)) {
+    if (b.owner !== player) continue;
+    for (const h of G.vertices[vertex].hexes) {
+      const tile = v.board.hexes[h];
+      const r = TERRAIN_RESOURCE[tile.terrain];
+      if (r && h !== v.board.robberHex) out[r] += pips(tile.number) * (b.type === 'city' ? 2 : 1);
+    }
+  }
+  return out;
+}
+
+/** How rare each resource is on this board (more pips = less scarce). */
+function scarcity(v: PlayerView): ResMap {
+  const total = emptyRes();
+  for (const h of v.board.hexes) {
+    const r = TERRAIN_RESOURCE[h.terrain];
+    if (r) total[r] += pips(h.number);
+  }
+  const out = emptyRes();
+  for (const r of RESOURCES) out[r] = 1 + 6 / Math.max(total[r], 1);
+  return out;
+}
+
+function harborAt(v: PlayerView, vertex: string) {
+  const G = boardGraph(v.board);
+  return v.board.harbors.find((h) => G.edges[h.edge].vertices.includes(vertex));
+}
+
+/** Value of owning a settlement at `vertex`. */
+function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): number {
+  const { v, level } = c;
+  const scarce = level === 'hard' ? scarcity(v) : null;
+  let value = 0;
+  const gained = new Set<Resource>();
+  for (const h of c.g.vertices[vertex].hexes) {
+    const tile = v.board.hexes[h];
+    if (tile.terrain === 'fog') {
+      // An undiscovered space: probably land with an unknown number.
+      value += 1;
+      continue;
+    }
+    if (tile.terrain === 'gold') {
+      // Gold: any resource, worth a little more than a normal field.
+      value += pips(tile.number) * (h === v.board.robberHex ? 0.4 : 1) * 1.3;
+      continue;
+    }
+    const r = TERRAIN_RESOURCE[tile.terrain];
+    if (!r) continue;
+    let p = pips(tile.number);
+    if (h === v.board.robberHex) p *= 0.4;
+    // Early game values brick/lumber, later ore/grain; medium+ also likes balance.
+    const weight = scarce ? scarce[r] : 1;
+    value += p * weight;
+    if (owned[r] === 0) gained.add(r);
+  }
+  if (level !== 'easy') value += gained.size * 1.6;
+  const harbor = harborAt(v, vertex);
+  if (harbor && level !== 'easy') {
+    if (harbor.type === 'generic') value += 1;
+    else value += Math.min(owned[harbor.type] / 3, 2.5) + (level === 'hard' ? 0.5 : 0);
+  }
+  if (c.ships) value += regionBonusAt(c, vertex) * (level === 'easy' ? 2 : 4);
+  // The Wonders of Catan: a building at a Great Wall / Great Bridge marker opens that wonder.
+  const spots = v.board.wonderSpots;
+  if (spots && !v.players[c.me].wonder && v.phase !== 'INITIAL_PLACEMENT' && [...spots.wall, ...spots.bridge].includes(vertex)) value += 3;
+  // The Fog Islands: ships (the way into the fog) can only start from a coastal building.
+  if (sailingPays(v) && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
+  return value;
+}
+
+/** Scenarios where ships earn something besides new settlement spots (fog, the tribe's gifts, villages). */
+function sailingPays(v: PlayerView): boolean {
+  return (v.fogLeft ?? 0) > 0 || Object.keys(v.board.edgeItems ?? {}).length > 0 || (v.board.villages ?? []).some((x) => x.cloth > 0);
+}
+
+/** The Forgotten Tribe: worth of the item a ship on `edge` would pick up. */
+function itemValue(c: Ctx, edge: string): number {
+  const item = c.v.board.edgeItems?.[edge];
+  if (!item) return 0;
+  const k = c.level === 'hard' ? 1.2 : c.level === 'easy' ? 0.6 : 1;
+  return (item.kind === 'vp' ? 6 : item.kind === 'dev' ? 3.5 : 2.5) * k;
+}
+
+/** Cloth for Catan: worth of reaching a village the bot does not trade with yet. */
+function villageValue(c: Ctx, vertex: string): number {
+  const villages = c.v.board.villages ?? [];
+  const i = villages.findIndex((x) => x.vertex === vertex);
+  if (i < 0 || c.v.players[c.me].villages.includes(i)) return 0;
+  const village = villages[i];
+  if (village.cloth === 0) return 0;
+  const k = c.level === 'hard' ? 1.3 : c.level === 'easy' ? 0.7 : 1;
+  return (3 + pips(village.number) * 1.2) * k;
+}
+
+/** The Fog Islands: worth of reaching `vertex` with a road or ship — each empty space there gets discovered. */
+function fogBonus(c: Ctx, vertex: string): number {
+  const spaces = c.g.vertices[vertex].hexes.filter((h) => c.v.board.hexes[h].terrain === 'fog').length;
+  return spaces * (c.level === 'easy' ? 2.5 : c.level === 'hard' ? 6 : 4.5);
+}
+
+/** Scenario VP tokens this bot would earn for a first settlement at `vertex`. */
+function regionBonusAt(c: Ctx, vertex: string): number {
+  const scenario = scenarioFor(c.v);
+  if (!scenario?.regionBonus) return 0;
+  const region = vertexRegion(c.v, vertex);
+  if (!region) return 0;
+  if (scenario.homeRegions === 'starting') {
+    // Starting settlements make their islands home instead of earning a bonus.
+    if (c.v.phase === 'INITIAL_PLACEMENT' || c.v.players[c.me].homeRegions.includes(region)) return 0;
+  } else if ((scenario.homeRegions ?? []).includes(region)) return 0;
+  return (c.v.players[c.me].bonusRegions ?? []).includes(region) ? 0 : scenario.regionBonus;
+}
+
+/**
+ * Seafarers: best spots reachable by ships, with the first ship edge to build.
+ * Ships start from the bot's buildings and ships, cross only sea edges and
+ * never pass an opponent's building or the pirate.
+ */
+function shipTargets(
+  c: Ctx,
+  maxDepth: number,
+  ignore?: string,
+): Array<{ vertex: string; dist: number; firstEdge: string; value: number; extra: number }> {
+  const { v, me } = c;
+  const ships = v.ships ?? {};
+  const pirate = pirateEdges(v);
+  const owned = production(v, me);
+  const seen = new Map<string, { dist: number; firstEdge: string; bonus: number }>();
+  let frontier: Array<{ vertex: string; firstEdge: string; bonus: number }> = [];
+  const add = (vertex: string) => {
+    if (seen.has(vertex)) return;
+    seen.set(vertex, { dist: 0, firstEdge: '', bonus: 0 });
+    frontier.push({ vertex, firstEdge: '', bonus: 0 });
+  };
+  for (const [vertex, b] of Object.entries(v.buildings)) if (b.owner === me) add(vertex);
+  for (const [edge, owner] of Object.entries(ships)) {
+    if (owner !== me || edge === ignore) continue;
+    for (const x of c.g.edges[edge].vertices) if (!v.buildings[x] || v.buildings[x].owner === me) add(x);
+  }
+  for (let d = 1; d <= maxDepth; d++) {
+    const next: typeof frontier = [];
+    for (const { vertex, firstEdge, bonus } of frontier) {
+      const b = v.buildings[vertex];
+      if (b && b.owner !== me) continue;
+      for (const e of c.g.vertices[vertex].edges) {
+        if (!isShipEdge(v, e) || v.roads[e] !== undefined) continue;
+        const mine = ships[e] === me && e !== ignore;
+        if (!mine && (ships[e] !== undefined && e !== ignore)) continue;
+        if (!mine && pirate.includes(e)) continue;
+        const [a, bb] = c.g.edges[e].vertices;
+        const other = a === vertex ? bb : a;
+        if (seen.has(other)) continue;
+        const fe = firstEdge || (mine ? '' : e);
+        // Items on the way (The Forgotten Tribe) are picked up by the ships of the route.
+        const nb = bonus + (mine ? 0 : itemValue(c, e));
+        seen.set(other, { dist: d, firstEdge: fe, bonus: nb });
+        next.push({ vertex: other, firstEdge: fe, bonus: nb });
+      }
+    }
+    frontier = next;
+  }
+  const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number; extra: number }> = [];
+  for (const [vertex, { dist, firstEdge, bonus }] of seen) {
+    if (dist === 0 || !firstEdge) continue;
+    const spot = satisfiesDistanceRule(v, vertex);
+    const extra = fogBonus(c, vertex) + bonus + villageValue(c, vertex);
+    if (!spot && extra === 0) continue;
+    out.push({ vertex, dist, firstEdge, extra, value: ((spot ? vertexValue(c, vertex, owned) : 0) + extra) / (1 + 0.35 * dist) });
+  }
+  return out.sort((a, b) => b.value - a.value);
+}
+
+/** Best vertices the player could reach by extending roads, with path lengths. */
+function expansionTargets(c: Ctx, maxDepth: number): Array<{ vertex: string; dist: number; firstEdge: string; value: number }> {
+  const { v, me } = c;
+  const owned = production(v, me);
+  const start = new Set<string>();
+  for (const [vertex, b] of Object.entries(v.buildings)) if (b.owner === me) start.add(vertex);
+  for (const [edge, owner] of Object.entries(v.roads)) if (owner === me) c.g.edges[edge].vertices.forEach((x) => start.add(x));
+
+  const seen = new Map<string, { dist: number; firstEdge: string }>();
+  let frontier: Array<{ vertex: string; firstEdge: string }> = [...start]
+    .filter((x) => !v.buildings[x] || v.buildings[x].owner === me)
+    .map((x) => ({ vertex: x, firstEdge: '' }));
+  for (const f of frontier) seen.set(f.vertex, { dist: 0, firstEdge: '' });
+
+  for (let d = 1; d <= maxDepth; d++) {
+    const next: typeof frontier = [];
+    for (const { vertex, firstEdge } of frontier) {
+      const b = v.buildings[vertex];
+      if (b && b.owner !== me) continue;
+      for (const e of c.g.vertices[vertex].edges) {
+        if (v.roads[e] !== undefined && v.roads[e] !== me) continue;
+        if (c.ships && (!isRoadEdge(v, e) || v.ships?.[e] !== undefined)) continue;
+        const [a, bb] = c.g.edges[e].vertices;
+        const other = a === vertex ? bb : a;
+        if (seen.has(other)) continue;
+        const fe = firstEdge || (v.roads[e] === undefined ? e : '');
+        seen.set(other, { dist: d, firstEdge: fe });
+        next.push({ vertex: other, firstEdge: fe });
+      }
+    }
+    frontier = next;
+  }
+
+  const out: Array<{ vertex: string; dist: number; firstEdge: string; value: number }> = [];
+  for (const [vertex, { dist, firstEdge }] of seen) {
+    if (dist === 0 || !firstEdge) continue;
+    const spot = satisfiesDistanceRule(v, vertex);
+    const fog = fogBonus(c, vertex);
+    if (!spot && fog === 0) continue;
+    out.push({ vertex, dist, firstEdge, value: ((spot ? vertexValue(c, vertex, owned) : 0) + fog) / (1 + 0.45 * dist) });
+  }
+  return out.sort((a, b) => b.value - a.value);
+}
+
+function pick<T>(c: Ctx, sorted: T[], topFraction: number): T {
+  // Easy bots choose among the better half; others take the best.
+  const n = Math.max(1, Math.ceil(sorted.length * topFraction));
+  return sorted[Math.floor(c.rand() * n)];
+}
+
+function opponents(c: Ctx): number[] {
+  return c.v.players.map((_, i) => i).filter((i) => i !== c.me);
+}
+
+/** Strongest opponent by public points (ties: more cards). */
+function leader(c: Ctx): number {
+  return opponents(c).sort(
+    (a, b) =>
+      c.v.players[b].victoryPoints - c.v.players[a].victoryPoints || c.v.players[b].resourceCount - c.v.players[a].resourceCount,
+  )[0];
+}
+
+// ---------------------------------------------------------------------------
+// Goal planning
+// ---------------------------------------------------------------------------
+
+function piecesLeft(c: Ctx) {
+  const p = c.v.players[c.me];
+  // The Pirate Islands: the settlement under the bot's fortress is not available until captured.
+  const fortress = fortressOf(c.v, c.me);
+  const reserved = fortress && fortress.lairs > 0 ? 1 : 0;
+  return {
+    roads: c.mod.pieceLimits.roads - p.roadsBuilt,
+    settlements: c.mod.pieceLimits.settlements - reserved - (p.settlementsBuilt - p.citiesBuilt),
+    cities: c.mod.pieceLimits.cities - p.citiesBuilt,
+    ships: (c.mod.pieceLimits.ships ?? 0) - (p.shipsBuilt ?? 0),
+  };
+}
+
+/** Warships a bot wants before it attacks its fortress (each attack must beat a die). */
+function warshipsWanted(c: Ctx): number {
+  return c.level === 'easy' ? 3 : c.level === 'medium' ? 4 : 5;
+}
+
+/**
+ * The Pirate Islands: the next ship of the line, or null — the ship that would reach
+ * the fortress (and start the attacks) waits until the bot has enough warships.
+ */
+function pirateShip(c: Ctx): string | null {
+  const next = legalShips(c.v, c.me)[0];
+  const f = fortressOf(c.v, c.me);
+  if (!next || !f) return null;
+  if (c.g.edges[next].vertices.includes(f.vertex) && warshipCount(c.v, c.me) < warshipsWanted(c)) return null;
+  return next;
+}
+
+/** The Pirate Islands: the goal while the bot's fortress still stands (null once captured). */
+function pirateGoal(c: Ctx): Goal | null {
+  const f = fortressOf(c.v, c.me);
+  if (!f || f.lairs === 0) return null;
+  if (piecesLeft(c).ships > 0 && pirateShip(c)) return 'ship';
+  // Line waiting at the fortress (or attacking it): Knights make warships.
+  return c.v.devDeckCount > 0 ? 'devCard' : null;
+}
+
+/** The Wonders of Catan: build levels once claimed, when nothing else is close. */
+function wonderGoal(c: Ctx, canSettle: boolean, canCity: boolean): Goal | null {
+  const w = c.v.players[c.me].wonder;
+  if (!w || w.level >= WONDER_LEVELS) return null;
+  const vp = c.v.players[c.me].victoryPoints;
+  if (vp >= 7 || w.level >= 2 || (!canSettle && !canCity)) return 'wonder';
+  return null;
+}
+
+function chooseGoal(c: Ctx): Goal | null {
+  const left = piecesLeft(c);
+  const canSettle = left.settlements > 0 && legalSettlements(c.v, c.me).length > 0;
+  const canCity = left.cities > 0 && legalCities(c.v, c.me).length > 0;
+  const prod = production(c.v, c.me);
+  const oreGrain = prod.ore + prod.grain;
+  if (c.v.board.fortresses) {
+    if (canCity && c.res.ore >= 2 && c.res.grain >= 1) return 'city';
+    const pirate = pirateGoal(c);
+    if (pirate) return pirate;
+  }
+  const wonder = wonderGoal(c, canSettle, canCity);
+  if (wonder) return wonder;
+
+  if (canSettle && canCity && c.level !== 'easy') {
+    // Prefer cities once ore/grain flow is decent, settlements otherwise.
+    return oreGrain >= 8 || c.res.ore >= 2 ? 'city' : 'settlement';
+  }
+  if (canSettle) return 'settlement';
+  if (canCity) return 'city';
+  if (c.ships && left.settlements > 0 && left.ships > 0) {
+    // Seafarers: sail when the best spot by sea beats the best one by road.
+    const sea = shipTargets(c, 6)[0];
+    const land = left.roads > 0 ? expansionTargets(c, 3)[0] : undefined;
+    if (sea && (!land || sea.value > land.value)) return 'ship';
+  }
+  if (left.settlements > 0 && left.roads > 0 && expansionTargets(c, 3).length > 0) return 'road';
+  if (c.v.devDeckCount > 0) return 'devCard';
+  return null;
+}
+
+function goalCost(c: Ctx, goal: Goal): Partial<ResMap> {
+  if (goal === 'wonder') {
+    const w = c.v.players[c.me].wonder;
+    return w ? WONDERS[w.id].cost : {};
+  }
+  return goal === 'ship' ? (c.mod.costs.ship ?? {}) : c.mod.costs[goal];
+}
+
+function missingFor(res: ResMap, cost: Partial<ResMap>): ResMap {
+  const m = emptyRes();
+  for (const r of RESOURCES) m[r] = Math.max(0, (cost[r] ?? 0) - res[r]);
+  return m;
+}
+
+/** Cards not needed for the current goal (what we are happy to give away). */
+function surplus(res: ResMap, cost: Partial<ResMap>): ResMap {
+  const s = emptyRes();
+  for (const r of RESOURCES) s[r] = Math.max(0, res[r] - (cost[r] ?? 0));
+  return s;
+}
+
+// ---------------------------------------------------------------------------
+// Decisions per phase
+// ---------------------------------------------------------------------------
+
+function setupSettlement(c: Ctx): Action {
+  const spots = legalSetupSettlements(c.v)
+    .map((vertex) => ({ vertex, value: vertexValue(c, vertex) }))
+    .sort((a, b) => b.value - a.value);
+  const choice = pick(c, spots, c.level === 'easy' ? 0.35 : c.level === 'medium' ? 0.04 : 0.01);
+  return { type: 'placeSetupSettlement', vertex: choice.vertex };
+}
+
+function setupRoad(c: Ctx, settlement: string): Action {
+  const edges = legalSetupRoads(c.v, settlement);
+  if (c.level === 'easy') return { type: 'placeSetupRoad', edge: edges[Math.floor(c.rand() * edges.length)] };
+  // Point the road at the best open spot two steps away.
+  let best = edges[0];
+  let bestValue = -1;
+  for (const e of edges) {
+    const far = c.g.edges[e].vertices.find((x) => x !== settlement)!;
+    for (const n of c.g.vertices[far].neighbors) {
+      if (n === settlement || !satisfiesDistanceRule(c.v, n)) continue;
+      const val = vertexValue(c, n);
+      if (val > bestValue) {
+        bestValue = val;
+        best = e;
+      }
+    }
+  }
+  if (c.ships && edges.length > 0) {
+    // A ship instead, when it heads for a new island worth more than the land spots.
+    const allowed = new Set(legalSetupShips(c.v, settlement));
+    const sea = shipTargets(c, 5).find((t) => allowed.has(t.firstEdge) && regionBonusAt(c, t.vertex) > 0);
+    if (sea && sea.value > bestValue * 0.6) return { type: 'placeSetupRoad', edge: sea.firstEdge, ship: true };
+  }
+  if (edges.length === 0 && c.ships) {
+    const ship = legalSetupShips(c.v, settlement)[0];
+    if (ship) return { type: 'placeSetupRoad', edge: ship, ship: true };
+  }
+  return { type: 'placeSetupRoad', edge: best };
+}
+
+/** Gold field: pick what the current goal still lacks, else what we hold least of. */
+function chooseGold(c: Ctx, owed: number): Action {
+  const bank = { ...c.v.bank };
+  const n = Math.min(owed, totalRes(bank));
+  const goal = chooseGoal(c) ?? 'devCard';
+  const cost = goalCost(c, goal);
+  const have = { ...c.res };
+  const out = emptyRes();
+  for (let i = 0; i < n; i++) {
+    const miss = missingFor(have, cost);
+    const avail = RESOURCES.filter((r) => bank[r] > 0);
+    const needed = [...avail].sort((a, b) => miss[b] - miss[a])[0];
+    const r = miss[needed] > 0 ? needed : [...avail].sort((a, b) => have[a] - have[b])[0];
+    out[r]++;
+    have[r]++;
+    bank[r]--;
+  }
+  return { type: 'chooseGold', resources: out };
+}
+
+function discard(c: Ctx, count: number): Action {
+  const goal = chooseGoal(c) ?? 'devCard';
+  const keep = goalCost(c, goal);
+  const out = emptyRes();
+  const pool = { ...c.res };
+  for (let i = 0; i < count; i++) {
+    // Drop from the largest pile beyond what the goal needs.
+    const r = [...RESOURCES].sort(
+      (a, b) => pool[b] - (keep[b] ?? 0) - (pool[a] - (keep[a] ?? 0)) || pool[b] - pool[a],
+    )[0];
+    out[r]++;
+    pool[r]--;
+  }
+  return { type: 'discard', resources: out };
+}
+
+function robberHex(c: Ctx): number {
+  const { v, me } = c;
+  const lead = leader(c);
+  const candidates = v.board.hexes
+    .filter((h) => h.id !== v.board.robberHex && robberAllowed(v.board, h.id))
+    .map((h) => {
+      const owners = playersOnHex(v, h.id);
+      if (owners.includes(me)) return { id: h.id, score: -100 };
+      let score = 0;
+      for (const vert of c.g.hexes[h.id].vertices) {
+        const b = v.buildings[vert];
+        if (!b || b.owner === me) continue;
+        const weight = c.level === 'hard' && b.owner === lead ? 1.8 : 1;
+        score += pips(h.number) * (b.type === 'city' ? 2 : 1) * weight;
+      }
+      if (owners.some((o) => o !== me && v.players[o].resourceCount > 0)) score += 2;
+      return { id: h.id, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  if (c.level === 'easy') {
+    const safe = candidates.filter((x) => x.score >= 0);
+    return safe[Math.floor(c.rand() * safe.length)]?.id ?? candidates[0].id;
+  }
+  return candidates[0].id;
+}
+
+/** Seafarers: robber or pirate? The pirate goes where it robs and blocks opponents' ships. */
+function robberOrPirate(c: Ctx): Action {
+  const robber: Action = { type: 'moveRobber', hex: robberHex(c) };
+  const { v, me } = c;
+  if (v.board.pirateHex === undefined || c.level === 'easy' || robberOnMe(c)) return robber;
+  if (v.board.villages && v.players[me].villages.length === 0) return robber;
+  const lead = leader(c);
+  let best: { hex: number; score: number } | null = null;
+  for (const h of v.board.hexes) {
+    if (h.terrain !== 'sea' || h.id === v.board.pirateHex) continue;
+    const owners = shipOwnersOnHex(v, h.id);
+    if (owners.includes(me)) continue;
+    let score = 0;
+    let front = false;
+    for (const e of c.g.hexes[h.id].edges) {
+      const o = v.ships?.[e];
+      if (o === undefined) continue;
+      score += c.level === 'hard' && o === lead ? 1.5 : 1;
+      // The tip of an opponent's sea route: the pirate stops it advancing.
+      if (shipHasOpenEnd(v, o, e)) front = true;
+    }
+    if (front) score += 3;
+    if (owners.some((o) => v.players[o].resourceCount > 0)) score += 2;
+    if (score > 0 && (!best || score > best.score)) best = { hex: h.id, score };
+  }
+  if (!best) return robber;
+  // Score of the robber's best hex, computed the same way robberHex() ranks it.
+  const rHex = robberHex(c);
+  let rScore = 0;
+  for (const vert of c.g.hexes[rHex].vertices) {
+    const b = v.buildings[vert];
+    if (b && b.owner !== me) rScore += pips(v.board.hexes[rHex].number) * (b.type === 'city' ? 2 : 1);
+  }
+  if (playersOnHex(v, rHex).some((o) => o !== me && v.players[o].resourceCount > 0)) rScore += 2;
+  return best.score * 2.5 > rScore ? { type: 'movePirate', hex: best.hex } : robber;
+}
+
+function stealVictim(c: Ctx): number {
+  const cands = [...c.v.stealCandidates];
+  if (c.level === 'easy') return cands[Math.floor(c.rand() * cands.length)];
+  return cands.sort(
+    (a, b) =>
+      c.v.players[b].victoryPoints * 2 + c.v.players[b].resourceCount -
+      (c.v.players[a].victoryPoints * 2 + c.v.players[a].resourceCount),
+  )[0];
+}
+
+function robberOnMe(c: Ctx): boolean {
+  return playersOnHex(c.v, c.v.board.robberHex).includes(c.me);
+}
+
+function playableDev(c: Ctx, type: string): boolean {
+  const p = c.v.players[c.me];
+  return !p.playedDevThisTurn && (p.devCards ?? []).some((d) => d.type === type && devCardReady(c.v, d));
+}
+
+function shouldPlayKnight(c: Ctx): boolean {
+  if (!playableDev(c, 'knight')) return false;
+  // The Pirate Islands: a Knight turns the next normal ship of the line into a warship.
+  if (c.v.board.fortresses) {
+    return !!pirateRoute(c.v, c.me)?.edges.some((e) => !(c.v.warships ?? []).includes(e));
+  }
+  if (robberOnMe(c)) return true;
+  if (c.level === 'easy') return false;
+  const mine = c.v.players[c.me].knightsPlayed;
+  const holder = c.v.largestArmy;
+  const best = holder === null ? 2 : c.v.players[holder].knightsPlayed;
+  // Race for Largest Army when one more knight would take it.
+  if (holder !== c.me && mine + 1 > best && mine + 1 >= 3) return true;
+  return c.level === 'hard' && c.v.players[leader(c)].victoryPoints >= 7;
+}
+
+/** A dev card worth playing in the main phase, or null. */
+function mainPhaseDev(c: Ctx, goal: Goal | null): Action | null {
+  if (shouldPlayKnight(c)) return { type: 'playKnight' };
+  if (playableDev(c, 'roadBuilding') && piecesLeft(c).roads > 0 && legalRoads(c.v, c.me).length > 0 && (goal === 'road' || goal === 'settlement' || c.level === 'easy')) {
+    return { type: 'playRoadBuilding' };
+  }
+  if (c.ships && goal === 'ship' && playableDev(c, 'roadBuilding') && piecesLeft(c).ships > 0 && legalShips(c.v, c.me).length > 0) {
+    return { type: 'playRoadBuilding' };
+  }
+  if (playableDev(c, 'yearOfPlenty') && goal) {
+    const miss = missingFor(c.res, goalCost(c, goal));
+    const wanted = RESOURCES.flatMap((r) => Array(miss[r]).fill(r) as Resource[]).filter((r) => c.v.bank[r] > 0);
+    if (wanted.length > 0) {
+      const a = wanted[0];
+      const b = wanted[1] ?? wanted[0];
+      if (a !== b || c.v.bank[a] >= 2) return { type: 'playYearOfPlenty', resources: [a, b] };
+    }
+  }
+  if (playableDev(c, 'monopoly') && goal && c.level !== 'easy') {
+    // Pick the resource we lack most; opponents' hands are hidden, so guess from what the board produces for them.
+    const miss = missingFor(c.res, goalCost(c, goal));
+    const theirProd = emptyRes();
+    for (const o of opponents(c)) {
+      const p = production(c.v, o);
+      for (const r of RESOURCES) theirProd[r] += p[r];
+    }
+    const best = [...RESOURCES].sort((a, b) => miss[b] * 3 + theirProd[b] - (miss[a] * 3 + theirProd[a]))[0];
+    const cardsOut = opponents(c).reduce((s, o) => s + c.v.players[o].resourceCount, 0);
+    if (miss[best] > 0 && cardsOut >= 4) return { type: 'playMonopoly', resource: best };
+  }
+  return null;
+}
+
+function bestSettlement(c: Ctx): string | null {
+  const spots = legalSettlements(c.v, c.me).map((vertex) => ({ vertex, value: vertexValue(c, vertex) }));
+  if (!spots.length) return null;
+  spots.sort((a, b) => b.value - a.value);
+  return pick(c, spots, c.level === 'easy' ? 0.5 : 0.01).vertex;
+}
+
+function bestCity(c: Ctx): string | null {
+  const spots = legalCities(c.v, c.me).map((vertex) => ({ vertex, value: vertexValue(c, vertex) }));
+  if (!spots.length) return null;
+  return spots.sort((a, b) => b.value - a.value)[0].vertex;
+}
+
+function bestRoad(c: Ctx): string | null {
+  const legal = new Set(legalRoads(c.v, c.me));
+  if (!legal.size) return null;
+  if (c.level === 'easy') {
+    const all = [...legal];
+    return all[Math.floor(c.rand() * all.length)];
+  }
+  const targets = expansionTargets(c, c.level === 'hard' ? 4 : 3).filter((t) => legal.has(t.firstEdge));
+  if (targets.length) return targets[0].firstEdge;
+  // No good spot: extend toward Longest Road if competitive (hard), otherwise any legal road.
+  return [...legal][0];
+}
+
+/** Seafarers: the next ship toward the best spot by sea. */
+function bestShip(c: Ctx): string | null {
+  if (c.v.board.fortresses) return pirateShip(c);
+  const legal = new Set(legalShips(c.v, c.me));
+  if (!legal.size) return null;
+  const target = shipTargets(c, 6).find((t) => legal.has(t.firstEdge));
+  return target ? target.firstEdge : null;
+}
+
+/**
+ * Seafarers: move a loose ship (open end, not needed for the current route)
+ * to the front of the best sea route, when that gets a target closer.
+ */
+function shipMove(c: Ctx): Action | null {
+  const { v, me } = c;
+  if (v.shipMoved || c.level === 'easy' || v.paired) return null;
+  const before = shipTargets(c, 6)[0];
+  let best: { from: string; to: string; value: number } | null = null;
+  for (const from of movableShips(v, me)) {
+    const after = shipTargets(c, 6, from)[0];
+    if (!after || after.firstEdge === from || !legalShipMoves(v, me, from).includes(after.firstEdge)) continue;
+    // After the move the route is one ship shorter.
+    const value = (after.value * (1 + 0.35 * after.dist)) / (1 + 0.35 * (after.dist - 1));
+    if (value > (before?.value ?? 0) * 1.05 && (!best || value > best.value)) best = { from, to: after.firstEdge, value };
+  }
+  return best ? { type: 'moveShip', from: best.from, to: best.to } : null;
+}
+
+/** Bank/harbor trade toward the goal. */
+function bankTrade(c: Ctx, goal: Goal): Action | null {
+  const cost = goalCost(c, goal);
+  const miss = missingFor(c.res, cost);
+  const need = RESOURCES.filter((r) => miss[r] > 0 && c.v.bank[r] > 0).sort((a, b) => miss[b] - miss[a]);
+  if (!need.length) return null;
+  const rates = tradeRates(c.v, c.me);
+  const spare = surplus(c.res, cost);
+  const give = RESOURCES.filter((r) => r !== need[0] && spare[r] >= rates[r]).sort(
+    (a, b) => rates[a] - rates[b] || spare[b] - spare[a],
+  )[0];
+  if (!give) return null;
+  // Only trade when it actually gets us close to building (avoid trading away everything).
+  const stillMissing = totalRes(miss) - 1;
+  if (c.level === 'easy' && stillMissing > 1) return null;
+  if (stillMissing > 2) return null;
+  return { type: 'bankTrade', give, get: need[0] };
+}
+
+/** One player-trade proposal per turn: offer spare cards for a missing one. */
+function proposeTrade(c: Ctx, goal: Goal): Action | null {
+  const cost = goalCost(c, goal);
+  const miss = missingFor(c.res, cost);
+  const need = RESOURCES.find((r) => miss[r] > 0);
+  if (!need) return null;
+  const spare = surplus(c.res, cost);
+  const give = RESOURCES.filter((r) => r !== need && spare[r] > 0).sort((a, b) => spare[b] - spare[a])[0];
+  if (!give) return null;
+  const to = opponents(c).filter(
+    (o) => c.v.players[o].resourceCount > 0 && (c.level !== 'hard' || c.v.players[o].victoryPoints < 8),
+  );
+  if (!to.length) return null;
+  const offer = emptyRes();
+  offer[give] = 1;
+  const want = emptyRes();
+  want[need] = 1;
+  return { type: 'proposeTrade', give: offer, get: want, to };
+}
+
+/** Value of a set of cards to this bot given its goal. */
+function cardsValue(c: Ctx, cards: ResMap, goal: Goal | null): number {
+  const cost = goal ? goalCost(c, goal) : {};
+  const miss = missingFor(c.res, cost);
+  let v = 0;
+  for (const r of RESOURCES) {
+    const useful = Math.min(cards[r], miss[r]);
+    v += useful * 2 + (cards[r] - useful) * 0.8;
+  }
+  return v;
+}
+
+function respondToTrade(c: Ctx): Action {
+  const t = c.v.trade!;
+  const reject: Action = { type: 'respondTrade', tradeId: t.id, response: 'reject' };
+  if (!hasRes(c.res, t.get)) return reject;
+  if (c.level !== 'easy' && c.v.players[t.from].victoryPoints >= (c.level === 'hard' ? 7 : 8)) return reject;
+  const goal = chooseGoal(c);
+  // From our side: we receive t.give, we pay t.get.
+  const gain = cardsValue(c, t.give, goal);
+  const after = { ...c.res };
+  for (const r of RESOURCES) after[r] -= t.get[r];
+  const loss = cardsValue({ ...c, res: after }, t.get, goal) + (goal && !hasRes(after, goalCost(c, goal)) && hasRes(c.res, goalCost(c, goal)) ? 3 : 0);
+  if (c.level === 'easy') return c.rand() < 0.5 ? { type: 'respondTrade', tradeId: t.id, response: 'accept' } : reject;
+  if (gain > loss + (c.level === 'hard' ? 0.5 : 0)) return { type: 'respondTrade', tradeId: t.id, response: 'accept' };
+  // Medium/hard: counter with a 1-for-1 using our spare card for what we need.
+  if (goal) {
+    const miss = missingFor(c.res, goalCost(c, goal));
+    const need = RESOURCES.find((r) => miss[r] > 0 && t.give[r] > 0);
+    const spare = surplus(c.res, goalCost(c, goal));
+    const give = RESOURCES.find((r) => r !== need && spare[r] > 0);
+    if (need && give && !(c.v.trade!.counters[c.me])) {
+      const g = emptyRes();
+      g[give] = 1;
+      const w = emptyRes();
+      w[need] = 1;
+      return { type: 'counterTrade', tradeId: t.id, give: g, get: w };
+    }
+  }
+  return reject;
+}
+
+export interface BotMemory {
+  /** Trade proposals made this turn (one per turn keeps bots from spamming). */
+  proposedOnTurn?: number;
+  /** Actions taken on the current turn, to guarantee the turn ends. */
+  actionsOnTurn?: { turn: number; count: number };
+}
+
+/**
+ * The next action for the bot seated at `view.me`, or null when it has
+ * nothing to do right now (e.g. waiting for another player).
+ */
+export function chooseBotAction(view: PlayerView, level: BotDifficulty, rand: Random = Math.random, memory: BotMemory = {}): Action | null {
+  const me = view.me;
+  if (me === null || view.phase === 'GAME_OVER') return null;
+  const res = view.players[me].resources;
+  if (!res) return null;
+  const mod = modFor(view);
+  const c: Ctx = { v: view, me, res, level, rand, g: boardGraph(view.board), mod, ships: hasShips(mod) };
+
+  if (view.phase === 'ORDER_ROLL') {
+    const group = view.orderRoll?.groups.find((g) => g.length > 1);
+    return group?.includes(me) && !view.orderRoll!.rolls[me] ? { type: 'rollForOrder' } : null;
+  }
+  if (view.phase === 'ROBBER_DISCARD') {
+    const n = view.pendingDiscards[me];
+    return n === undefined ? null : discard(c, n);
+  }
+  if (view.phase === 'GOLD_CHOICE') {
+    const n = view.pendingGold?.[me];
+    return n === undefined ? null : chooseGold(c, n);
+  }
+  if (view.trade && view.trade.from !== me && view.trade.to.includes(me) && view.trade.responses[me] === 'pending' && view.phase === 'MAIN_ACTIONS') {
+    return respondToTrade(c);
+  }
+  if (view.currentPlayer !== me) return null;
+
+  switch (view.phase) {
+    case 'INITIAL_PLACEMENT': {
+      const last = view.setup?.lastSettlement;
+      return last ? setupRoad(c, last) : setupSettlement(c);
+    }
+    case 'PRE_ROLL':
+      if (shouldPlayKnight(c) && (robberOnMe(c) || level === 'hard')) return { type: 'playKnight' };
+      return { type: 'rollDice' };
+    case 'ROBBER_MOVE':
+      return c.ships ? robberOrPirate(c) : { type: 'moveRobber', hex: robberHex(c) };
+    case 'ROBBER_STEAL': {
+      const victim = stealVictim(c);
+      // Cloth for Catan: the pirate may take cloth — worth it to complete a pair, or when there are no cards.
+      const vp = view.players[victim];
+      const cloth = !!view.stealCloth && vp.cloth > 0 && (vp.resourceCount === 0 || view.players[me].cloth % 2 === 1);
+      return cloth ? { type: 'steal', victim, cloth: true } : { type: 'steal', victim };
+    }
+    case 'MAIN_ACTIONS':
+      return mainPhase(c, memory);
+    default:
+      return null;
+  }
+}
+
+function mainPhase(c: Ctx, memory: BotMemory): Action | null {
+  const { v, me } = c;
+  const end: Action = { type: 'endTurn' };
+
+  // Safety valve: never loop forever inside one turn.
+  if (memory.actionsOnTurn?.turn === v.turn && memory.actionsOnTurn.count > 40) {
+    if (v.freeRoads > 0) return { type: 'finishRoadBuilding' };
+    if (v.trade) return { type: 'cancelTrade' };
+    return end;
+  }
+
+  if (v.freeRoads > 0) {
+    if (c.ships) {
+      const left = piecesLeft(c);
+      const ship = left.ships > 0 ? bestShip(c) : null;
+      const road = left.roads > 0 && legalRoads(v, me).length > 0 ? bestRoad(c) : null;
+      if (ship && (chooseGoal(c) === 'ship' || !road)) return { type: 'placeFreeRoad', edge: ship, ship: true };
+      if (road) return { type: 'placeFreeRoad', edge: road };
+      const any = left.ships > 0 ? legalShips(v, me)[0] : undefined;
+      return any ? { type: 'placeFreeRoad', edge: any, ship: true } : { type: 'finishRoadBuilding' };
+    }
+    const road = bestRoad(c);
+    return road ? { type: 'placeFreeRoad', edge: road } : { type: 'finishRoadBuilding' };
+  }
+
+  // Our own open trade offer: take an acceptable answer, else withdraw once everyone answered.
+  if (v.trade && v.trade.from === me) {
+    const t = v.trade;
+    for (const p of t.to) {
+      if (t.responses[p] === 'accepted') return { type: 'confirmTrade', tradeId: t.id, with: p };
+      if (t.responses[p] === 'countered') {
+        const counter = t.counters[p];
+        const goal = chooseGoal(c);
+        if (hasRes(c.res, counter.give) && cardsValue(c, counter.get, goal) >= cardsValue(c, counter.give, goal)) {
+          return { type: 'confirmTrade', tradeId: t.id, with: p };
+        }
+      }
+    }
+    // Still waiting for answers: do nothing (the server withdraws stale offers).
+    if (t.to.some((p) => t.responses[p] === 'pending')) return null;
+    return { type: 'cancelTrade' };
+  }
+
+  // The Forgotten Tribe: a captured port goes next to a settlement as soon as it can.
+  const held = v.players[me].heldPorts ?? [];
+  if (held.length > 0) {
+    const spots = legalPortEdges(v, me);
+    if (spots.length > 0) return { type: 'placePort', edge: spots[Math.floor(c.rand() * spots.length)], port: held[0] };
+  }
+
+  // The Wonders of Catan: claim a wonder as soon as one's requirement is met.
+  if (v.board.wonderSpots && !v.players[me].wonder) {
+    const vp = v.players[me].victoryPoints;
+    const open = WONDER_IDS.filter((id) => wonderBlock(v, me, id, vp) === null);
+    if (open.length > 0) return { type: 'claimWonder', wonder: open[Math.floor(c.rand() * open.length)] };
+  }
+
+  const goal = chooseGoal(c);
+
+  const dev = mainPhaseDev(c, goal);
+  if (dev) return dev;
+
+  const wonder = v.players[me].wonder;
+  if (wonder && wonder.level < WONDER_LEVELS && hasRes(c.res, WONDERS[wonder.id].cost) && (goal === 'wonder' || wonder.level === WONDER_LEVELS - 1)) {
+    return { type: 'buildWonder' };
+  }
+
+  // Build whatever we can afford, best first.
+  const left = piecesLeft(c);
+  if (left.cities > 0 && hasRes(c.res, c.mod.costs.city)) {
+    const city = bestCity(c);
+    if (city && (goal === 'city' || goal !== 'settlement' || !hasRes(c.res, c.mod.costs.settlement))) return { type: 'buildCity', vertex: city };
+  }
+  if (left.settlements > 0 && hasRes(c.res, c.mod.costs.settlement)) {
+    const spot = bestSettlement(c);
+    if (spot) return { type: 'buildSettlement', vertex: spot };
+  }
+  if (left.cities > 0 && hasRes(c.res, c.mod.costs.city)) {
+    const city = bestCity(c);
+    if (city) return { type: 'buildCity', vertex: city };
+  }
+  if (goal === 'road' && left.roads > 0 && hasRes(c.res, c.mod.costs.road)) {
+    const road = bestRoad(c);
+    if (road) return { type: 'buildRoad', edge: road };
+  }
+  if (c.ships && goal === 'ship' && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
+    const ship = bestShip(c);
+    if (ship) return { type: 'buildShip', edge: ship };
+  }
+  if (c.ships && (goal === 'ship' || goal === 'road')) {
+    const move = shipMove(c);
+    if (move) return move;
+  }
+  // A spare road is fine when it does not eat into the settlement plan.
+  if (goal === 'settlement' && left.roads > 0 && hasRes(c.res, { lumber: 2, brick: 2 }) && c.level !== 'easy') {
+    const target = expansionTargets(c, 2)[0];
+    if (target && legalSettlements(v, me).length < 2) return { type: 'buildRoad', edge: target.firstEdge };
+  }
+  // Fog to discover, gifts to pick up or villages to reach: a spare ship heads there.
+  if (c.ships && sailingPays(v) && c.level !== 'easy' && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
+    if (totalRes(c.res) >= 6 || hasRes(c.res, { lumber: 2, wool: 2 }) || goal === 'ship') {
+      const legal = new Set(legalShips(v, me));
+      const target = shipTargets(c, 6).find((t) => t.extra > 0 && legal.has(t.firstEdge));
+      if (target) return { type: 'buildShip', edge: target.firstEdge };
+    }
+  }
+  if ((goal === 'devCard' || (c.level !== 'easy' && hasRes(c.res, { ...c.mod.costs.devCard, ore: 1 + (goal === 'city' ? 3 : 0) }))) && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard)) {
+    return { type: 'buyDevCard' };
+  }
+  if (c.level === 'easy' && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard) && c.rand() < 0.5) return { type: 'buyDevCard' };
+
+  if (goal) {
+    const bank = bankTrade(c, goal);
+    if (bank) return bank;
+    const humansExist = v.players.some((p, i) => i !== me && p.kind === 'human');
+    // Player 2 of a 5–6 player turn may not trade with other players.
+    if (!v.paired && memory.proposedOnTurn !== v.turn && (c.level !== 'easy' || humansExist) && totalRes(c.res) >= 3) {
+      const offer = proposeTrade(c, goal);
+      if (offer) {
+        memory.proposedOnTurn = v.turn;
+        return offer;
+      }
+    }
+  }
+  return end;
+}

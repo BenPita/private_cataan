@@ -4,11 +4,16 @@
  * decision is returned as a normal Action and validated by the engine.
  *
  * Difficulty changes how well the bot evaluates options, not what it may do:
- *  - easy:   noisy placement, simple priorities, little trading
- *  - medium: production-based placement, resource-goal planning, bank trades,
- *            robber aimed at the strongest opponent, sensible trade responses
- *  - hard:   medium plus scarcity/harbor-aware placement, road planning
- *            several steps ahead, dev-card army race, leader-aware trading
+ *  - easy:   noisy placement, random roads and robber, one bank trade at a
+ *            time, spends only a hand of 10+
+ *  - medium: production-based placement (among its top 10% spots), goal = best worth per round of
+ *            waiting (plannedGoal), up to 2 bank trades to finish a build,
+ *            spends a hand of 9+, robber aimed at the strongest opponent
+ *  - hard:   medium plus scarcity/resource-weighted placement that plans its
+ *            next starting settlement too, roads
+ *            several steps ahead, up to 3 trades and detours to any build,
+ *            keeps under 8 cards, races for Longest Road and Largest Army,
+ *            rushes its wonder, leader-aware trading
  */
 import { TERRAIN_RESOURCE, devCardReady } from './rulesets';
 import { boardGraph, type BoardGraph } from './geometry';
@@ -30,6 +35,7 @@ import {
   legalSetupShips,
   legalShipMoves,
   legalShips,
+  longestRoadLength,
   movableShips,
   pirateEdges,
   playersOnHex,
@@ -90,6 +96,9 @@ function scarcity(v: PlayerView): ResMap {
   }
   const out = emptyRes();
   for (const r of RESOURCES) out[r] = 1 + 6 / Math.max(total[r], 1);
+  // Scaled to average 1, so a spot's worth stays comparable with the other levels' and with bonuses.
+  const mean = RESOURCES.reduce((n, r) => n + out[r], 0) / RESOURCES.length;
+  for (const r of RESOURCES) out[r] /= mean;
   return out;
 }
 
@@ -97,6 +106,11 @@ function harborAt(v: PlayerView, vertex: string) {
   const G = boardGraph(v.board);
   return v.board.harbors.find((h) => G.edges[h.edge].vertices.includes(vertex));
 }
+
+/** Hard: how much each resource's production is worth (cities and dev cards need ore and grain). */
+const HARD_WEIGHT: ResMap = { lumber: 1.1, brick: 1.1, wool: 0.8, grain: 1.15, ore: 1.2 };
+/** Seafarers: ships take lumber and wool. */
+const HARD_WEIGHT_SEA: ResMap = { lumber: 1.2, brick: 1.0, wool: 1.05, grain: 1.05, ore: 1.1 };
 
 /** Value of owning a settlement at `vertex`. */
 function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): number {
@@ -121,7 +135,7 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
     let p = pips(tile.number);
     if (h === v.board.robberHex) p *= 0.4;
     // Early game values brick/lumber, later ore/grain; medium+ also likes balance.
-    const weight = scarce ? scarce[r] : 1;
+    const weight = scarce ? scarce[r] * (c.ships ? HARD_WEIGHT_SEA : HARD_WEIGHT)[r] : 1;
     value += p * weight;
     if (owned[r] === 0) gained.add(r);
   }
@@ -136,7 +150,8 @@ function vertexValue(c: Ctx, vertex: string, owned = production(c.v, c.me)): num
   const spots = v.board.wonderSpots;
   if (spots && !v.players[c.me].wonder && v.phase !== 'INITIAL_PLACEMENT' && [...spots.wall, ...spots.bridge].includes(vertex)) value += 3;
   // The Fog Islands: ships (the way into the fog) can only start from a coastal building.
-  if (sailingPays(v) && level !== 'easy' && c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea')) value += 2;
+  const coastal = c.g.vertices[vertex].hexes.some((h) => v.board.hexes[h].terrain === 'sea');
+  if (sailingPays(v) && level !== 'easy' && coastal) value += 2;
   return value;
 }
 
@@ -321,9 +336,9 @@ function piecesLeft(c: Ctx) {
   };
 }
 
-/** Warships a bot wants before it attacks its fortress (each attack must beat a die). */
+/** Warships a bot wants before it attacks its fortress (each attack must beat a die; hard measured best at 4). */
 function warshipsWanted(c: Ctx): number {
-  return c.level === 'easy' ? 3 : c.level === 'medium' ? 4 : 5;
+  return c.level === 'easy' ? 3 : 4;
 }
 
 /**
@@ -352,6 +367,8 @@ function wonderGoal(c: Ctx, canSettle: boolean, canCity: boolean): Goal | null {
   const w = c.v.players[c.me].wonder;
   if (!w || w.level >= WONDER_LEVELS) return null;
   const vp = c.v.players[c.me].victoryPoints;
+  // Hard weighs each level against its other plans (plannedGoal); at the target only a level can win.
+  if (c.level === 'hard') return vp >= c.v.config.victoryTarget ? 'wonder' : null;
   if (vp >= 7 || w.level >= 2 || (!canSettle && !canCity)) return 'wonder';
   return null;
 }
@@ -360,8 +377,6 @@ function chooseGoal(c: Ctx): Goal | null {
   const left = piecesLeft(c);
   const canSettle = left.settlements > 0 && legalSettlements(c.v, c.me).length > 0;
   const canCity = left.cities > 0 && legalCities(c.v, c.me).length > 0;
-  const prod = production(c.v, c.me);
-  const oreGrain = prod.ore + prod.grain;
   if (c.v.board.fortresses) {
     if (canCity && c.res.ore >= 2 && c.res.grain >= 1) return 'city';
     const pirate = pirateGoal(c);
@@ -370,21 +385,96 @@ function chooseGoal(c: Ctx): Goal | null {
   const wonder = wonderGoal(c, canSettle, canCity);
   if (wonder) return wonder;
 
-  if (canSettle && canCity && c.level !== 'easy') {
-    // Prefer cities once ore/grain flow is decent, settlements otherwise.
-    return oreGrain >= 8 || c.res.ore >= 2 ? 'city' : 'settlement';
+  return plannedGoal(c, canSettle, canCity);
+}
+
+/** Expected cards of each resource per round (each player rolls once). Gold counts as any card. */
+function income(c: Ctx): { inc: ResMap; any: number } {
+  const inc = production(c.v, c.me);
+  const rolls = c.v.players.length / 36;
+  for (const r of RESOURCES) inc[r] *= rolls;
+  let any = 0;
+  for (const [vertex, b] of Object.entries(c.v.buildings)) {
+    if (b.owner !== c.me) continue;
+    for (const h of c.g.vertices[vertex].hexes) {
+      const tile = c.v.board.hexes[h];
+      if (tile.terrain === 'gold' && h !== c.v.board.robberHex) any += pips(tile.number) * (b.type === 'city' ? 2 : 1) * rolls;
+    }
   }
-  if (canSettle) return 'settlement';
-  if (canCity) return 'city';
-  if (c.ships && left.settlements > 0 && left.ships > 0) {
-    // Seafarers: sail when the best spot by sea beats the best one by road.
-    const sea = shipTargets(c, 6)[0];
-    const land = left.roads > 0 ? expansionTargets(c, 3)[0] : undefined;
-    if (sea && (!land || sea.value > land.value)) return 'ship';
+  return { inc, any };
+}
+
+/** Rounds until `cost` can be paid, from cards in hand, production and bank trades. */
+function roundsFor(c: Ctx, cost: Partial<ResMap>, flow = income(c)): number {
+  const trades = tradesFor(c, cost);
+  if (trades) return trades.length * 0.15;
+  const miss = missingFor(c.res, cost);
+  const rates = tradeRates(c.v, c.me);
+  const all = RESOURCES.reduce((n, r) => n + flow.inc[r], flow.any);
+  let worst = 0;
+  let sum = 0;
+  for (const r of RESOURCES) {
+    if (miss[r] === 0) continue;
+    const direct = miss[r] / Math.max(flow.inc[r] + flow.any, 1e-6);
+    const traded = (miss[r] * rates[r]) / Math.max(all, 0.15);
+    const t = Math.min(direct, traded);
+    worst = Math.max(worst, t);
+    sum += t;
   }
-  if (left.settlements > 0 && left.roads > 0 && expansionTargets(c, 3).length > 0) return 'road';
-  if (c.v.devDeckCount > 0) return 'devCard';
-  return null;
+  return (worst + sum) / 2;
+}
+
+function scaleCost(cost: Partial<ResMap>, n: number, plus: Partial<ResMap> = {}): Partial<ResMap> {
+  const out: Partial<ResMap> = {};
+  for (const r of RESOURCES) out[r] = (cost[r] ?? 0) * n + (plus[r] ?? 0);
+  return out;
+}
+
+/**
+ * Medium/hard: the goal with the best worth per round of waiting — a city, a
+ * settlement, roads or ships to a new spot, or a dev card. A spot's worth is
+ * its point plus what it produces; waiting counts production and bank trades.
+ */
+function plannedGoal(c: Ctx, canSettle: boolean, canCity: boolean): Goal | null {
+  const left = piecesLeft(c);
+  const flow = income(c);
+  const k = 0.12;
+  const options: Array<{ goal: Goal; score: number }> = [];
+  const add = (goal: Goal, value: number, cost: Partial<ResMap>) => options.push({ goal, score: value / (0.6 + roundsFor(c, cost, flow)) });
+  if (canCity) {
+    const best = Math.max(...legalCities(c.v, c.me).map((x) => vertexValue(c, x)));
+    add('city', 1 + k * best, c.mod.costs.city);
+  }
+  if (canSettle) {
+    const best = Math.max(...legalSettlements(c.v, c.me).map((x) => vertexValue(c, x)));
+    add('settlement', 1 + k * best, c.mod.costs.settlement);
+  }
+  if (left.settlements > 0 && left.roads > 0) {
+    const t = expansionTargets(c, c.level === 'hard' ? 4 : 3)[0];
+    if (t) {
+      const spot = satisfiesDistanceRule(c.v, t.vertex);
+      const worth = (spot ? 1 + k * vertexValue(c, t.vertex) : 0) + k * fogBonus(c, t.vertex);
+      add('road', worth, scaleCost(c.mod.costs.road, t.dist, spot ? c.mod.costs.settlement : {}));
+    }
+  }
+  if (c.ships && left.ships > 0) {
+    const t = shipTargets(c, 6).find((x) => left.settlements > 0 || x.extra > 0);
+    if (t) {
+      const spot = left.settlements > 0 && satisfiesDistanceRule(c.v, t.vertex);
+      const worth = (spot ? 1 + k * vertexValue(c, t.vertex) : 0) + k * t.extra;
+      add('ship', worth, scaleCost(goalCost(c, 'ship'), t.dist, spot ? c.mod.costs.settlement : {}));
+    }
+  }
+  const race = roadRace(c);
+  if (race && (c.v.longestRoad.holder !== null || race.need <= 2)) {
+    add(race.ship ? 'ship' : 'road', 2 / race.need, scaleCost(race.ship ? goalCost(c, 'ship') : c.mod.costs.road, race.need));
+  }
+  // The Wonders of Catan (hard): four levels win the game, so each one is worth more than the last.
+  const wonder = c.v.players[c.me].wonder;
+  if (c.level === 'hard' && wonder && wonder.level < WONDER_LEVELS) add('wonder', 4 + wonder.level, WONDERS[wonder.id].cost);
+  if (c.v.devDeckCount > 0) add('devCard', (c.level === 'hard' && !c.ships ? 0.5 : 0.35) + armyRace(c), c.mod.costs.devCard);
+  options.sort((a, b) => b.score - a.score);
+  return options[0]?.goal ?? null;
 }
 
 function goalCost(c: Ctx, goal: Goal): Partial<ResMap> {
@@ -412,11 +502,51 @@ function surplus(res: ResMap, cost: Partial<ResMap>): ResMap {
 // Decisions per phase
 // ---------------------------------------------------------------------------
 
+/** Pips a starting spot produces, as a simple guess of where opponents will settle. */
+function rawPips(v: PlayerView, g: BoardGraph, vertex: string): number {
+  let n = 0;
+  for (const h of g.vertices[vertex].hexes) {
+    const tile = v.board.hexes[h];
+    if ((TERRAIN_RESOURCE[tile.terrain] || tile.terrain === 'gold') && h !== v.board.robberHex) n += pips(tile.number);
+  }
+  return n;
+}
+
+/**
+ * Hard: choose a starting settlement together with the next one — after the
+ * opponents in between take the richest spots — so the pair produces the most
+ * and the widest mix.
+ */
+function plannedSetup(c: Ctx, spots: Array<{ vertex: string; value: number }>): string | null {
+  const setup = c.v.setup;
+  if (!setup) return null;
+  const next = setup.order.indexOf(c.me, setup.step + 1);
+  if (next < 0) return null;
+  let best: { vertex: string; score: number } | null = null;
+  for (const first of spots.slice(0, 8)) {
+    let v: PlayerView = { ...c.v, buildings: { ...c.v.buildings, [first.vertex]: { owner: c.me, type: 'settlement' } } };
+    for (let i = setup.step + 1; i < next; i++) {
+      const taken = legalSetupSettlements(v).sort((a, b) => rawPips(v, c.g, b) - rawPips(v, c.g, a))[0];
+      if (!taken) break;
+      v = { ...v, buildings: { ...v.buildings, [taken]: { owner: setup.order[i], type: 'settlement' } } };
+    }
+    const after: Ctx = { ...c, v };
+    const second = Math.max(0, ...legalSetupSettlements(v).map((x) => vertexValue(after, x)));
+    const score = first.value + second;
+    if (!best || score > best.score) best = { vertex: first.vertex, score };
+  }
+  return best?.vertex ?? null;
+}
+
 function setupSettlement(c: Ctx): Action {
   const spots = legalSetupSettlements(c.v)
     .map((vertex) => ({ vertex, value: vertexValue(c, vertex) }))
     .sort((a, b) => b.value - a.value);
-  const choice = pick(c, spots, c.level === 'easy' ? 0.35 : c.level === 'medium' ? 0.04 : 0.01);
+  // Measured weaker on the Fog Islands and Wonders maps (small, crowded starting areas), so not used there.
+  const plan = c.level === 'hard' && !c.v.board.wonderSpots && !(c.v.fogLeft ?? 0);
+  const planned = plan ? plannedSetup(c, spots) : null;
+  if (planned) return { type: 'placeSetupSettlement', vertex: planned };
+  const choice = pick(c, spots, c.level === 'easy' ? 0.35 : c.level === 'medium' ? 0.1 : 0.01);
   return { type: 'placeSetupSettlement', vertex: choice.vertex };
 }
 
@@ -630,6 +760,41 @@ function bestCity(c: Ctx): string | null {
   return spots.sort((a, b) => b.value - a.value)[0].vertex;
 }
 
+/**
+ * Hard: roads (Seafarers: or ships) still needed to take Longest Road (null when
+ * out of reach in 3), and the piece that lengthens the bot's route the most.
+ */
+function roadRace(c: Ctx): { need: number; edge: string; ship: boolean } | null {
+  if (c.level !== 'hard') return null;
+  const { holder, lengths } = c.v.longestRoad;
+  if (holder === c.me) return null;
+  const mine = lengths[c.me] ?? 0;
+  const need = (holder === null ? 5 : lengths[holder] + 1) - mine;
+  if (need < 1 || need > 3) return null;
+  const left = piecesLeft(c);
+  let best: { edge: string; len: number; ship: boolean } | null = null;
+  const tryEdge = (e: string, ship: boolean) => {
+    const after = ship ? { ...c.v, ships: { ...c.v.ships, [e]: c.me } } : { ...c.v, roads: { ...c.v.roads, [e]: c.me } };
+    const len = longestRoadLength(after, c.me);
+    if (len > mine && (!best || len > best.len)) best = { edge: e, len, ship };
+  };
+  if (left.roads > 0) for (const e of legalRoads(c.v, c.me)) if (!c.ships || isRoadEdge(c.v, e)) tryEdge(e, false);
+  if (c.ships && left.ships > 0 && !c.v.board.fortresses) for (const e of legalShips(c.v, c.me)) tryEdge(e, true);
+  const found = best as { edge: string; len: number; ship: boolean } | null;
+  return found ? { need, edge: found.edge, ship: found.ship } : null;
+}
+
+/** Hard: extra worth of a dev card while Largest Army is within two knights. */
+function armyRace(c: Ctx): number {
+  if (c.level !== 'hard' || c.v.board.fortresses) return 0;
+  const holder = c.v.largestArmy;
+  if (holder === c.me) return 0;
+  const p = c.v.players[c.me];
+  const mine = p.knightsPlayed + (p.devCards ?? []).filter((d) => d.type === 'knight').length;
+  const need = (holder === null ? 3 : c.v.players[holder].knightsPlayed + 1) - mine;
+  return need >= 1 && need <= 2 ? 0.5 / need : 0;
+}
+
 function bestRoad(c: Ctx): string | null {
   const legal = new Set(legalRoads(c.v, c.me));
   if (!legal.size) return null;
@@ -637,6 +802,8 @@ function bestRoad(c: Ctx): string | null {
     const all = [...legal];
     return all[Math.floor(c.rand() * all.length)];
   }
+  const race = roadRace(c);
+  if (race && !race.ship && (c.v.longestRoad.holder !== null || race.need <= 2)) return race.edge;
   const targets = expansionTargets(c, c.level === 'hard' ? 4 : 3).filter((t) => legal.has(t.firstEdge));
   if (targets.length) return targets[0].firstEdge;
   // No good spot: extend toward Longest Road if competitive (hard), otherwise any legal road.
@@ -648,6 +815,8 @@ function bestShip(c: Ctx): string | null {
   if (c.v.board.fortresses) return pirateShip(c);
   const legal = new Set(legalShips(c.v, c.me));
   if (!legal.size) return null;
+  const race = roadRace(c);
+  if (race?.ship && (c.v.longestRoad.holder !== null || race.need <= 2)) return race.edge;
   const target = shipTargets(c, 6).find((t) => legal.has(t.firstEdge));
   return target ? target.firstEdge : null;
 }
@@ -669,6 +838,112 @@ function shipMove(c: Ctx): Action | null {
     if (value > (before?.value ?? 0) * 1.05 && (!best || value > best.value)) best = { from, to: after.firstEdge, value };
   }
   return best ? { type: 'moveShip', from: best.from, to: best.to } : null;
+}
+
+/**
+ * Bank/harbor trades that make `cost` affordable, giving only cards the cost
+ * itself does not use (cheapest rate first). Null when it cannot be done.
+ */
+function tradesFor(c: Ctx, cost: Partial<ResMap>): Array<{ give: Resource; get: Resource }> | null {
+  const rates = tradeRates(c.v, c.me);
+  const have = { ...c.res };
+  const bank = { ...c.v.bank };
+  const out: Array<{ give: Resource; get: Resource }> = [];
+  for (let i = 0; i < 6; i++) {
+    const miss = missingFor(have, cost);
+    const need = RESOURCES.filter((r) => miss[r] > 0).sort((a, b) => miss[b] - miss[a])[0];
+    if (!need) return out;
+    if (bank[need] <= 0) return null;
+    const spare = surplus(have, cost);
+    const give = RESOURCES.filter((r) => r !== need && spare[r] >= rates[r]).sort((a, b) => rates[a] - rates[b] || spare[b] - spare[a])[0];
+    if (!give) return null;
+    have[give] -= rates[give];
+    have[need]++;
+    bank[need]--;
+    out.push({ give, get: need });
+  }
+  return null;
+}
+
+/** Whether `goal` has somewhere to go right now (a spot, an edge, a card in the deck). */
+function goalOpen(c: Ctx, goal: Goal): boolean {
+  const left = piecesLeft(c);
+  switch (goal) {
+    case 'city':
+      return left.cities > 0 && legalCities(c.v, c.me).length > 0;
+    case 'settlement':
+      return left.settlements > 0 && legalSettlements(c.v, c.me).length > 0;
+    case 'road':
+      return left.roads > 0 && legalRoads(c.v, c.me).length > 0;
+    case 'ship':
+      return left.ships > 0 && bestShip(c) !== null;
+    case 'devCard':
+      return c.v.devDeckCount > 0;
+    case 'wonder': {
+      const w = c.v.players[c.me].wonder;
+      return !!w && w.level < WONDER_LEVELS;
+    }
+  }
+}
+
+/** Cards in hand at which the bot spends or trades down before a 7 can halve them. */
+function handLimit(c: Ctx): number {
+  return c.level === 'easy' ? 10 : c.level === 'medium' ? 9 : 8;
+}
+
+/**
+ * Bank trades that finish a build this turn: the goal first; with a big hand
+ * (or one point from winning) also a city, a settlement or a dev card.
+ */
+function tradeToBuild(c: Ctx, goal: Goal | null): { give: Resource; get: Resource } | null {
+  if (c.level === 'easy') {
+    // Easy: one trade, only for the goal.
+    const trades = goal && goalOpen(c, goal) ? tradesFor(c, goalCost(c, goal)) : null;
+    return trades?.length === 1 ? trades[0] : null;
+  }
+  const p = c.v.players[c.me];
+  const lastPoint = c.v.config.victoryTarget - p.victoryPoints <= 1;
+  const max = c.level === 'medium' ? 2 : 3;
+  const options: Goal[] = goal ? [goal] : [];
+  if (lastPoint || totalRes(c.res) >= handLimit(c) || c.level === 'hard') {
+    for (const g of ['city', 'settlement', 'devCard'] as Goal[]) if (!options.includes(g)) options.push(g);
+  }
+  for (const g of options) {
+    if (!goalOpen(c, g)) continue;
+    const trades = tradesFor(c, goalCost(c, g));
+    if (!trades?.length) continue;
+    const vp = g === 'city' || g === 'settlement';
+    // Away from the goal, only a short detour (and never a dev card for most of the hand).
+    const limit = g === goal || (lastPoint && vp) ? max + (lastPoint ? 2 : 0) : g === 'devCard' ? 1 : max - 1;
+    if (trades.length <= limit) return trades[0];
+  }
+  return null;
+}
+
+/**
+ * Too many cards for a 7: buy a dev card, lay a road, or trade spare cards
+ * toward what the goal still lacks.
+ */
+function spendDown(c: Ctx, goal: Goal | null): Action | null {
+  if (totalRes(c.res) < handLimit(c)) return null;
+  const left = piecesLeft(c);
+  if (c.v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard)) return { type: 'buyDevCard' };
+  if (left.roads > 0 && left.settlements > 0 && hasRes(c.res, c.mod.costs.road)) {
+    const road = bestRoad(c);
+    if (road) return { type: 'buildRoad', edge: road };
+  }
+  if (c.ships && left.ships > 0 && hasRes(c.res, goalCost(c, 'ship'))) {
+    const ship = bestShip(c);
+    if (ship) return { type: 'buildShip', edge: ship };
+  }
+  const cost = goalCost(c, goal ?? 'devCard');
+  const miss = missingFor(c.res, cost);
+  const rates = tradeRates(c.v, c.me);
+  const spare = surplus(c.res, cost);
+  const get = RESOURCES.filter((r) => c.v.bank[r] > 0).sort((a, b) => miss[b] - miss[a] || c.res[a] - c.res[b])[0];
+  if (!get) return null;
+  const give = RESOURCES.filter((r) => r !== get && spare[r] >= rates[r]).sort((a, b) => rates[a] - rates[b] || spare[b] - spare[a])[0];
+  return give ? { type: 'bankTrade', give, get } : null;
 }
 
 /** Bank/harbor trade toward the goal. */
@@ -757,6 +1032,8 @@ export interface BotMemory {
   proposedOnTurn?: number;
   /** Actions taken on the current turn, to guarantee the turn ends. */
   actionsOnTurn?: { turn: number; count: number };
+  /** The goal the bot is trading toward this turn. */
+  goal?: { turn: number; goal: Goal };
 }
 
 /**
@@ -866,10 +1143,20 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
   if (v.board.wonderSpots && !v.players[me].wonder) {
     const vp = v.players[me].victoryPoints;
     const open = WONDER_IDS.filter((id) => wonderBlock(v, me, id, vp) === null);
-    if (open.length > 0) return { type: 'claimWonder', wonder: open[Math.floor(c.rand() * open.length)] };
+    if (open.length > 0) {
+      // Hard claims the wonder its production pays for fastest.
+      const flow = income(c);
+      const pickId =
+        c.level === 'hard'
+          ? [...open].sort((a, b) => roundsFor(c, WONDERS[a].cost, flow) - roundsFor(c, WONDERS[b].cost, flow))[0]
+          : open[Math.floor(c.rand() * open.length)];
+      return { type: 'claimWonder', wonder: pickId };
+    }
   }
 
-  const goal = chooseGoal(c);
+  // Keep the goal the bot started trading for this turn, so a trade does not flip it.
+  const kept = memory.goal?.turn === v.turn && goalOpen(c, memory.goal.goal) ? memory.goal.goal : null;
+  const goal = kept ?? chooseGoal(c);
 
   const dev = mainPhaseDev(c, goal);
   if (dev) return dev;
@@ -918,13 +1205,22 @@ function mainPhase(c: Ctx, memory: BotMemory): Action | null {
       if (target) return { type: 'buildShip', edge: target.firstEdge };
     }
   }
-  if ((goal === 'devCard' || (c.level !== 'easy' && hasRes(c.res, { ...c.mod.costs.devCard, ore: 1 + (goal === 'city' ? 3 : 0) }))) && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard)) {
-    return { type: 'buyDevCard' };
+  const canDev = v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard);
+  // Medium/hard: a dev card from cards the goal does not need.
+  const spare = goal ? surplus(c.res, goalCost(c, goal)) : c.res;
+  if (canDev && (goal === 'devCard' || (c.level !== 'easy' && hasRes(spare, c.mod.costs.devCard)))) return { type: 'buyDevCard' };
+  if (c.level === 'easy' && canDev && c.rand() < 0.5) return { type: 'buyDevCard' };
+
+  const trade = tradeToBuild(c, goal);
+  if (trade) {
+    if (goal) memory.goal = { turn: v.turn, goal };
+    return { type: 'bankTrade', ...trade };
   }
-  if (c.level === 'easy' && v.devDeckCount > 0 && hasRes(c.res, c.mod.costs.devCard) && c.rand() < 0.5) return { type: 'buyDevCard' };
+  const down = spendDown(c, goal);
+  if (down) return down;
 
   if (goal) {
-    const bank = bankTrade(c, goal);
+    const bank = c.level === 'easy' ? bankTrade(c, goal) : null;
     if (bank) return bank;
     const humansExist = v.players.some((p, i) => i !== me && p.kind === 'human');
     // Player 2 of a 5–6 player turn may not trade with other players.

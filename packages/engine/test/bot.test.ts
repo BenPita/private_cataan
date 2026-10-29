@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, chooseBotAction, createGame, getPlayerView, type BotDifficulty } from '../src';
-import { playBotGame } from './helpers';
+import { GRAPH, applyAction, chooseBotAction, createGame, getPlayerView, type BotDifficulty } from '../src';
+import { mainPhaseGame, placeBuilding, playBotGame, setResources } from './helpers';
 
 describe('bots', () => {
   for (const level of ['easy', 'medium', 'hard'] as const) {
@@ -29,6 +29,32 @@ describe('bots', () => {
     }
   }
 
+  /** Player 0 in its main phase with one city spot, no roads left and `cards` in hand. */
+  function cityOnlyGame(cards: Parameters<typeof setResources>[2]) {
+    const s = mainPhaseGame(2);
+    placeBuilding(s, 0, GRAPH.vertexIds[20]);
+    s.players[0].roadsBuilt = 15;
+    setResources(s, 0, cards);
+    return s;
+  }
+
+  it('medium and hard trade with the bank to finish a city', () => {
+    const s = cityOnlyGame({ ore: 1, grain: 2, lumber: 4, brick: 4 });
+    for (const level of ['medium', 'hard'] as const) {
+      const a = chooseBotAction(getPlayerView(s, 0), level, () => 0.5, {});
+      expect(a).toMatchObject({ type: 'bankTrade', get: 'ore' });
+    }
+  });
+
+  it('spend a hand that a 7 would halve, keep a small one', () => {
+    const big = cityOnlyGame({ wool: 9 });
+    big.devDeck = [];
+    expect(chooseBotAction(getPlayerView(big, 0), 'hard', () => 0.5, {})).toMatchObject({ type: 'bankTrade', give: 'wool' });
+    const small = cityOnlyGame({ wool: 7 });
+    small.devDeck = [];
+    expect(chooseBotAction(getPlayerView(small, 0), 'hard', () => 0.5, {})).toEqual({ type: 'endTurn' });
+  });
+
   it('higher difficulty wins more often', () => {
     const wins: Record<BotDifficulty, number> = { easy: 0, medium: 0, hard: 0 };
     const lineup: BotDifficulty[] = ['easy', 'medium', 'hard'];
@@ -40,6 +66,17 @@ describe('bots', () => {
     }
     expect(wins.medium + wins.hard).toBeGreaterThan(wins.easy * 2);
   });
+
+  it('hard beats medium head-to-head', () => {
+    // Two of each, seats alternating. Over 80 seeded base games (bot-bench duel) hard wins ~85%.
+    let hard = 0;
+    for (let g = 0; g < 16; g++) {
+      const levels: BotDifficulty[] = g % 2 ? ['hard', 'medium', 'hard', 'medium'] : ['medium', 'hard', 'medium', 'hard'];
+      const r = playBotGame(levels, 948 + g);
+      if (r.state.winner !== null && levels[r.state.winner] === 'hard') hard++;
+    }
+    expect(hard).toBeGreaterThanOrEqual(10);
+  }, 120_000);
 
   it('answers a human trade offer and decides from its own view only', () => {
     let s = createGame(

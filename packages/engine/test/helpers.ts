@@ -136,7 +136,13 @@ interface Result {
 }
 
 /** Runs a game where every seat is a bot. Bots only ever see their own view. */
-export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 8000, config: Partial<GameConfig> = {}): Result {
+export function playBotGame(
+  levels: BotDifficulty[],
+  seed: number,
+  maxSteps = 8000,
+  config: Partial<GameConfig> = {},
+  choose: typeof chooseBotAction = chooseBotAction,
+): Result {
   let s = createGame(
     levels.map((difficulty, i) => ({ name: `Bot${i}`, kind: 'bot' as const, difficulty })),
     seed,
@@ -153,7 +159,7 @@ export function playBotGame(levels: BotDifficulty[], seed: number, maxSteps = 80
     for (const seat of order) {
       const view = getPlayerView(s, seat);
       const m = memory[seat];
-      const action: Action | null = chooseBotAction(view, levels[seat], () => rng.next(), m);
+      const action: Action | null = choose(view, levels[seat], () => rng.next(), m);
       if (!action) continue;
       const res = applyAction(s, seat, action);
       if (res.ok) {

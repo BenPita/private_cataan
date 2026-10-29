@@ -433,11 +433,31 @@ Seafarers 5–6 players, wired 2026-10-29 (rulebook CN3084; `mods/seafarers/maps
 - Tests: every scenario starts with 5 and 6 players; 6-bot games finish in all 9 scenarios (+ Pirate Islands
   with 5).
 
-## Side task — stronger, more distinct bots (owner request 2026-10-29, do after the expansions)
-Owner feels all three levels play the same and too timidly: bots sit on 10+ cards instead of
-building, trading and racing for points. Wanted: clearly different levels, and Hard must be
-genuinely hard (spend cards, trade actively, plan towards VP). Measure before/after with seeded
-bot-vs-bot games (win rates per level, average hand size at turn end, cards lost to 7s).
+## Stronger, more distinct bots (owner request 2026-10-29) — DONE locally, not deployed
+Owner felt all three levels played the same and too timidly (bots sat on 10+ cards). Root cause: with
+no free settlement spot the goal became "city" even with no ore income, so bots waited for many turns
+instead of building roads; and bank trades were only made when one card short.
+- Goal choice (all levels, `plannedGoal`): city, settlement, roads/ships to a new spot, dev card —
+  each scored as worth (1 VP + production of the spot) / rounds needed to afford it (income + bank
+  trades). The goal a bot started trading for stays its goal for the rest of that turn.
+- Easy: noisy placement, random roads/robber, one bank trade at a time, spends only at 10+ cards.
+  Medium: placement among its top 10% spots, up to 2 bank trades to finish a build, spends at 9+.
+  Hard: best placement, resource-weighted (land: ore/grain/brick/lumber over wool; sea: lumber and wool
+  for ships), and its first starting settlement is chosen together with the next one after opponents take
+  the richest spots in between (not on Fog Islands / Wonders maps, where that measured weaker); up to 3
+  trades and short detours to any build, keeps under 8 cards, races for Longest Road (roads or ships) and
+  Largest Army, rushes its wonder and claims the one it pays for fastest, attacks its fortress with 4
+  warships (like medium; 5 measured weaker).
+- Measured (`npx tsx packages/engine/scripts/bot-bench.ts [games] [mode]`; `... duel hard medium N mode`).
+  Hard vs medium, 2 v 2, 80 games per mode: base 85%, 6-player 84%, Four Islands 81%, New World 80%,
+  Wonders 79%, Cloth 71%, Forgotten Tribe 69%, New Shores 65%, Fog Islands 65%, Desert 65%, Pirate ~62%.
+  Medium vs easy 90–100% in every mode. Cards lost to 7s per game roughly halved (base medium 14→11,
+  hard 18→8; Forgotten Tribe hard 23→8); hard ends 1–3% of turns with 8+ cards (was 15–28%); VP at turn
+  30 up 0.3–1.2 in most modes.
+- Setup placement decides a lot: medium picking among its top 10% instead of 4% moved hard's win rate
+  from ~58% to ~80% on Four Islands and Wonders.
+- The regression snapshot's bot games use a frozen copy of the old bots (`test/legacy-bot.ts`), so the
+  snapshot still checks the engine only.
 
 ## Game screen look (2026-10-28)
 
