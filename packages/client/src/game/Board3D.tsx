@@ -700,7 +700,7 @@ function createEngine(mount: HTMLDivElement, onPick: (hit: Hit | null) => void) 
       wanted.set(`s:${edge}:${owner}`, {
         make: () => {
           const m = new THREE.Mesh(shipGeo, [pieceMat(colors[owner]), sailMat]);
-          m.scale.setScalar(1.25);
+          m.scale.setScalar(1.45);
           m.position.set(e.x, TILE_H, e.y);
           m.rotation.y = -Math.atan2(b.y - a.y, b.x - a.x);
           return m;

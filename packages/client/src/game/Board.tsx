@@ -169,9 +169,10 @@ function Ship({ x, y, angle, color }: { x: number; y: number; angle: number; col
           />
           <path d="M-14,-2.6 L8,-2.6 Q14,-2 15.5,0 Q14,2 8,2.6 L-14,2.6 Z" fill={side} />
         </g>
-        <line x1={0} y1={0} x2={0} y2={-22} stroke="#3b2412" strokeWidth="2" strokeLinecap="round" />
-        <path d="M1.2,-20.5 Q13,-12 1.2,-3 Z" fill="url(#flag)" stroke="#6b5530" strokeWidth="1" strokeLinejoin="round" />
-        <path d="M0,-22 L-8,-19.5 L0,-17 Z" fill={color} stroke="#1d150d" strokeWidth="0.8" />
+        <line x1={0} y1={2} x2={0} y2={-27} stroke="#3b2412" strokeWidth="2.2" strokeLinecap="round" />
+        <path d="M1.5,-25 Q19,-14 1.5,-1 Z" fill="url(#flag)" stroke="#5b4520" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M-1.5,-23 Q-11,-14 -1.5,-5 Z" fill="url(#flag)" stroke="#5b4520" strokeWidth="1.1" strokeLinejoin="round" />
+        <path d="M0,-27 L-10,-24 L0,-21 Z" fill={color} stroke="#1d150d" strokeWidth="0.9" />
       </g>
     </g>
   );
